@@ -1,0 +1,24 @@
+# Raw product photos and videos — not referenced by code yet (320 MB)
+# Re-include specific cleaned hero shots in /public/products/ after Photoroom pass.
+public/products/*/photos/
+public/products/*/videos/
+public/products/raw/
+
+# Local dev artifacts
+.next/
+node_modules/
+.DS_Store
+
+# Docs and scrape dumps — not needed in deployed output
+docs/scrape-pinchtab/
+docs/*.png
+docs/*.json
+
+# Python utility scripts and venv
+scripts/
+*.py
+__pycache__/
+*.zip
+
+# Logs
+*.log
