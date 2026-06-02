@@ -100,7 +100,7 @@ export default function FAQ() {
   const hiddenCount = FAQS.length - VISIBLE_COUNT;
 
   return (
-    <section id="faq" className="py-16 sm:py-24 bg-white">
+    <section id="faq" className="py-8 sm:py-14 bg-white">
       <div className="max-w-3xl mx-auto px-4">
         <div className="text-center">
           <span className="font-mono text-xs uppercase tracking-widest text-brand-red">
@@ -111,7 +111,7 @@ export default function FAQ() {
           </h2>
         </div>
 
-        <div className="mt-10 sm:mt-14">
+        <div className="mt-6 sm:mt-10">
           {visibleFaqs.map((qa, i) => (
             <Item
               key={qa.q}

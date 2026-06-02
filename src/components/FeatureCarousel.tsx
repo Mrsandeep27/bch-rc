@@ -94,7 +94,7 @@ function Tile({ feat, i }: { feat: Feature; i: number }) {
 
 export default function FeatureCarousel() {
   return (
-    <section className="py-16 sm:py-24 bg-white">
+    <section className="py-8 sm:py-14 bg-white">
       <div className="max-w-7xl mx-auto px-4">
         <div className="text-center max-w-2xl mx-auto">
           <span className="font-mono text-xs uppercase tracking-widest text-brand-red">
@@ -110,7 +110,7 @@ export default function FeatureCarousel() {
 
         {/* Mobile: horizontal snap-scroll (one tile per swipe).
             Desktop: standard 2/4 col grid. */}
-        <div className="mt-10 sm:mt-14 -mx-4 sm:mx-0 overflow-x-auto sm:overflow-visible snap-x snap-mandatory sm:snap-none no-scrollbar">
+        <div className="mt-6 sm:mt-10 -mx-4 sm:mx-0 overflow-x-auto sm:overflow-visible snap-x snap-mandatory sm:snap-none no-scrollbar">
           <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 px-4 sm:px-0 pb-2 sm:pb-0">
             {FEATURES.map((f, i) => (
               <div

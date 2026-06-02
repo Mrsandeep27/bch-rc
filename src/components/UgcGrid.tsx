@@ -78,7 +78,7 @@ export default function UgcGrid() {
   // Use real scraped posts when manifest is populated, otherwise stubs.
   const UGC = MANIFEST.length >= 6 ? MANIFEST.slice(0, 12) : STUBS;
   return (
-    <section className="py-14 sm:py-20 bg-white" aria-label="Drifters of India">
+    <section className="py-8 sm:py-14 bg-white" aria-label="Drifters of India">
       <div className="max-w-6xl mx-auto px-4">
         <div className="text-center">
           <p className="text-xs font-mono font-bold uppercase tracking-widest text-brand-red">

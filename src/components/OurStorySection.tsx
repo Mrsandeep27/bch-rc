@@ -27,7 +27,7 @@ export default function OurStorySection() {
   return (
     <section
       id="our-story"
-      className="py-12 sm:py-20 bg-white"
+      className="py-8 sm:py-14 bg-white"
       aria-label="Why Bangalore gifts PRC Cars"
     >
       <div className="max-w-6xl mx-auto px-4 grid grid-cols-2 gap-3 sm:gap-10 lg:gap-14 items-center">

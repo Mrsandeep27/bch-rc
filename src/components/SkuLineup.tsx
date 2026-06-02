@@ -148,7 +148,7 @@ function SkuCard({ sku, index }: SkuCardProps) {
 
 export default function SkuLineup() {
   return (
-    <section id="sku" className="py-16 sm:py-24 bg-white">
+    <section id="sku" className="py-8 sm:py-14 bg-white">
       <div className="max-w-6xl mx-auto px-4">
         <h2 className="text-3xl sm:text-4xl font-bold text-brand-ink text-center text-balance">
           Pick your drift.
@@ -158,7 +158,7 @@ export default function SkuLineup() {
         </p>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 mt-10 sm:mt-14">
+      <div className="max-w-7xl mx-auto px-4 mt-6 sm:mt-10">
         <div className="flex overflow-x-auto snap-x snap-mandatory gap-4 no-scrollbar -mx-4 px-4 pb-4 sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 sm:gap-5 lg:gap-6 sm:overflow-visible sm:min-w-0 sm:mx-0 sm:px-0 sm:pb-0">
           {getVisibleProducts().map((sku, i) => (
             <SkuCard key={sku.id} sku={sku} index={i} />
@@ -166,7 +166,7 @@ export default function SkuLineup() {
         </div>
 
         {/* "More coming soon" — sits below the grid, intentionally subtle */}
-        <div className="mt-8 sm:mt-10 flex justify-center">
+        <div className="mt-5 sm:mt-8 flex justify-center">
           <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-cream border border-brand-line text-xs sm:text-sm font-mono uppercase tracking-widest text-brand-ink-soft">
             <span className="w-1.5 h-1.5 rounded-full bg-brand-red animate-pulse" />
             More drift cars dropping soon · stay tuned

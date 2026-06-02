@@ -64,7 +64,7 @@ export default function BundlePicker() {
   };
 
   return (
-    <section id="bundles" className="py-16 sm:py-24 bg-brand-cream">
+    <section id="bundles" className="py-8 sm:py-14 bg-brand-cream">
       <div className="max-w-5xl mx-auto px-4">
         <div className="text-center">
           <span className="font-mono text-xs uppercase tracking-widest text-brand-red">
@@ -79,7 +79,7 @@ export default function BundlePicker() {
         </div>
 
         {/* Mobile: horizontal snap-scroll (3 cards, swipe). Desktop: 3-col grid. */}
-        <div className="mt-10 sm:mt-14 -mx-4 sm:mx-0 overflow-x-auto sm:overflow-visible snap-x snap-mandatory sm:snap-none no-scrollbar">
+        <div className="mt-6 sm:mt-10 -mx-4 sm:mx-0 overflow-x-auto sm:overflow-visible snap-x snap-mandatory sm:snap-none no-scrollbar">
           <div className="flex sm:grid sm:grid-cols-3 gap-4 sm:gap-6 px-4 sm:px-0 pb-2 sm:pb-0 pt-4 sm:pt-0">
           {OPTIONS.map((opt, i) => {
             const isSelected = opt.qty === selectedQty;

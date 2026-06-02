@@ -48,7 +48,7 @@ const OFFERS_LIST: Offer[] = [
 
 export default function OfferStack() {
   return (
-    <section className="py-12 sm:py-16 bg-brand-cream">
+    <section className="py-8 sm:py-14 bg-brand-cream">
       <div className="max-w-5xl mx-auto px-4">
         <div className="text-center">
           <p className="text-xs font-mono font-bold uppercase tracking-widest text-brand-red">

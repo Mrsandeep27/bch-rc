@@ -50,7 +50,7 @@ export default function RecentlyViewed({ excludeId }: { excludeId?: string }) {
   if (items.length === 0) return null;
 
   return (
-    <section className="border-t border-brand-line bg-white py-10 sm:py-14">
+    <section className="border-t border-brand-line bg-white py-6 sm:py-10">
       <div className="max-w-6xl mx-auto px-4">
         <div className="flex items-baseline justify-between">
           <div>
