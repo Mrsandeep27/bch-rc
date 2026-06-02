@@ -60,7 +60,12 @@ export default function PDPClient({ sku }: { sku: Sku }) {
   const pct = calcDiscountPct(sku.mrpINR, sku.retailINR);
   // Color-specific hero overrides the base hero; alt angles are shared across colors.
   const heroSrc = selectedColor?.image ?? sku.heroImage;
-  const gallery = [heroSrc, ...sku.altImages].filter(Boolean);
+  // Per-color alt angles don't exist yet — when colors are defined for this
+  // SKU, show ONLY the single color hero (no thumbnails) so the gallery
+  // stays consistent with the swatch the user picked.
+  const gallery = sku.colors?.length
+    ? [heroSrc]
+    : [heroSrc, ...sku.altImages].filter(Boolean);
   const activeSrc = gallery[activeImage] ?? heroSrc;
 
   function addToCart() {

@@ -137,28 +137,35 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* 4. Visit us (Map) */}
+          {/* 4. Ships from (Map) */}
           <div>
             <h3 className="font-display font-bold tracking-wider text-white text-sm uppercase mb-4">
-              Visit Us
+              Ships From
             </h3>
             <a
               href={MAP_LINK}
               target="_blank"
               rel="noopener"
-              className="block rounded-xl overflow-hidden border border-white/10 hover:border-brand-red transition-colors"
-              aria-label="Open in Google Maps"
+              className="relative block rounded-xl overflow-hidden border border-white/10 hover:border-brand-red transition-colors"
+              aria-label="Open warehouse address in Google Maps"
             >
               <iframe
                 src={MAP_SRC}
-                title="PRC Cars — Yelahanka, Bengaluru"
+                title="PRC Cars warehouse — Yelahanka, Bengaluru"
                 loading="lazy"
                 referrerPolicy="no-referrer-when-downgrade"
                 className="w-full h-36 block pointer-events-none"
               />
+              <span className="absolute top-2 left-2 bg-brand-red text-white text-[9px] font-mono uppercase tracking-widest px-2 py-1 rounded-full">
+                Warehouse
+              </span>
             </a>
-            <p className="text-xs text-neutral-400 mt-2">
-              Yelahanka, Bengaluru
+            <p className="text-xs text-neutral-400 mt-2 leading-snug">
+              Yelahanka 1st Stage, Bengaluru
+              <br />
+              <span className="text-brand-red font-semibold">
+                Flagship store · Coming soon
+              </span>
             </p>
           </div>
         </div>
