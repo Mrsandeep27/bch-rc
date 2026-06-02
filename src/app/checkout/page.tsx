@@ -49,7 +49,7 @@ export default function CheckoutPage() {
   async function handlePlaceOrder() {
     setLoading(true);
     await new Promise((r) => setTimeout(r, 1500));
-    const orderId = `BCH-${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+    const orderId = `PRC-${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
     useCart.getState().clear();
     router.push(`/orders/${orderId}`);
   }

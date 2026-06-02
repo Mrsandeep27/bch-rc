@@ -6,13 +6,13 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { Star, ArrowRight } from "lucide-react";
 
-const STOREFRONT_SRC = "/store/bch-storefront.jpg";
+const STOREFRONT_SRC = "/store/storefront.jpg";
 
 const STORY_POINTS = [
   {
     title: "We Pick What Lasts",
     body:
-      "We don't drop-ship random toys. Every chassis is tested on tile, marble, and concrete before it earns a spot in our box. Picked by hand, by people who actually drive them.",
+      "We don't drop-ship random toys. Every chassis is tested on tile, marble, and concrete before it earns a spot in our box. Picked by hand in Bangalore by people who actually drive them.",
   },
   {
     title: "From Our Warehouse to Your Door",
@@ -48,14 +48,14 @@ export default function OurStorySection() {
             {!imgFailed ? (
               <Image
                 src={STOREFRONT_SRC}
-                alt="Bharath Cycle Hub storefront — Yelahanka, Bengaluru. PRC Cars is operated by BCH."
+                alt="PRC Cars workshop — Yelahanka, Bengaluru"
                 fill
                 sizes="(max-width: 1024px) 90vw, 50vw"
                 className="object-cover object-center"
                 onError={() => setImgFailed(true)}
               />
             ) : (
-              // Soft placeholder until /store/bch-storefront.jpg is dropped in.
+              // Soft placeholder until /store/storefront.jpg is dropped in.
               <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 bg-gradient-to-br from-brand-cream via-white to-brand-cream">
                 <div className="w-16 h-16 rounded-full bg-brand-red/10 flex items-center justify-center mb-3">
                   <Star size={24} className="text-brand-red fill-brand-red" />
@@ -66,7 +66,7 @@ export default function OurStorySection() {
                 <p className="text-sm text-brand-ink-soft mt-1 max-w-xs">
                   Drop the image at{" "}
                   <span className="font-mono text-xs">
-                    public/store/bch-storefront.jpg
+                    public/store/storefront.jpg
                   </span>
                 </p>
               </div>
@@ -110,12 +110,12 @@ export default function OurStorySection() {
             <span className="text-brand-red">PRC Cars</span>
           </h2>
           <p className="text-base text-brand-ink-soft mt-4 leading-relaxed">
-            Operated by{" "}
+            Designed, packed, and shipped from{" "}
             <strong className="text-brand-ink font-semibold">
-              Bharath Cycle Hub
-            </strong>{" "}
-            — serving Bangalore families since 1987. The same shop that puts
-            kids on their first bicycle now ships their first RC drift car.
+              Yelahanka, Bengaluru
+            </strong>
+            . Real people, real warehouse, real WhatsApp number — not a
+            drop-shipper.
           </p>
 
           <ul className="mt-7 space-y-5">
