@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Star, ArrowRight, MapPin, Truck, Clock } from "lucide-react";
+import { ArrowRight, MapPin, Truck, Clock } from "lucide-react";
 import { THEME } from "@/lib/theme";
 
 const STORY_POINTS = [
@@ -110,26 +110,6 @@ export default function OurStorySection() {
             </div>
           </div>
 
-          {/* Floating Google Rating card */}
-          <div className="absolute -bottom-4 -right-2 sm:bottom-6 sm:right-6 bg-white rounded-xl shadow-xl border border-brand-line px-4 py-3 flex flex-col items-center min-w-[120px]">
-            <div className="text-2xl font-display font-bold text-brand-red leading-none">
-              4.9
-            </div>
-            <div className="flex items-center gap-0.5 mt-1.5">
-              {[0, 1, 2, 3, 4].map((i) => (
-                <Star
-                  key={i}
-                  size={11}
-                  className="text-gold fill-gold"
-                  aria-hidden
-                />
-              ))}
-            </div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-brand-ink mt-1">
-              Customer Rating
-            </p>
-            <p className="text-[10px] text-brand-ink-soft">500+ orders</p>
-          </div>
         </motion.div>
 
         {/* Right: 3 pillars + CTA */}
