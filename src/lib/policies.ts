@@ -201,13 +201,6 @@ ${ADDRESS}
 
 We do **not** sell your data, share it with advertisers, or use it for retargeting on Facebook / Google / etc.
 
-## How we secure it
-
-- HTTPS everywhere (Vercel TLS)
-- Database access restricted to the operator
-- Payment data never touches our servers — it goes directly from your browser to Razorpay's PCI-DSS-certified infrastructure
-- Passwords (when accounts go live) hashed with bcrypt
-
 ## Your rights
 
 You can request, at any time, via WhatsApp **${WA}** or email **${EMAIL}**:
