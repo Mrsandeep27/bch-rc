@@ -5,7 +5,6 @@ import { PRODUCTS, getVisibleProducts } from "@/lib/products";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import StickyMobileCTA from "@/components/StickyMobileCTA";
 import WhatsAppFab from "@/components/WhatsAppFab";
 import CartDrawer from "@/components/CartDrawer";
 import PDPClient from "@/components/PDPClient";
@@ -58,7 +57,6 @@ export default async function ProductPage({
         <PDPClient sku={sku} />
       </main>
       <Footer />
-      <StickyMobileCTA />
       <WhatsAppFab />
       <CartDrawer />
     </>

@@ -41,25 +41,30 @@ export default function Hero() {
   };
 
   return (
-    <section className="relative overflow-hidden min-h-screen bg-black isolate">
-      {/* Background hero image — full-bleed */}
+    <section className="relative overflow-hidden min-h-[100svh] bg-black isolate">
+      {/* Background hero image — full-bleed.
+          On mobile: shift the focus inward (65%) so we see the car body, not
+          just the right edge. On desktop: object-right keeps the car on the
+          right half so left text gets a clean dark backdrop. */}
       <Image
         src={THEME.heroImageSrc}
         alt=""
         priority
         fill
         sizes="100vw"
-        className="object-cover object-right select-none pointer-events-none"
+        className="object-cover select-none pointer-events-none [object-position:65%_center] sm:[object-position:right_center]"
       />
 
-      {/* Left-side darkening gradient — keeps text readable over the car edge */}
-      <div className="absolute inset-0 bg-gradient-to-r from-black via-black/85 to-black/10 sm:from-black sm:via-black/70 sm:to-transparent" />
+      {/* Readability gradient.
+          Mobile: top-down dark fade (text sits at top, car body shows below).
+          Desktop: left-to-right dark fade (text on left, car on right). */}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-black/50 to-black/30 sm:bg-gradient-to-r sm:from-black sm:via-black/70 sm:to-transparent" />
 
       {/* Subtle bottom-vignette */}
       <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black to-transparent" />
 
       {/* Content stack — left-aligned on desktop, centered on mobile */}
-      <div className="relative z-10 max-w-7xl mx-auto px-6 sm:px-10 py-20 sm:py-28 min-h-screen flex pb-44 sm:pb-40">
+      <div className="relative z-10 max-w-7xl mx-auto px-5 sm:px-10 py-16 sm:py-28 min-h-[100svh] flex pb-36 sm:pb-40">
         <div className="w-full sm:max-w-xl flex flex-col justify-center text-left">
           {/* Launch-week offer chip — slim, sits inline above the eyebrow */}
           <motion.div

@@ -88,7 +88,7 @@ export default function PDPClient({ sku }: { sku: Sku }) {
   }, [sku.id]);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 max-w-6xl mx-auto px-4 py-8">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-12 max-w-6xl mx-auto px-4 py-6 sm:py-8">
       {/* Image gallery */}
       <div className="lg:sticky lg:top-20 lg:self-start space-y-3">
         <div className="aspect-square rounded-2xl overflow-hidden border border-brand-line bg-white relative">
@@ -183,10 +183,10 @@ export default function PDPClient({ sku }: { sku: Sku }) {
                     aria-label={c.name}
                     aria-pressed={active}
                     className={cn(
-                      "w-9 h-9 rounded-full border-2 transition-all relative",
+                      "w-11 h-11 sm:w-10 sm:h-10 rounded-full border-2 transition-all relative shrink-0",
                       active
                         ? "border-brand-ink ring-2 ring-offset-2 ring-brand-red"
-                        : "border-brand-line hover:border-brand-ink-soft"
+                        : "border-brand-line hover:border-brand-ink-soft active:scale-95"
                     )}
                     style={{ background: swatchBg(c.swatch) }}
                   />

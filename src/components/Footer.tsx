@@ -33,62 +33,63 @@ const MAP_LINK = "https://maps.google.com/?q=" + encodeURIComponent(
 
 export default function Footer() {
   return (
-    <footer className="bg-brand-ink text-white pt-12 pb-6">
+    <footer className="bg-brand-ink text-white pt-10 sm:pt-12 pb-6">
       <div className="max-w-6xl mx-auto px-4">
-        {/* Top: 4-column block */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10">
-          {/* 1. Logo + pitch + socials */}
-          <div>
+        {/* Top grid — mobile: logo full-width, then 2-col contact/links,
+            then map full-width. Desktop: standard 4 columns. */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-8 sm:gap-y-10">
+          {/* 1. Logo + pitch + socials — spans both cols on mobile, centered */}
+          <div className="col-span-2 lg:col-span-1 flex flex-col items-center text-center lg:items-start lg:text-left">
             <Link href="/" aria-label={`${THEME.brandName} home`}>
               <Image
                 src={THEME.logoMain}
                 alt={THEME.brandName}
                 width={826}
                 height={304}
-                className="h-14 w-auto"
+                className="h-12 sm:h-14 w-auto"
               />
             </Link>
-            <p className="text-sm text-neutral-400 mt-4 leading-relaxed">
+            <p className="text-sm text-neutral-400 mt-3 sm:mt-4 leading-relaxed max-w-xs">
               India&apos;s most-gifted mini RC drift cars. Pan-India COD, ships
               in 24 hrs from Bangalore.
             </p>
-            <div className="flex items-center gap-3 mt-5">
+            <div className="flex items-center gap-3 mt-4 sm:mt-5">
               <a
                 href="https://youtube.com/@pocketrccars"
                 target="_blank"
                 rel="noopener"
                 aria-label="YouTube"
-                className="w-9 h-9 rounded-full bg-white/5 hover:bg-brand-red flex items-center justify-center transition-colors"
+                className="w-11 h-11 sm:w-10 sm:h-10 rounded-full bg-white/5 hover:bg-brand-red flex items-center justify-center transition-colors"
               >
-                <YoutubeIcon size={16} />
+                <YoutubeIcon size={18} />
               </a>
               <a
                 href={`https://instagram.com/${THEME.instagramHandle}`}
                 target="_blank"
                 rel="noopener"
                 aria-label="Instagram"
-                className="w-9 h-9 rounded-full bg-white/5 hover:bg-brand-red flex items-center justify-center transition-colors"
+                className="w-11 h-11 sm:w-10 sm:h-10 rounded-full bg-white/5 hover:bg-brand-red flex items-center justify-center transition-colors"
               >
-                <InstagramIcon size={16} />
+                <InstagramIcon size={18} />
               </a>
               <a
                 href={waLink()}
                 target="_blank"
                 rel="noopener"
                 aria-label="WhatsApp"
-                className="w-9 h-9 rounded-full bg-white/5 hover:bg-whatsapp-green flex items-center justify-center transition-colors"
+                className="w-11 h-11 sm:w-10 sm:h-10 rounded-full bg-white/5 hover:bg-whatsapp-green flex items-center justify-center transition-colors"
               >
-                <WhatsAppIcon size={16} />
+                <WhatsAppIcon size={18} />
               </a>
             </div>
           </div>
 
           {/* 2. Contact us */}
           <div>
-            <h3 className="font-display font-bold tracking-wider text-white text-sm uppercase mb-4">
+            <h3 className="font-display font-bold tracking-wider text-white text-xs sm:text-sm uppercase mb-3 sm:mb-4">
               Contact Us
             </h3>
-            <ul className="space-y-3 text-sm text-neutral-300">
+            <ul className="space-y-2.5 sm:space-y-3 text-xs sm:text-sm text-neutral-300">
               <li className="flex items-start gap-2.5">
                 <MapPin size={16} className="text-brand-red shrink-0 mt-0.5" />
                 <span className="leading-snug">
@@ -120,15 +121,15 @@ export default function Footer() {
 
           {/* 3. Quick links */}
           <div>
-            <h3 className="font-display font-bold tracking-wider text-white text-sm uppercase mb-4">
+            <h3 className="font-display font-bold tracking-wider text-white text-xs sm:text-sm uppercase mb-3 sm:mb-4">
               Quick Links
             </h3>
-            <ul className="space-y-2.5">
+            <ul className="space-y-2 sm:space-y-2.5">
               {QUICK_LINKS.map((l) => (
                 <li key={l.href}>
                   <Link
                     href={l.href}
-                    className="text-sm text-brand-red hover:text-white transition-colors"
+                    className="text-xs sm:text-sm text-brand-red hover:text-white transition-colors"
                   >
                     {l.label}
                   </Link>
@@ -137,9 +138,9 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* 4. Ships from (Map) */}
-          <div>
-            <h3 className="font-display font-bold tracking-wider text-white text-sm uppercase mb-4">
+          {/* 4. Ships from (Map) — spans both cols on mobile */}
+          <div className="col-span-2 lg:col-span-1">
+            <h3 className="font-display font-bold tracking-wider text-white text-xs sm:text-sm uppercase mb-3 sm:mb-4">
               Ships From
             </h3>
             <a

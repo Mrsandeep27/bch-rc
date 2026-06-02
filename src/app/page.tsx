@@ -13,7 +13,6 @@ import OfferStack from "@/components/OfferStack";
 import FAQ from "@/components/FAQ";
 import FinalCta from "@/components/FinalCta";
 import Footer from "@/components/Footer";
-import StickyMobileCTA from "@/components/StickyMobileCTA";
 import WhatsAppFab from "@/components/WhatsAppFab";
 import CartDrawer from "@/components/CartDrawer";
 import ExitIntentModal from "@/components/ExitIntentModal";
@@ -47,7 +46,6 @@ export default function Page() {
         <FinalCta />
       </main>
       <Footer />
-      <StickyMobileCTA />
       <WhatsAppFab />
       <CartDrawer />
       <SocialProofToast />

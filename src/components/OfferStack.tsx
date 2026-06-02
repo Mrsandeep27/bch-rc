@@ -59,30 +59,33 @@ export default function OfferStack() {
           </h2>
         </div>
 
-        <div className="mt-6 sm:mt-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-          {OFFERS_LIST.map((offer, i) => {
-            const Icon = offer.icon;
-            return (
-              <motion.div
-                key={offer.title}
-                initial={{ opacity: 0, y: 12 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.35, delay: i * 0.06, ease: "easeOut" }}
-                className="bg-white rounded-xl border border-brand-line p-4 sm:p-5 hover:border-brand-red hover:shadow-md transition-all"
-              >
-                <div className="w-11 h-11 rounded-lg bg-brand-red-soft text-brand-red flex items-center justify-center mb-3">
-                  <Icon size={20} aria-hidden />
-                </div>
-                <div className="font-semibold text-brand-ink text-base leading-tight">
-                  {offer.title}
-                </div>
-                <div className="text-sm text-brand-ink-soft mt-1.5 leading-snug">
-                  {offer.sub}
-                </div>
-              </motion.div>
-            );
-          })}
+        {/* Mobile: horizontal snap-scroll. Desktop: 3/5 col grid. */}
+        <div className="mt-6 sm:mt-8 -mx-4 sm:mx-0 overflow-x-auto sm:overflow-visible snap-x snap-mandatory sm:snap-none no-scrollbar">
+          <div className="flex sm:grid sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 px-4 sm:px-0 pb-2 sm:pb-0">
+            {OFFERS_LIST.map((offer, i) => {
+              const Icon = offer.icon;
+              return (
+                <motion.div
+                  key={offer.title}
+                  initial={{ opacity: 0, y: 12 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.35, delay: i * 0.06, ease: "easeOut" }}
+                  className="snap-center shrink-0 w-[62%] sm:w-auto bg-white rounded-xl border border-brand-line p-4 sm:p-5 hover:border-brand-red hover:shadow-md transition-all"
+                >
+                  <div className="w-11 h-11 rounded-lg bg-brand-red-soft text-brand-red flex items-center justify-center mb-3">
+                    <Icon size={20} aria-hidden />
+                  </div>
+                  <div className="font-semibold text-brand-ink text-base leading-tight">
+                    {offer.title}
+                  </div>
+                  <div className="text-sm text-brand-ink-soft mt-1.5 leading-snug">
+                    {offer.sub}
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </section>

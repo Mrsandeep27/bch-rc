@@ -108,10 +108,19 @@ export default function FeatureCarousel() {
           </p>
         </div>
 
-        <div className="mt-10 sm:mt-14 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          {FEATURES.map((f, i) => (
-            <Tile key={f.title} feat={f} i={i} />
-          ))}
+        {/* Mobile: horizontal snap-scroll (one tile per swipe).
+            Desktop: standard 2/4 col grid. */}
+        <div className="mt-10 sm:mt-14 -mx-4 sm:mx-0 overflow-x-auto sm:overflow-visible snap-x snap-mandatory sm:snap-none no-scrollbar">
+          <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 px-4 sm:px-0 pb-2 sm:pb-0">
+            {FEATURES.map((f, i) => (
+              <div
+                key={f.title}
+                className="snap-center shrink-0 w-[78%] sm:w-auto"
+              >
+                <Tile feat={f} i={i} />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </section>

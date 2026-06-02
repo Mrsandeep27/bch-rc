@@ -78,7 +78,9 @@ export default function BundlePicker() {
           </p>
         </div>
 
-        <div className="mt-10 sm:mt-14 grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+        {/* Mobile: horizontal snap-scroll (3 cards, swipe). Desktop: 3-col grid. */}
+        <div className="mt-10 sm:mt-14 -mx-4 sm:mx-0 overflow-x-auto sm:overflow-visible snap-x snap-mandatory sm:snap-none no-scrollbar">
+          <div className="flex sm:grid sm:grid-cols-3 gap-4 sm:gap-6 px-4 sm:px-0 pb-2 sm:pb-0 pt-4 sm:pt-0">
           {OPTIONS.map((opt, i) => {
             const isSelected = opt.qty === selectedQty;
             return (
@@ -91,7 +93,7 @@ export default function BundlePicker() {
                 viewport={{ once: true }}
                 transition={{ duration: 0.4, delay: i * 0.08, ease: "easeOut" }}
                 className={cn(
-                  "relative text-left bg-white rounded-2xl p-5 sm:p-7 border-2 transition-all",
+                  "snap-center shrink-0 w-[78%] sm:w-auto relative text-left bg-white rounded-2xl p-5 sm:p-7 border-2 transition-all",
                   isSelected
                     ? "border-brand-red shadow-2xl scale-[1.02]"
                     : "border-brand-line hover:border-brand-ink/40 hover:shadow-md"
@@ -155,6 +157,7 @@ export default function BundlePicker() {
               </motion.button>
             );
           })}
+          </div>
         </div>
 
         <div className="mt-8 sm:mt-10 flex flex-col items-center">
