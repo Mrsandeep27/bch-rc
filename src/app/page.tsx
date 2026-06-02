@@ -7,6 +7,7 @@ import StatsStrip from "@/components/StatsStrip";
 import SkuLineup from "@/components/SkuLineup";
 import FeatureCarousel from "@/components/FeatureCarousel";
 import OurStorySection from "@/components/OurStorySection";
+import UgcGrid from "@/components/UgcGrid";
 import BundlePicker from "@/components/BundlePicker";
 import OfferStack from "@/components/OfferStack";
 import FAQ from "@/components/FAQ";
@@ -15,6 +16,8 @@ import Footer from "@/components/Footer";
 import StickyMobileCTA from "@/components/StickyMobileCTA";
 import WhatsAppFab from "@/components/WhatsAppFab";
 import CartDrawer from "@/components/CartDrawer";
+import ExitIntentModal from "@/components/ExitIntentModal";
+import SocialProofToast from "@/components/SocialProofToast";
 import Loader from "@/components/Loader";
 
 export default function Page() {
@@ -37,6 +40,7 @@ export default function Page() {
         <SkuLineup />
         <FeatureCarousel />
         <OurStorySection />
+        <UgcGrid />
         <BundlePicker />
         <OfferStack />
         <FAQ />
@@ -46,6 +50,8 @@ export default function Page() {
       <StickyMobileCTA />
       <WhatsAppFab />
       <CartDrawer />
+      <SocialProofToast />
+      <ExitIntentModal />
     </>
   );
 }

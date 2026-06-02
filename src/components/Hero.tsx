@@ -9,6 +9,7 @@ import { waLink } from "@/lib/theme";
 import { THEME } from "@/lib/theme";
 import { getHeroSku } from "@/lib/products";
 import { useCart } from "@/lib/cart-store";
+import LaunchCountdown from "@/components/LaunchCountdown";
 
 function getVariantFromSource(source: string | null): HeroVariant {
   switch (source) {
@@ -76,8 +77,8 @@ export default function Hero() {
               <span className="font-display font-bold text-sm sm:text-base leading-none">
                 Flat 35% off
               </span>
-              <span className="text-white/70 text-[10px] font-mono uppercase tracking-widest hidden sm:inline">
-                · while stock lasts
+              <span className="hidden sm:flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-white/80 border-l border-white/30 pl-2.5">
+                ends in <LaunchCountdown variant="chip" />
               </span>
             </div>
           </motion.div>

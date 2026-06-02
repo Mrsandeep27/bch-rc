@@ -26,7 +26,8 @@ export const THEME = {
   whatsappNumber: "916362346498",
   email: "hello@pocketrccars.com",
   phoneDisplay: "+91 63623 46498",
-  instagramHandle: "pocketrccars",
+  instagramHandle: "164prccars",
+  instagramHandleAlt: "pocketrccar",
   youtubeHandle: "pocketrccars",
 
   // Hero

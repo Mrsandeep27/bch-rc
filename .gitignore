@@ -50,6 +50,16 @@ GST*.pdf
 *Certificate*.pdf
 *certificate*.pdf
 
+# Voice notes / private audio
+*.ogg
+WhatsApp*.ogg
+public/WhatsApp*.ogg
+
+# Scraped UGC raw videos — kept locally, not committed (saves repo size).
+# Site uses click-thru-to-Instagram model with .jpg posters only.
+public/ugc/*.mp4
+public/ugc/*.raw.*
+
 # vercel
 .vercel
 

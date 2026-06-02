@@ -80,7 +80,7 @@ function Counter({ target, suffix, duration = 1.6 }: { target: number; suffix: s
 export default function StatsStrip() {
   return (
     <section
-      className="py-10 sm:py-14 bg-brand-ink text-white"
+      className="py-6 sm:py-8 bg-brand-ink text-white"
       aria-label="Trust statistics"
     >
       <div className="max-w-6xl mx-auto px-4 grid grid-cols-3 gap-4 sm:gap-10">
@@ -95,11 +95,11 @@ export default function StatsStrip() {
               transition={{ duration: 0.5, delay: i * 0.12, ease: "easeOut" }}
               className="flex flex-col items-center text-center"
             >
-              <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-brand-red mb-2 sm:mb-3" aria-hidden />
-              <div className="font-display text-3xl sm:text-5xl font-bold leading-none">
+              <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-brand-red mb-1.5" aria-hidden />
+              <div className="font-display text-2xl sm:text-4xl font-bold leading-none">
                 <Counter target={stat.target} suffix={stat.suffix} />
               </div>
-              <div className="font-semibold text-xs sm:text-sm mt-2 sm:mt-3">{stat.label}</div>
+              <div className="font-semibold text-[11px] sm:text-sm mt-1.5">{stat.label}</div>
               <div className="text-white/55 text-[10px] sm:text-xs mt-0.5 font-mono">
                 {stat.sub}
               </div>

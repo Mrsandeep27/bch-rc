@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Minus, Plus, ShoppingBag, Zap, Truck, Shield, RotateCw } from "lucide-react";
@@ -8,6 +8,10 @@ import type { Sku } from "@/lib/products";
 import { formatINR, calcDiscountPct, cn } from "@/lib/utils";
 import { useCart } from "@/lib/cart-store";
 import { ProductPlaceholder } from "@/components/ProductPlaceholder";
+import PDPStickyCTA from "@/components/PDPStickyCTA";
+import PDPBundleUpsell from "@/components/PDPBundleUpsell";
+import ReviewsBlock from "@/components/ReviewsBlock";
+import RecentlyViewed, { recordView } from "@/components/RecentlyViewed";
 
 function swatchBg(swatch: string): string {
   if (swatch.startsWith("gradient:")) {
@@ -76,6 +80,12 @@ export default function PDPClient({ sku }: { sku: Sku }) {
     useCart.getState().add(sku.id, qty);
     router.push("/checkout");
   }
+
+  // Track this SKU as recently viewed for the "Pick up where you left off"
+  // strip — fires once when the PDP mounts.
+  useEffect(() => {
+    recordView(sku.id);
+  }, [sku.id]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 max-w-6xl mx-auto px-4 py-8">
@@ -236,6 +246,9 @@ export default function PDPClient({ sku }: { sku: Sku }) {
           Buy Now · {formatINR(sku.retailINR * qty)}
         </button>
 
+        {/* Bundle upsell at the decision moment — directly below Buy Now */}
+        <PDPBundleUpsell sku={sku} />
+
         {/* Trust row */}
         <div className="mt-6 grid grid-cols-3 gap-3 text-center">
           <div className="p-3 border border-brand-line rounded-lg">
@@ -291,7 +304,19 @@ export default function PDPClient({ sku }: { sku: Sku }) {
             </dl>
           </div>
         </details>
+
+        {/* Reviews — sits inside the right column on mobile/lg, full-width
+            visually thanks to mt + border-t inside ReviewsBlock */}
+        <ReviewsBlock skuId={sku.id} />
       </div>
+
+      {/* Recently-viewed strip — full-width below the two-column PDP grid */}
+      <div className="col-span-1 lg:col-span-2 -mx-4 lg:mx-0">
+        <RecentlyViewed excludeId={sku.id} />
+      </div>
+
+      {/* Desktop sticky CTA bar — slides in after scroll past Buy Now */}
+      <PDPStickyCTA sku={sku} selectedColorName={selectedColor?.name} />
     </div>
   );
 }

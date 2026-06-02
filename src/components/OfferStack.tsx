@@ -22,60 +22,63 @@ const OFFERS_LIST: Offer[] = [
   {
     icon: Gift,
     title: "Free drift wheels",
-    sub: "Extra drift wheels FREE with every order (worth ₹199)",
+    sub: "Extra wheels FREE · worth ₹199",
   },
   {
     icon: CreditCard,
     title: `Prepaid ₹${OFFERS.prepaidDiscountINR} off`,
-    sub: `Pay online → ${formatINR(1299 - OFFERS.prepaidDiscountINR)} (instead of ${formatINR(1299)} COD)`,
+    sub: `Pay online → ${formatINR(1299 - OFFERS.prepaidDiscountINR)}`,
   },
   {
     icon: Package,
     title: "Buy-2 bundle",
-    sub: `Mix any 2 cars → ${formatINR(OFFERS.bundle2PriceINR)} (save ${formatINR(OFFERS.bundle2SaveINR)})`,
+    sub: `Mix 2 → ${formatINR(OFFERS.bundle2PriceINR)} · save ${formatINR(OFFERS.bundle2SaveINR)}`,
   },
   {
     icon: Zap,
     title: "Festival drop",
-    sub: "Limited stock at launch price — dispatched in 24 hrs from Bangalore",
+    sub: "Launch price · 24-hr dispatch",
   },
   {
     icon: Sparkles,
-    title: `LED upgrade · +${formatINR(OFFERS.ledSmokeUpgradeINR)}`,
-    sub: "Unlocks full-body LED + driver figurine on Pro variants",
+    title: `LED upgrade +${formatINR(OFFERS.ledSmokeUpgradeINR)}`,
+    sub: "Full-body LED + driver figurine",
   },
 ];
 
 export default function OfferStack() {
   return (
-    <section className="py-14 sm:py-20 bg-brand-cream">
-      <div className="max-w-4xl mx-auto px-4">
-        <h2 className="text-3xl sm:text-4xl font-bold text-brand-ink text-center">
-          Stack the offers.
-        </h2>
+    <section className="py-12 sm:py-16 bg-brand-cream">
+      <div className="max-w-5xl mx-auto px-4">
+        <div className="text-center">
+          <p className="text-xs font-mono font-bold uppercase tracking-widest text-brand-red">
+            Stack &apos;em up
+          </p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-brand-ink mt-1">
+            Five offers. One cart.
+          </h2>
+        </div>
 
-        <div className="mt-8 bg-white rounded-2xl border border-brand-line divide-y divide-brand-line shadow-sm">
+        <div className="mt-6 sm:mt-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
           {OFFERS_LIST.map((offer, i) => {
             const Icon = offer.icon;
             return (
               <motion.div
                 key={offer.title}
-                initial={{ opacity: 0, y: 16 }}
+                initial={{ opacity: 0, y: 12 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ duration: 0.4, delay: i * 0.08, ease: "easeOut" }}
-                className="flex items-start sm:items-center gap-4 p-5 sm:p-6"
+                transition={{ duration: 0.35, delay: i * 0.06, ease: "easeOut" }}
+                className="bg-white rounded-xl border border-brand-line p-4 sm:p-5 hover:border-brand-red hover:shadow-md transition-all"
               >
-                <div className="w-11 h-11 rounded-full bg-brand-red-soft text-brand-red flex items-center justify-center shrink-0">
+                <div className="w-11 h-11 rounded-lg bg-brand-red-soft text-brand-red flex items-center justify-center mb-3">
                   <Icon size={20} aria-hidden />
                 </div>
-                <div>
-                  <div className="font-semibold text-brand-ink">
-                    {offer.title}
-                  </div>
-                  <div className="text-sm text-brand-ink-soft mt-0.5">
-                    {offer.sub}
-                  </div>
+                <div className="font-semibold text-brand-ink text-base leading-tight">
+                  {offer.title}
+                </div>
+                <div className="text-sm text-brand-ink-soft mt-1.5 leading-snug">
+                  {offer.sub}
                 </div>
               </motion.div>
             );
