@@ -46,11 +46,16 @@ function formatCount(n: number): string {
 
 function Counter({ target, suffix, duration = 1.6 }: { target: number; suffix: string; duration?: number }) {
   const ref = useRef<HTMLSpanElement>(null);
-  const inView = useInView(ref, { once: true, margin: "-30%" });
-  const [count, setCount] = useState(0);
+  const inView = useInView(ref, { once: true, margin: "0px 0px -10% 0px" });
+  // Start at target so the number is correct on first paint (no "0+" flash
+  // if the section never scrolls fully into view). The animation still plays
+  // once inView fires — it briefly resets to 0 and counts up from there.
+  const [count, setCount] = useState(target);
+  const animatedRef = useRef(false);
 
   useEffect(() => {
-    if (!inView) return;
+    if (!inView || animatedRef.current) return;
+    animatedRef.current = true;
     const start = performance.now();
     let raf = 0;
     const tick = (now: number) => {
@@ -59,6 +64,7 @@ function Counter({ target, suffix, duration = 1.6 }: { target: number; suffix: s
       setCount(Math.round(eased * target));
       if (t < 1) raf = requestAnimationFrame(tick);
     };
+    setCount(0);
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [inView, target, duration]);
