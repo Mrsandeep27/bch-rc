@@ -8,6 +8,19 @@
 
 export type Scale = "1:64" | "1:43" | "1:24";
 
+export type ColorVariant = {
+  /** Display name, e.g. "Blue", "Multi Colour", "Red & Orange" */
+  name: string;
+  /** Slug used in image filenames + URL query, e.g. "blue", "multi", "red-orange" */
+  slug: string;
+  /** Swatch fill — solid hex, or "gradient:from,to" / "gradient:from,mid,to" */
+  swatch: string;
+  /** Units in hand from Syed's warehouse — used for stock badges + sold-out gating */
+  stock: number;
+  /** Optional variant image. Falls back to sku.heroImage if absent. */
+  image?: string;
+};
+
 export type Sku = {
   id: string;
   slug: string;
@@ -24,6 +37,10 @@ export type Sku = {
   /** Optional web-optimized MP4 (muted, ~6s loop). Plays on hover in SkuLineup. */
   heroVideo?: string;
   altImages: string[];
+  /** When true, SKU exists in data but is hidden from the storefront grid. */
+  hidden?: boolean;
+  /** Per-color stock + image. Listed in display order. */
+  colors?: ColorVariant[];
   specs: {
     lengthMM: number;
     drive: "2WD" | "4WD";
@@ -62,6 +79,11 @@ export const PRODUCTS: Sku[] = [
       "/products/PRC-bmw-3.jpg",
       "/products/PRC-bmw-4.jpg",
     ],
+    colors: [
+      { name: "White",  slug: "white",  swatch: "#f1f1ef", stock: 35, image: "/products/colors/PRC-bmw-white.jpg" },
+      { name: "Blue",   slug: "blue",   swatch: "#1d4ed8", stock: 18, image: "/products/colors/PRC-bmw-blue.jpg" },
+      { name: "Black",  slug: "black",  swatch: "#111827", stock: 16, image: "/products/colors/PRC-bmw-black.jpg" },
+    ],
     specs: {
       lengthMM: 72,
       drive: "2WD",
@@ -98,6 +120,12 @@ export const PRODUCTS: Sku[] = [
       "/products/PRC-porsche-3.jpg",
       "/products/PRC-porsche-4.jpg",
     ],
+    colors: [
+      { name: "Dark Blue",    slug: "dark-blue",    swatch: "#1e3a8a",                              stock: 18, image: "/products/colors/PRC-porsche-dark-blue.jpg" },
+      { name: "Green",        slug: "green",        swatch: "#16a34a",                              stock: 18, image: "/products/colors/PRC-porsche-green.jpg" },
+      { name: "Yellow",       slug: "yellow",       swatch: "#facc15",                              stock: 18, image: "/products/colors/PRC-porsche-yellow.jpg" },
+      { name: "Multi Colour", slug: "multi",        swatch: "gradient:#f97316,#facc15,#16a34a,#2563eb", stock: 18, image: "/products/colors/PRC-porsche-multi.jpg" },
+    ],
     specs: {
       lengthMM: 70,
       drive: "2WD",
@@ -132,6 +160,12 @@ export const PRODUCTS: Sku[] = [
       "/products/PRC-thar-2.jpg",
       "/products/PRC-thar-3.jpg",
       "/products/PRC-thar-4.jpg",
+    ],
+    colors: [
+      { name: "Blue",   slug: "blue",   swatch: "#2563eb", stock: 11, image: "/products/colors/PRC-thar-blue.jpg" },
+      { name: "Yellow", slug: "yellow", swatch: "#facc15", stock:  8, image: "/products/colors/PRC-thar-yellow.jpg" },
+      { name: "White",  slug: "white",  swatch: "#f1f1ef", stock:  5, image: "/products/colors/PRC-thar-white.jpg" },
+      { name: "Black",  slug: "black",  swatch: "#111827", stock:  1, image: "/products/colors/PRC-thar-black.jpg" },
     ],
     specs: {
       lengthMM: 75,
@@ -168,6 +202,14 @@ export const PRODUCTS: Sku[] = [
       "/products/PRC-monster-2.jpg",
       "/products/PRC-monster-3.jpg",
       "/products/PRC-monster-4.jpg",
+    ],
+    colors: [
+      { name: "Blue #68",       slug: "blue-68",     swatch: "#1e40af",                              stock: 12, image: "/products/colors/PRC-monster-blue-68.jpg" },
+      { name: "Blue",           slug: "blue",        swatch: "#2563eb",                              stock: 11, image: "/products/colors/PRC-monster-blue.jpg" },
+      { name: "Yellow",         slug: "yellow",      swatch: "#facc15",                              stock: 11, image: "/products/colors/PRC-monster-yellow.jpg" },
+      { name: "White & Red",    slug: "white-red",   swatch: "gradient:#f8fafc,#dc2626",             stock: 11, image: "/products/colors/PRC-monster-white-red.jpg" },
+      { name: "Multi Colour",   slug: "multi",       swatch: "gradient:#f97316,#facc15,#16a34a,#2563eb", stock: 11, image: "/products/colors/PRC-monster-multi.jpg" },
+      { name: "Red & Orange",   slug: "red-orange",  swatch: "gradient:#dc2626,#f97316",             stock: 12, image: "/products/colors/PRC-monster-red-orange.jpg" },
     ],
     specs: {
       lengthMM: 85,
@@ -208,6 +250,10 @@ export const PRODUCTS: Sku[] = [
       "/products/PRC-f1-classic-3.jpg",
       "/products/PRC-f1-classic-4.jpg",
     ],
+    colors: [
+      { name: "White", slug: "white", swatch: "#f1f1ef", stock: 36, image: "/products/colors/PRC-f1-classic-white.jpg" },
+      { name: "Red",   slug: "red",   swatch: "#dc2626", stock: 36, image: "/products/colors/PRC-f1-classic-red.jpg" },
+    ],
     specs: {
       lengthMM: 70,
       drive: "2WD",
@@ -236,6 +282,7 @@ export const PRODUCTS: Sku[] = [
       "USB-C · LED headlights · drift wheels swap",
     ],
     bodyShape: "Ferrari-style F1, white livery",
+    hidden: true,
     heroImage: "/products/PRC-f1-ferrari.jpg",
     altImages: [
       "/products/PRC-f1-ferrari-2.jpg",
@@ -270,6 +317,7 @@ export const PRODUCTS: Sku[] = [
       "LED tail-lights · age 6+ friendly",
     ],
     bodyShape: "VW Beetle-style round-roof",
+    hidden: true,
     heroImage: "/products/PRC-beetle.jpg",
     altImages: [
       "/products/PRC-beetle-2.jpg",
@@ -305,6 +353,7 @@ export const PRODUCTS: Sku[] = [
     ],
     badge: "PRO",
     bodyShape: "F1 Leclerc-style with driver",
+    hidden: true,
     heroImage: "/products/PRC-f1-driver.jpg",
     altImages: [
       "/products/PRC-f1-driver-2.jpg",
@@ -331,8 +380,19 @@ export function getProductById(id: string): Sku | undefined {
   return PRODUCTS.find((p) => p.id === id);
 }
 
+/** Storefront grid — excludes anything flagged `hidden`. */
+export function getVisibleProducts(): Sku[] {
+  return PRODUCTS.filter((p) => !p.hidden);
+}
+
 export function getHeroSku(): Sku {
   return PRODUCTS.find((p) => p.id === HERO_SKU_ID)!;
+}
+
+/** Sum of stock across all color variants. Falls back to 0 if no variants. */
+export function totalStock(sku: Sku): number {
+  if (!sku.colors?.length) return 0;
+  return sku.colors.reduce((sum, c) => sum + c.stock, 0);
 }
 
 export const WHOLESALE_TIERS = [

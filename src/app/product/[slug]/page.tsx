@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
-import { PRODUCTS } from "@/lib/products";
+import { PRODUCTS, getVisibleProducts } from "@/lib/products";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -11,7 +11,9 @@ import CartDrawer from "@/components/CartDrawer";
 import PDPClient from "@/components/PDPClient";
 
 export function generateStaticParams() {
-  return PRODUCTS.map((p) => ({ slug: p.slug }));
+  // Only prerender visible SKUs. Hidden SKUs hit notFound() at runtime if anyone
+  // navigates directly to their URL.
+  return getVisibleProducts().map((p) => ({ slug: p.slug }));
 }
 
 export async function generateMetadata({
@@ -35,7 +37,7 @@ export default async function ProductPage({
 }) {
   const { slug } = await params;
   const sku = PRODUCTS.find((p) => p.slug === slug);
-  if (!sku) notFound();
+  if (!sku || sku.hidden) notFound();
 
   return (
     <>

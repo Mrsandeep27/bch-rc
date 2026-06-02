@@ -3,10 +3,40 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ShoppingBag, Star } from "lucide-react";
-import { PRODUCTS, type Sku } from "@/lib/products";
+import { getVisibleProducts, type Sku, type ColorVariant } from "@/lib/products";
 import { formatINR, calcDiscountPct, cn } from "@/lib/utils";
 import { useCart } from "@/lib/cart-store";
 import { ProductImage } from "@/components/ProductImage";
+
+/** Resolve a swatch token (hex or `gradient:from,to[,...]`) to a CSS background value. */
+function swatchBg(swatch: string): string {
+  if (swatch.startsWith("gradient:")) {
+    const stops = swatch.slice("gradient:".length);
+    return `linear-gradient(135deg, ${stops})`;
+  }
+  return swatch;
+}
+
+function SwatchRow({ colors, max = 5 }: { colors: ColorVariant[]; max?: number }) {
+  const shown = colors.slice(0, max);
+  const extra = colors.length - shown.length;
+  return (
+    <div className="flex items-center gap-1.5">
+      {shown.map((c) => (
+        <span
+          key={c.slug}
+          title={c.name}
+          aria-label={c.name}
+          className="w-3.5 h-3.5 rounded-full border border-brand-line shadow-sm"
+          style={{ background: swatchBg(c.swatch) }}
+        />
+      ))}
+      {extra > 0 && (
+        <span className="text-[10px] font-mono text-brand-ink-soft">+{extra}</span>
+      )}
+    </div>
+  );
+}
 
 // One-line "pick reason" per SKU index — small caps badge above SKU name.
 // Mirrors Legend of Toys "Best for drifting / Parents' choice / Collector's pick".
@@ -88,6 +118,10 @@ function SkuCard({ sku, index }: SkuCardProps) {
           {sku.name}
         </Link>
 
+        {sku.colors && sku.colors.length > 0 && (
+          <SwatchRow colors={sku.colors} />
+        )}
+
         <div className="flex items-baseline justify-between gap-2 flex-wrap">
           <div className="flex items-baseline gap-2">
             <span className="text-xl sm:text-2xl font-bold text-brand-ink">
@@ -119,13 +153,13 @@ export default function SkuLineup() {
           Pick your drift.
         </h2>
         <p className="text-brand-ink-soft text-center mt-2 text-base sm:text-lg">
-          Eight cars. One obsession.
+          Five icons. Multiple colours. One obsession.
         </p>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 mt-10 sm:mt-14">
-        <div className="flex overflow-x-auto snap-x snap-mandatory gap-4 no-scrollbar -mx-4 px-4 pb-4 sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:gap-5 lg:gap-6 sm:overflow-visible sm:min-w-0 sm:mx-0 sm:px-0 sm:pb-0">
-          {PRODUCTS.map((sku, i) => (
+        <div className="flex overflow-x-auto snap-x snap-mandatory gap-4 no-scrollbar -mx-4 px-4 pb-4 sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 sm:gap-5 lg:gap-6 sm:overflow-visible sm:min-w-0 sm:mx-0 sm:px-0 sm:pb-0">
+          {getVisibleProducts().map((sku, i) => (
             <SkuCard key={sku.id} sku={sku} index={i} />
           ))}
         </div>

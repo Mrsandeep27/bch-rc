@@ -45,6 +45,11 @@ public/*.MOV
 __pycache__/
 *.pyc
 
+# Private legal docs — do NOT commit to a public repo
+GST*.pdf
+*Certificate*.pdf
+*certificate*.pdf
+
 # vercel
 .vercel
 

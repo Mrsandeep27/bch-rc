@@ -9,6 +9,13 @@ import { formatINR, calcDiscountPct, cn } from "@/lib/utils";
 import { useCart } from "@/lib/cart-store";
 import { ProductPlaceholder } from "@/components/ProductPlaceholder";
 
+function swatchBg(swatch: string): string {
+  if (swatch.startsWith("gradient:")) {
+    return `linear-gradient(135deg, ${swatch.slice("gradient:".length)})`;
+  }
+  return swatch;
+}
+
 /**
  * Gallery image with graceful fallback — uses next/image and degrades to the
  * colored SVG placeholder if the file 404s. Lets us list altImages that don't
@@ -44,11 +51,17 @@ export default function PDPClient({ sku }: { sku: Sku }) {
   const router = useRouter();
   const [qty, setQty] = useState(1);
   const [activeImage, setActiveImage] = useState(0);
+  const [selectedColorSlug, setSelectedColorSlug] = useState<string | null>(
+    sku.colors?.[0]?.slug ?? null
+  );
+  const selectedColor =
+    sku.colors?.find((c) => c.slug === selectedColorSlug) ?? null;
   const savings = sku.mrpINR - sku.retailINR;
   const pct = calcDiscountPct(sku.mrpINR, sku.retailINR);
-  // Build the gallery: hero + altImages. Missing files fall back gracefully.
-  const gallery = [sku.heroImage, ...sku.altImages].filter(Boolean);
-  const activeSrc = gallery[activeImage] ?? sku.heroImage;
+  // Color-specific hero overrides the base hero; alt angles are shared across colors.
+  const heroSrc = selectedColor?.image ?? sku.heroImage;
+  const gallery = [heroSrc, ...sku.altImages].filter(Boolean);
+  const activeSrc = gallery[activeImage] ?? heroSrc;
 
   function addToCart() {
     useCart.getState().add(sku.id, qty);
@@ -127,6 +140,46 @@ export default function PDPClient({ sku }: { sku: Sku }) {
             Inclusive of all taxes · Pay online → save ₹100
           </p>
         </div>
+
+        {/* Color picker */}
+        {sku.colors && sku.colors.length > 0 && (
+          <div className="mt-6">
+            <div className="flex items-baseline justify-between">
+              <span className="text-xs font-mono uppercase tracking-widest text-brand-ink-soft">
+                Colour
+              </span>
+              {selectedColor && (
+                <span className="text-sm font-semibold text-brand-ink">
+                  {selectedColor.name}
+                </span>
+              )}
+            </div>
+            <div className="mt-2.5 flex flex-wrap gap-2">
+              {sku.colors.map((c) => {
+                const active = c.slug === selectedColorSlug;
+                return (
+                  <button
+                    key={c.slug}
+                    type="button"
+                    onClick={() => {
+                      setSelectedColorSlug(c.slug);
+                      setActiveImage(0);
+                    }}
+                    aria-label={c.name}
+                    aria-pressed={active}
+                    className={cn(
+                      "w-9 h-9 rounded-full border-2 transition-all relative",
+                      active
+                        ? "border-brand-ink ring-2 ring-offset-2 ring-brand-red"
+                        : "border-brand-line hover:border-brand-ink-soft"
+                    )}
+                    style={{ background: swatchBg(c.swatch) }}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Bullets */}
         <ul className="mt-6 space-y-2">

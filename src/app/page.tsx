@@ -6,6 +6,7 @@ import TrustMarquee from "@/components/TrustMarquee";
 import StatsStrip from "@/components/StatsStrip";
 import SkuLineup from "@/components/SkuLineup";
 import FeatureCarousel from "@/components/FeatureCarousel";
+import OurStorySection from "@/components/OurStorySection";
 import BundlePicker from "@/components/BundlePicker";
 import OfferStack from "@/components/OfferStack";
 import FAQ from "@/components/FAQ";
@@ -35,6 +36,7 @@ export default function Page() {
         <StatsStrip />
         <SkuLineup />
         <FeatureCarousel />
+        <OurStorySection />
         <BundlePicker />
         <OfferStack />
         <FAQ />

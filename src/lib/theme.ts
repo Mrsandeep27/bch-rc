@@ -22,10 +22,10 @@ export const THEME = {
   logoBadge: "/logo/prc-red-accent.png",       // round black badge + red car — social profile pic
   favicon: "/logo/prc-favicon-512.png",
 
-  // Contact (placeholders until Syed provides)
-  whatsappNumber: "919999999999",
+  // Contact (real — Syed's WhatsApp business line)
+  whatsappNumber: "916362346498",
   email: "hello@pocketrccars.com",
-  phoneDisplay: "+91 99999 99999",
+  phoneDisplay: "+91 63623 46498",
   instagramHandle: "pocketrccars",
   youtubeHandle: "pocketrccars",
 
@@ -74,6 +74,20 @@ export const THEME = {
 
   // Final CTA
   finalCtaH2: "Order now — dispatched in 24 hrs from Bangalore.",
+
+  // Legal — required on storefront under Consumer Protection (E-commerce)
+  // Rules 2020. Sourced from GST REG-06 cert dated 2023-03-18 (valid from
+  // 2023-02-02, no expiry).
+  legal: {
+    gstin: "29AMVPI3949R1ZQ",
+    legalName: "Syed Ibrahim",
+    tradeName: "Bharath Cycle Hub",
+    constitution: "Proprietorship",
+    stateCode: "29", // Karnataka
+    registeredAddress:
+      "Temple, No 303, 15th A Cross, HIG A Sector, Yelahanka 1st Stage, Bengaluru, Karnataka 560064",
+    addressShort: "Yelahanka 1st Stage, Bengaluru, Karnataka 560064",
+  },
 } as const;
 
 export function waLink(message?: string): string {
