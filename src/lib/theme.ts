@@ -44,7 +44,7 @@ export const THEME = {
     primaryHover: "#C4151F",
     primarySoft: "#FEF2F3",
     ink: "#0A0A0A",            // matte black
-    inkSoft: "#525252",
+    inkSoft: "#3a3a3a",
     cream: "#FAF8F5",          // off-white background
     line: "#E5E5E5",
     accent: "#FACC15",         // finish-line yellow (for badges)
