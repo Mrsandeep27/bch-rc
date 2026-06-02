@@ -58,39 +58,34 @@ export default function Hero() {
       {/* Subtle bottom-vignette */}
       <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black to-transparent" />
 
-      {/* Tilted ticket-badge — launch-week offer sticker (top-right of hero) */}
-      <motion.div
-        initial={{ opacity: 0, rotate: -8, scale: 0.7 }}
-        animate={{ opacity: 1, rotate: -8, scale: 1 }}
-        transition={{ duration: 0.7, delay: 0.4, ease: [0.34, 1.56, 0.64, 1] }}
-        className="absolute z-20 right-4 sm:right-12 top-24 sm:top-32 pointer-events-none select-none"
-        aria-hidden
-      >
-        <div className="relative bg-brand-red text-white px-4 sm:px-6 py-3 sm:py-4 shadow-2xl">
-          {/* Punch holes — left edge */}
-          <span className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-black" />
-          <span className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-3 h-3 rounded-full bg-black" />
-          <div className="text-center">
-            <div className="font-mono text-[9px] sm:text-[10px] uppercase tracking-[0.25em] opacity-90">
-              Launch week
-            </div>
-            <div className="font-display font-bold text-2xl sm:text-3xl leading-none mt-1">
-              FLAT 35% OFF
-            </div>
-            <div className="font-mono text-[9px] sm:text-[10px] uppercase tracking-[0.2em] mt-1 opacity-90">
-              While stock lasts
-            </div>
-          </div>
-        </div>
-      </motion.div>
-
       {/* Content stack — left-aligned on desktop, centered on mobile */}
       <div className="relative z-10 max-w-7xl mx-auto px-6 sm:px-10 py-20 sm:py-28 min-h-screen flex pb-44 sm:pb-40">
         <div className="w-full sm:max-w-xl flex flex-col justify-center text-left">
-          <motion.span
+          {/* Launch-week offer chip — slim, sits inline above the eyebrow */}
+          <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: "easeOut" }}
+            className="mb-4 sm:mb-5"
+          >
+            <div className="inline-flex items-center gap-2.5 bg-brand-red/95 text-white pl-2 pr-3.5 py-1.5 rounded-full shadow-lg backdrop-blur-sm">
+              <span className="flex items-center gap-1.5 bg-white text-brand-red text-[9px] font-mono font-bold uppercase tracking-widest px-2 py-0.5 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-brand-red animate-pulse" />
+                Launch Week
+              </span>
+              <span className="font-display font-bold text-sm sm:text-base leading-none">
+                Flat 35% off
+              </span>
+              <span className="text-white/70 text-[10px] font-mono uppercase tracking-widest hidden sm:inline">
+                · while stock lasts
+              </span>
+            </div>
+          </motion.div>
+
+          <motion.span
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.05, ease: "easeOut" }}
             className="font-mono text-[10px] sm:text-xs uppercase tracking-[0.2em] text-white/65 mb-4 sm:mb-5"
           >
             Made in Bangalore · Trasped 1:64 scale

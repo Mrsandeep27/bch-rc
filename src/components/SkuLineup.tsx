@@ -74,12 +74,12 @@ function SkuCard({ sku, index }: SkuCardProps) {
           : "border-brand-line"
       )}
     >
-      <div className="aspect-square relative flex items-center justify-center">
+      <div className="aspect-square relative flex items-center justify-center overflow-hidden">
         <ProductImage sku={sku} />
         {sku.badge && (
           <span
             className={cn(
-              "absolute top-3 left-3 bg-brand-red text-white text-[10px] sm:text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full z-10",
+              "absolute top-3 left-3 bg-brand-red text-white text-[10px] sm:text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full z-10 shadow-md",
               isHero && "flex items-center gap-1"
             )}
           >
@@ -88,15 +88,16 @@ function SkuCard({ sku, index }: SkuCardProps) {
           </span>
         )}
 
-        {/* Tilted -% discount chip — top-right corner */}
+        {/* Diagonal corner ribbon — top-right, clean cut design */}
         {pct >= 5 && (
-          <span
-            className="absolute top-3 right-3 z-10 bg-brand-red text-white font-display font-bold text-base sm:text-lg px-3 py-1.5 shadow-lg select-none"
-            style={{ transform: "rotate(8deg)" }}
+          <div
             aria-label={`${pct} percent off`}
+            className="absolute top-0 right-0 z-10 w-[88px] h-[88px] overflow-hidden pointer-events-none select-none"
           >
-            -{pct}%
-          </span>
+            <div className="absolute top-[18px] -right-[26px] w-[120px] bg-brand-red text-white text-center py-1 shadow-lg font-display font-bold text-sm sm:text-base tracking-tight rotate-45">
+              {pct}% OFF
+            </div>
+          </div>
         )}
       </div>
 

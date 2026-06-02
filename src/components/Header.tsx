@@ -73,7 +73,7 @@ export default function Header() {
                 href={link.href}
                 className={cn(
                   "text-sm font-medium transition-colors",
-                  scrolled
+                  useSolidStyle
                     ? "text-brand-ink-soft hover:text-brand-red"
                     : "text-white/80 hover:text-white"
                 )}
@@ -102,7 +102,7 @@ export default function Header() {
               aria-label={`Cart (${cartCount} items)`}
               className={cn(
                 "relative p-2.5 rounded-full transition-colors",
-                scrolled
+                useSolidStyle
                   ? "hover:bg-brand-cream text-brand-ink"
                   : "hover:bg-white/10 text-white"
               )}
@@ -120,7 +120,7 @@ export default function Header() {
               onClick={() => setMobileOpen((v) => !v)}
               className={cn(
                 "lg:hidden p-2.5 rounded-full transition-colors",
-                scrolled
+                useSolidStyle
                   ? "hover:bg-brand-cream text-brand-ink"
                   : "hover:bg-white/10 text-white"
               )}
