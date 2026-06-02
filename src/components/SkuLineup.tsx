@@ -163,6 +163,14 @@ export default function SkuLineup() {
             <SkuCard key={sku.id} sku={sku} index={i} />
           ))}
         </div>
+
+        {/* "More coming soon" — sits below the grid, intentionally subtle */}
+        <div className="mt-8 sm:mt-10 flex justify-center">
+          <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-cream border border-brand-line text-xs sm:text-sm font-mono uppercase tracking-widest text-brand-ink-soft">
+            <span className="w-1.5 h-1.5 rounded-full bg-brand-red animate-pulse" />
+            More drift cars dropping soon · stay tuned
+          </span>
+        </div>
       </div>
     </section>
   );
