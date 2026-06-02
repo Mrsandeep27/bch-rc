@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Script from "next/script";
 import { useRouter } from "next/navigation";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
 import Footer from "@/components/Footer";
+import { PayButton } from "@/components/PayButton";
 import {
   useCart,
   getCartSubtotal,
@@ -13,6 +15,30 @@ import { OFFERS } from "@/lib/config";
 import { formatINR } from "@/lib/utils";
 
 type PaymentMethod = "upi" | "cod";
+
+type RazorpayOptions = {
+  key: string;
+  amount: number;
+  currency: string;
+  name: string;
+  description: string;
+  order_id: string;
+  prefill?: { name?: string; email?: string; contact?: string };
+  notes?: Record<string, string>;
+  theme?: { color?: string };
+  handler: (response: {
+    razorpay_payment_id: string;
+    razorpay_order_id: string;
+    razorpay_signature: string;
+  }) => void;
+  modal?: { ondismiss?: () => void };
+};
+
+declare global {
+  interface Window {
+    Razorpay?: new (options: RazorpayOptions) => { open(): void };
+  }
+}
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -31,6 +57,7 @@ export default function CheckoutPage() {
   const [stateName, setStateName] = useState("");
   const [payment, setPayment] = useState<PaymentMethod>("upi");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (count === 0) {
@@ -46,12 +73,101 @@ export default function CheckoutPage() {
   const prepaidDiscount = payment === "upi" ? OFFERS.prepaidDiscountINR : 0;
   const total = subtotal + shipping + codFee - prepaidDiscount;
 
+  function validate(): string | null {
+    if (name.trim().length < 2) return "Please enter your full name.";
+    if (!/^\d{10}$/.test(phone)) return "Enter a valid 10-digit mobile number.";
+    if (!/^\d{6}$/.test(pincode)) return "Enter a valid 6-digit pincode.";
+    if (line1.trim().length < 3) return "Please enter your address.";
+    if (city.trim().length < 2) return "Please enter your city.";
+    if (stateName.trim().length < 2) return "Please enter your state.";
+    return null;
+  }
+
   async function handlePlaceOrder() {
+    setError(null);
+    const validation = validate();
+    if (validation) {
+      setError(validation);
+      return;
+    }
+
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1500));
-    const orderId = `PRC-${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
-    useCart.getState().clear();
-    router.push(`/orders/${orderId}`);
+    try {
+      const res = await fetch("/api/orders/create", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          siteId: "prc",
+          items: items.map((i) => ({ skuId: i.skuId, qty: i.qty })),
+          address: {
+            fullName: name.trim(),
+            phone,
+            email: email.trim(),
+            line1: line1.trim(),
+            line2: line2.trim(),
+            city: city.trim(),
+            state: stateName.trim(),
+            pincode,
+          },
+          paymentMethod: payment === "upi" ? "UPI" : "COD",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to create order");
+      }
+
+      if (data.paymentMethod === "COD") {
+        useCart.getState().clear();
+        router.push(`/orders/${data.orderId}`);
+        return;
+      }
+
+      // Open Razorpay modal for prepaid.
+      if (!window.Razorpay) {
+        throw new Error("Razorpay SDK didn't load. Refresh and try again.");
+      }
+      const rzp = new window.Razorpay({
+        key: data.razorpayKeyId,
+        amount: data.amountInr * 100,
+        currency: "INR",
+        name: "PRC Cars",
+        description: `Order ${data.orderId}`,
+        order_id: data.razorpayOrderId,
+        prefill: {
+          name: data.customerName,
+          email: data.customerEmail,
+          contact: data.customerPhone,
+        },
+        theme: { color: "#0A0A0A" },
+        handler: async (response) => {
+          try {
+            const v = await fetch(`/api/orders/${data.orderId}/verify`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpaySignature: response.razorpay_signature,
+              }),
+            });
+            const vData = await v.json();
+            if (!v.ok) throw new Error(vData.error || "Verification failed");
+            useCart.getState().clear();
+            router.push(`/orders/${data.orderId}`);
+          } catch (err) {
+            setError(String(err));
+            setLoading(false);
+          }
+        },
+        modal: {
+          ondismiss: () => setLoading(false),
+        },
+      });
+      rzp.open();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setLoading(false);
+    }
   }
 
   const ctaLabel =
@@ -61,6 +177,10 @@ export default function CheckoutPage() {
 
   return (
     <>
+      <Script
+        src="https://checkout.razorpay.com/v1/checkout.js"
+        strategy="lazyOnload"
+      />
       <AnnouncementBar />
 
       <main className="bg-brand-cream min-h-screen py-12 px-4">
@@ -258,14 +378,18 @@ export default function CheckoutPage() {
           </div>
 
           <div className="sticky bottom-0 mt-6 -mx-4 px-4 py-3 bg-brand-cream/95 backdrop-blur lg:static lg:bg-transparent lg:mx-0 lg:px-0 lg:py-0">
-            <button
-              type="button"
+            {error && (
+              <div className="mb-3 rounded-lg border border-brand-red bg-brand-red-soft px-4 py-3 text-sm text-brand-red">
+                {error}
+              </div>
+            )}
+            <PayButton
+              label={loading ? "Placing order..." : ctaLabel}
               onClick={handlePlaceOrder}
               disabled={loading}
-              className="w-full bg-brand-red hover:bg-brand-red-hover text-white py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {loading ? "Placing order..." : ctaLabel}
-            </button>
+              loading={loading}
+              className="w-full text-lg"
+            />
             <p className="text-xs text-brand-ink-soft text-center mt-3">
               7-Day Free Replacement · Ships in 24 hrs from Bangalore
             </p>

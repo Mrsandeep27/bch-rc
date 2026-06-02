@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   ChevronLeft,
   Package,
@@ -19,9 +20,6 @@ import { WhatsAppIcon } from "@/components/BrandIcons";
 import { THEME } from "@/lib/theme";
 import { waLink } from "@/lib/config";
 
-// Stub status pipeline — replaced with real Shiprocket webhook data once the
-// backend is wired. For now: enter any order ID matching the pattern PRC-XXXX
-// and see a sample 4-step journey.
 type Step = {
   key: "placed" | "packed" | "shipped" | "delivered";
   label: string;
@@ -30,16 +28,109 @@ type Step = {
 };
 
 const STEPS: Step[] = [
-  { key: "placed", label: "Order placed", sub: "Confirmed + payment verified", icon: CheckCircle2 },
-  { key: "packed", label: "Packed", sub: "Boxed at Yelahanka warehouse", icon: Package },
-  { key: "shipped", label: "Out for delivery", sub: "Shiprocket courier en route", icon: Truck },
-  { key: "delivered", label: "Delivered", sub: "Enjoy your drift!", icon: CheckCircle2 },
+  {
+    key: "placed",
+    label: "Order placed",
+    sub: "Confirmed + payment verified",
+    icon: CheckCircle2,
+  },
+  {
+    key: "packed",
+    label: "Packed",
+    sub: "Boxed at Yelahanka warehouse",
+    icon: Package,
+  },
+  {
+    key: "shipped",
+    label: "Out for delivery",
+    sub: "Shiprocket courier en route",
+    icon: Truck,
+  },
+  {
+    key: "delivered",
+    label: "Delivered",
+    sub: "Enjoy your drift!",
+    icon: CheckCircle2,
+  },
 ];
 
+type OrderApiResponse = {
+  id: string;
+  status: string;
+  paymentStatus: string;
+  courierName: string | null;
+  trackingUrl: string | null;
+  awbCode: string | null;
+  placedAt: string;
+  paidAt: string | null;
+  packedAt: string | null;
+  shippedAt: string | null;
+  deliveredAt: string | null;
+  cancelledAt: string | null;
+};
+
+/** Map DB status → which pipeline step is "current" (active) */
+function statusToStepIndex(status: string): number {
+  switch (status) {
+    case "PENDING":
+      return -1; // payment not yet captured
+    case "PAID":
+      return 0; // placed/confirmed
+    case "PACKED":
+      return 1;
+    case "SHIPPED":
+      return 2;
+    case "DELIVERED":
+      return 3;
+    case "CANCELLED":
+    case "FAILED":
+    case "ABANDONED":
+      return -2; // special — show error
+    default:
+      return 0;
+  }
+}
+
 export default function TrackPage() {
-  const [input, setInput] = useState("");
-  const [submitted, setSubmitted] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const initialId = searchParams.get("id") ?? "";
+
+  const [input, setInput] = useState(initialId);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [order, setOrder] = useState<OrderApiResponse | null>(null);
+
+  async function fetchOrder(id: string) {
+    setLoading(true);
+    setError(null);
+    setOrder(null);
+    try {
+      const res = await fetch(`/api/orders/${id}`);
+      if (res.status === 404) {
+        setError("No order found with that ID. Double-check the WhatsApp confirmation.");
+        return;
+      }
+      if (!res.ok) {
+        setError("Couldn't fetch your order. Try again or WhatsApp us.");
+        return;
+      }
+      const data = (await res.json()) as OrderApiResponse;
+      setOrder(data);
+    } catch {
+      setError("Network error. Check your connection and retry.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Auto-fetch if landing with ?id=PRC-XXXXXXXX
+  useEffect(() => {
+    if (initialId) {
+      const id = initialId.trim().toUpperCase();
+      if (/^PRC-[A-Z0-9]{4,12}$/.test(id)) fetchOrder(id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialId]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -49,19 +140,17 @@ export default function TrackPage() {
       return;
     }
     if (!/^PRC-[A-Z0-9]{4,12}$/.test(id)) {
-      setError("Order IDs look like PRC-XXXXXXXX (the format on your WhatsApp confirmation).");
+      setError(
+        "Order IDs look like PRC-XXXXXXXX (the format on your WhatsApp confirmation).",
+      );
       return;
     }
-    setError(null);
-    setSubmitted(id);
+    fetchOrder(id);
   }
 
-  // Stub: deterministic "current step" based on the order ID length so the
-  // demo feels real. Real order pipeline lands when Supabase + Shiprocket
-  // webhooks are wired.
-  const currentStep = submitted
-    ? ((submitted.length + 1) % STEPS.length) as 0 | 1 | 2 | 3
-    : -1;
+  const currentStep = order ? statusToStepIndex(order.status) : -1;
+  const isCancelled = currentStep === -2;
+  const isPending = order?.status === "PENDING";
 
   return (
     <>
@@ -112,9 +201,10 @@ export default function TrackPage() {
             </div>
             <button
               type="submit"
-              className="bg-brand-red hover:bg-brand-red-hover text-white px-6 py-3 sm:py-4 rounded-xl font-bold text-base transition-colors"
+              disabled={loading}
+              className="bg-brand-red hover:bg-brand-red-hover disabled:opacity-50 text-white px-6 py-3 sm:py-4 rounded-xl font-bold text-base transition-colors"
             >
-              Track
+              {loading ? "Searching..." : "Track"}
             </button>
           </form>
 
@@ -125,7 +215,7 @@ export default function TrackPage() {
             </p>
           )}
 
-          {submitted && (
+          {order && (
             <div className="mt-8 border border-brand-line rounded-2xl p-5 sm:p-7 bg-white">
               <div className="flex items-baseline justify-between gap-3 mb-5">
                 <div>
@@ -133,63 +223,114 @@ export default function TrackPage() {
                     Order
                   </p>
                   <p className="font-display text-xl font-bold text-brand-ink font-mono mt-0.5">
-                    {submitted}
+                    {order.id}
                   </p>
                 </div>
-                <span className="bg-success/10 text-success text-[11px] font-mono uppercase tracking-widest font-semibold px-2.5 py-1 rounded-full">
-                  Active
-                </span>
+                {isCancelled ? (
+                  <span className="bg-brand-red/10 text-brand-red text-[11px] font-mono uppercase tracking-widest font-semibold px-2.5 py-1 rounded-full">
+                    {order.status}
+                  </span>
+                ) : isPending ? (
+                  <span className="bg-gold/10 text-gold text-[11px] font-mono uppercase tracking-widest font-semibold px-2.5 py-1 rounded-full">
+                    Payment pending
+                  </span>
+                ) : (
+                  <span className="bg-success/10 text-success text-[11px] font-mono uppercase tracking-widest font-semibold px-2.5 py-1 rounded-full">
+                    Active
+                  </span>
+                )}
               </div>
 
-              {/* Step pipeline */}
-              <ol className="space-y-3">
-                {STEPS.map((step, i) => {
-                  const done = i <= currentStep;
-                  const active = i === currentStep;
-                  const Icon = step.icon;
-                  return (
-                    <li
-                      key={step.key}
-                      className={`flex items-start gap-4 p-3 rounded-xl border transition-colors ${
-                        active
-                          ? "border-brand-red bg-brand-red-soft"
-                          : done
-                          ? "border-success/30 bg-success/5"
-                          : "border-brand-line bg-white"
-                      }`}
-                    >
-                      <span
-                        className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center ${
+              {isCancelled ? (
+                <p className="text-sm text-brand-ink-soft">
+                  This order is {order.status.toLowerCase()}. WhatsApp us if you
+                  think this is wrong.
+                </p>
+              ) : isPending ? (
+                <p className="text-sm text-brand-ink-soft">
+                  Your payment hasn&apos;t been captured yet. If you completed
+                  the payment, please wait a few seconds and refresh. If
+                  you&apos;d like to retry, WhatsApp us with the order ID.
+                </p>
+              ) : (
+                <ol className="space-y-3">
+                  {STEPS.map((step, i) => {
+                    const done = i <= currentStep;
+                    const active = i === currentStep;
+                    const Icon = step.icon;
+                    return (
+                      <li
+                        key={step.key}
+                        className={`flex items-start gap-4 p-3 rounded-xl border transition-colors ${
                           active
-                            ? "bg-brand-red text-white"
+                            ? "border-brand-red bg-brand-red-soft"
                             : done
-                            ? "bg-success text-white"
-                            : "bg-brand-cream text-brand-ink-soft"
+                              ? "border-success/30 bg-success/5"
+                              : "border-brand-line bg-white"
                         }`}
                       >
-                        <Icon size={16} />
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <p
-                          className={`text-sm font-semibold ${
-                            done || active ? "text-brand-ink" : "text-brand-ink-soft"
+                        <span
+                          className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center ${
+                            active
+                              ? "bg-brand-red text-white"
+                              : done
+                                ? "bg-success text-white"
+                                : "bg-brand-cream text-brand-ink-soft"
                           }`}
                         >
-                          {step.label}
-                        </p>
-                        <p className="text-xs text-brand-ink-soft mt-0.5">
-                          {step.sub}
-                        </p>
-                      </div>
-                      {active && (
-                        <span className="text-[10px] font-mono uppercase tracking-widest text-brand-red font-bold animate-pulse">
-                          Now
+                          <Icon size={16} />
                         </span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ol>
+                        <div className="flex-1 min-w-0">
+                          <p
+                            className={`text-sm font-semibold ${
+                              done || active
+                                ? "text-brand-ink"
+                                : "text-brand-ink-soft"
+                            }`}
+                          >
+                            {step.label}
+                          </p>
+                          <p className="text-xs text-brand-ink-soft mt-0.5">
+                            {step.sub}
+                          </p>
+                        </div>
+                        {active && (
+                          <span className="text-[10px] font-mono uppercase tracking-widest text-brand-red font-bold animate-pulse">
+                            Now
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+
+              {order.trackingUrl && (
+                <div className="mt-5 pt-5 border-t border-brand-line">
+                  <p className="text-xs text-brand-ink-soft">
+                    Courier:{" "}
+                    <span className="font-semibold text-brand-ink">
+                      {order.courierName ?? "—"}
+                    </span>
+                    {order.awbCode && (
+                      <>
+                        {" · "}AWB{" "}
+                        <span className="font-mono text-brand-ink">
+                          {order.awbCode}
+                        </span>
+                      </>
+                    )}
+                  </p>
+                  <a
+                    href={order.trackingUrl}
+                    target="_blank"
+                    rel="noopener"
+                    className="mt-3 inline-flex items-center gap-2 bg-brand-ink hover:bg-brand-ink-soft text-white px-4 py-2.5 rounded-full font-semibold text-sm transition-colors"
+                  >
+                    Track on courier site
+                  </a>
+                </div>
+              )}
 
               <div className="mt-5 pt-5 border-t border-brand-line">
                 <p className="text-xs text-brand-ink-soft">
@@ -197,9 +338,7 @@ export default function TrackPage() {
                   with the courier directly.
                 </p>
                 <a
-                  href={waLink(
-                    `Hi, I need an update on my order ${submitted}.`
-                  )}
+                  href={waLink(`Hi, I need an update on my order ${order.id}.`)}
                   target="_blank"
                   rel="noopener"
                   className="mt-3 inline-flex items-center gap-2 bg-whatsapp-green hover:bg-whatsapp-green-hover text-white px-4 py-2.5 rounded-full font-semibold text-sm transition-colors"
@@ -218,7 +357,9 @@ export default function TrackPage() {
             </p>
             <p className="text-sm text-brand-ink-soft mt-2 leading-relaxed">
               Check the WhatsApp confirmation we sent to{" "}
-              <span className="font-semibold text-brand-ink">{THEME.phoneDisplay}</span>{" "}
+              <span className="font-semibold text-brand-ink">
+                {THEME.phoneDisplay}
+              </span>{" "}
               after your order. The ID is in the first message and looks like{" "}
               <span className="font-mono text-brand-ink">PRC-XXXXXXXX</span>.
               <br />
