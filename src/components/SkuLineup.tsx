@@ -167,8 +167,8 @@ export default function SkuLineup() {
 
         {/* "More coming soon" — sits below the grid, intentionally subtle */}
         <div className="mt-5 sm:mt-8 flex justify-center">
-          <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-cream border border-brand-line text-xs sm:text-sm font-mono uppercase tracking-widest text-brand-ink-soft">
-            <span className="w-1.5 h-1.5 rounded-full bg-brand-red animate-pulse" />
+          <span className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-brand-ink text-white text-xs sm:text-sm font-mono font-semibold uppercase tracking-widest">
+            <span className="w-2 h-2 rounded-full bg-brand-red animate-pulse" />
             More drift cars dropping soon · stay tuned
           </span>
         </div>

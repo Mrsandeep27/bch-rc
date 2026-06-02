@@ -91,11 +91,12 @@ export function ProductImage({
         />
       )}
 
-      {/* Tiny play-indicator dot — signals "hover for video" */}
+      {/* Tiny play-indicator dot — desktop only ("Hover" makes no sense on
+          mobile where there's no hover event; tap-to-play is implicit). */}
       {sku.heroVideo && !playing && (
         <span
           aria-hidden
-          className="absolute bottom-2 right-2 z-10 flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/70 backdrop-blur-sm"
+          className="hidden sm:flex absolute bottom-2 right-2 z-10 items-center gap-1 px-2 py-0.5 rounded-full bg-black/70 backdrop-blur-sm"
         >
           <span className="w-1.5 h-1.5 rounded-full bg-brand-red animate-pulse" />
           <span className="text-[9px] font-mono uppercase tracking-wider text-white/90">
