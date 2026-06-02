@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
-import { Heart, Play } from "lucide-react";
+import { Play } from "lucide-react";
 import { InstagramIcon } from "@/components/BrandIcons";
 import { THEME } from "@/lib/theme";
 
@@ -76,7 +76,16 @@ const STUBS: UgcCard[] = [
 
 export default function UgcGrid() {
   // Use real scraped posts when manifest is populated, otherwise stubs.
-  const UGC = MANIFEST.length >= 6 ? MANIFEST.slice(0, 12) : STUBS;
+  // Both PRC Instagram accounts often cross-post the same reel, so dedupe
+  // by post URL (or by caption as a fallback) before rendering.
+  const source = MANIFEST.length >= 6 ? MANIFEST : STUBS;
+  const seen = new Set<string>();
+  const UGC = source.filter((c) => {
+    const key = c.url ?? c.caption;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 12);
   return (
     <section className="py-8 sm:py-14 bg-white" aria-label="Drifters of India">
       <div className="max-w-6xl mx-auto px-4">
@@ -166,15 +175,11 @@ export default function UgcGrid() {
                     </span>
                   </div>
 
-                  {/* Bottom info */}
+                  {/* Bottom info — caption only, no like count */}
                   <div className="absolute inset-x-0 bottom-0 p-3 text-white z-10">
                     <p className="text-xs font-semibold leading-tight line-clamp-2">
                       {card.caption}
                     </p>
-                    <div className="flex items-center gap-1 text-[10px] mt-1.5 opacity-90">
-                      <Heart size={10} className="fill-white" />
-                      <span>{card.likes}</span>
-                    </div>
                   </div>
                 </motion.a>
               );
