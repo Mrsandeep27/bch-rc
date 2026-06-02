@@ -93,7 +93,7 @@ export default function BundlePicker() {
                 viewport={{ once: true }}
                 transition={{ duration: 0.4, delay: i * 0.08, ease: "easeOut" }}
                 className={cn(
-                  "snap-center shrink-0 w-[78%] sm:w-auto relative text-left bg-white rounded-2xl p-5 sm:p-7 border-2 transition-all",
+                  "snap-center shrink-0 w-[88%] sm:w-auto relative text-left bg-white rounded-2xl p-5 sm:p-7 border-2 transition-all",
                   isSelected
                     ? "border-brand-red shadow-2xl scale-[1.02]"
                     : "border-brand-line hover:border-brand-ink/40 hover:shadow-md"
@@ -113,8 +113,8 @@ export default function BundlePicker() {
                   </span>
                 )}
 
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs uppercase tracking-widest text-brand-ink-soft">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-[11px] sm:text-xs uppercase tracking-widest text-brand-ink font-semibold truncate">
                     {opt.sub}
                   </span>
                   <span
@@ -145,7 +145,7 @@ export default function BundlePicker() {
                   )}
                 </div>
 
-                <div className="mt-1 text-xs sm:text-sm text-brand-ink-soft font-mono">
+                <div className="mt-1 text-xs sm:text-sm text-brand-ink-soft font-mono font-medium">
                   {formatINR(opt.perCarINR)} per car
                 </div>
 
@@ -169,8 +169,8 @@ export default function BundlePicker() {
             <ShoppingBag size={20} aria-hidden />
             Add {selectedQty} {selectedQty === 1 ? "car" : "cars"} — {formatINR(selected.priceINR)}
           </button>
-          <p className="text-brand-ink-soft text-xs sm:text-sm mt-3 font-mono">
-            Free shipping · COD pan-India · dispatched in 24 hrs
+          <p className="text-brand-ink text-xs sm:text-sm mt-3 font-mono font-medium text-center">
+            Free shipping · COD pan-India · 24-hr dispatch
           </p>
         </div>
       </div>

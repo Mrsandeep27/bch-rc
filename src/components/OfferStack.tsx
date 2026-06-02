@@ -71,7 +71,7 @@ export default function OfferStack() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.35, delay: i * 0.06, ease: "easeOut" }}
-                  className="snap-center shrink-0 w-[62%] sm:w-auto bg-white rounded-xl border border-brand-line p-4 sm:p-5 hover:border-brand-red hover:shadow-md transition-all"
+                  className="snap-center shrink-0 w-[72%] sm:w-auto bg-white rounded-xl border border-brand-line p-4 sm:p-5 hover:border-brand-red hover:shadow-md transition-all"
                 >
                   <div className="w-11 h-11 rounded-lg bg-brand-red-soft text-brand-red flex items-center justify-center mb-3">
                     <Icon size={20} aria-hidden />
