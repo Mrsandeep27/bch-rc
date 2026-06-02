@@ -12,8 +12,8 @@ export const HERO_VARIANTS: Record<
 > = {
   default: {
     h1: "Drift. Race. Pocket.",
-    sub: "F1 in your pocket — ₹1,299. LED · drift wheels · COD pan-India.",
-    ctaLabel: "🛒 Shop the Pocket F1 — ₹1,299",
+    sub: "1:64 drift cars · ₹1,299 · COD pan-India.",
+    ctaLabel: "Shop now — ₹1,299",
   },
   gift: {
     h1: "The Gift Every Car Guy Melts Over",

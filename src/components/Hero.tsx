@@ -5,7 +5,6 @@ import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Truck, PackageCheck, ShieldCheck } from "lucide-react";
 import { HERO_VARIANTS, type HeroVariant } from "@/lib/copy";
-import { waLink } from "@/lib/theme";
 import { THEME } from "@/lib/theme";
 import { getHeroSku } from "@/lib/products";
 import { useCart } from "@/lib/cart-store";
@@ -89,7 +88,7 @@ export default function Hero() {
             transition={{ duration: 0.5, delay: 0.05, ease: "easeOut" }}
             className="font-mono text-[10px] sm:text-xs uppercase tracking-[0.2em] text-white/65 mb-4 sm:mb-5"
           >
-            Made in Bangalore · Trasped 1:64 scale
+            Made in Bangalore · 1:64 scale
           </motion.span>
 
           <motion.h1
@@ -129,23 +128,6 @@ export default function Hero() {
             >
               {ctaLabel}
             </button>
-
-            <a
-              href={waLink("Hi, I want to order the Pocket RC mini drift car.")}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-white/75 hover:text-white underline-offset-4 hover:underline text-sm sm:text-base transition-colors"
-            >
-              or DM us on WhatsApp →
-            </a>
-
-            <p className="text-white/60 text-xs sm:text-sm font-mono mt-2">
-              <span className="line-through opacity-60">MRP ₹1,999</span>
-              <span className="mx-2">·</span>
-              <span className="text-brand-red font-semibold">35% off</span>
-              <span className="mx-2">·</span>
-              <span>COD ✓</span>
-            </p>
           </motion.div>
         </div>
       </div>
