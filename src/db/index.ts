@@ -44,16 +44,44 @@ if (!connectionString) {
   );
 }
 
-const queryClient = postgres(connectionString, {
-  prepare: false,
-  // max: 3 — small enough to keep total pool footprint tiny across many
-  // Lambda instances, large enough that a single request issuing 4-5
-  // queries with Promise.all genuinely parallelises (key for the admin
-  // overview page which fetches several aggregates at once).
-  max: 3,
-  idle_timeout: 20,
-  connect_timeout: 10,
-});
+// Cache the postgres-js client on globalThis. Without this, Next.js dev
+// HMR creates a fresh pool every time this module is re-evaluated (which
+// happens whenever any file in its import graph changes); the old pool's
+// TCP sockets linger in the background. Over a long dev session you
+// accumulate orphaned sockets — the next time one is handed back to the
+// app the server-side state is inconsistent and the first query on it
+// hangs until Postgres' statement_timeout cancels it, surfacing as
+// "PostgresError: canceling statement due to statement timeout" on a
+// trivial indexed SELECT. In production each Lambda cold-start re-evaluates
+// the module once, so the cache is a harmless no-op there.
+//
+// max_lifetime: 5 minutes. The Supabase Supavisor pooler holds idle
+// upstream connections for a finite window. Without an aggressive
+// max_lifetime, a long-lived Lambda instance can hand back a postgres-js
+// connection whose Supavisor counterpart has already been reaped — same
+// failure mode as the HMR-orphan case. Five minutes is well under any
+// pooler keepalive threshold and frequent enough that no connection ever
+// sees stale upstream state.
+//
+// max: 3 — small per-Lambda pool, big enough for one Promise.all of 4-5
+// admin aggregates to genuinely parallelise.
+const globalForDb = globalThis as unknown as {
+  __pgClient?: ReturnType<typeof postgres>;
+};
+
+const queryClient =
+  globalForDb.__pgClient ??
+  postgres(connectionString, {
+    prepare: false,
+    max: 3,
+    idle_timeout: 20,
+    max_lifetime: 60 * 5,
+    connect_timeout: 10,
+  });
+
+if (process.env.NODE_ENV !== "production") {
+  globalForDb.__pgClient = queryClient;
+}
 
 export const db = drizzle(queryClient, { schema });
 export { schema };
