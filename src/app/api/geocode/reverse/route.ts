@@ -101,28 +101,36 @@ export async function GET(req: Request) {
   const city = a.city || a.town || a.village || a.county || "";
   const state = a.state || "";
 
-  // Line 1 — pack as much specific detail as Nominatim returned, in the order
-  // a courier reads: building → house no + road → locality → sub-city.
-  // Indian Nominatim data is patchy, so we fall back to slicing `display_name`
-  // (which Nominatim ALWAYS returns and is the most detailed string they have)
-  // and trimming off the trailing parts that already populate other fields
-  // (city / state / postcode / country).
+  // Address composition:
+  //   line1 = house no + road  (the "street" the courier needs)
+  //   line2 = locality / area  (neighbourhood, suburb, city-district)
+  // We deliberately DON'T use `amenity`/`shop` as a building — those are the
+  // nearest POI Nominatim could find (a temple, ATM, restaurant), NOT the
+  // buyer's address. Falsely seeding the form with a landmark misleads the
+  // courier and gives buyers a bad first impression. We only honour `building`
+  // (a tagged structure name) when it's present.
   const street = [a.house_number, a.road || a.pedestrian || a.residential]
     .filter(Boolean)
     .join(" ");
   const locality =
     a.neighbourhood || a.quarter || a.suburb || a.city_district || a.borough || "";
-  const building = a.building || a.amenity || a.shop || "";
+  const building = a.building || "";
 
-  const line1Pieces = [building, street, locality].filter(Boolean);
-  let line1 = line1Pieces.join(", ");
+  let line1 = [building, street].filter(Boolean).join(", ");
+  let line2 = locality;
 
-  // If we still got nothing useful, fall back to the head of `display_name`
-  // up to (but not including) the city. e.g. "Plot 12, MIDC, Andheri East"
-  // out of "Plot 12, MIDC, Andheri East, Mumbai Suburban, Maharashtra, 400096, India".
+  // GPS in India rarely returns a house number, so line1 is often empty even
+  // when locality is fine. Promote locality → line1 so the required field is
+  // populated; the buyer can then add their flat/building on line2.
+  if (!line1 && line2) {
+    line1 = line2;
+    line2 = "";
+  }
+
+  // Last-resort fallback: slice `display_name` (always present, most detailed)
+  // and drop trailing parts that already populate other fields.
   if (!line1 && data.display_name) {
     const parts = data.display_name.split(",").map((s) => s.trim());
-    // Drop trailing pieces that match what we already returned separately.
     const tail = new Set(
       [city, state, a.postcode, a.country, a.county]
         .filter(Boolean)
@@ -133,8 +141,9 @@ export async function GET(req: Request) {
       if (tail.has(p.toLowerCase())) break;
       head.push(p);
     }
-    // Cap at first 3 pieces so we don't dump the entire string into one field.
-    line1 = head.slice(0, 3).join(", ");
+    // Put first piece on line1, next two on line2 — keeps line1 short.
+    line1 = head[0] || "";
+    line2 = head.slice(1, 3).join(", ");
   }
 
   return NextResponse.json({
@@ -143,6 +152,7 @@ export async function GET(req: Request) {
     city,
     state,
     line1,
+    line2,
     country: a.country || "",
     countryCode: (a.country_code || "").toUpperCase(),
     displayName: data.display_name || "",

@@ -263,6 +263,7 @@ export default function CheckoutPage() {
         city?: string;
         state?: string;
         line1?: string;
+        line2?: string;
         countryCode?: string;
         error?: string;
       };
@@ -279,11 +280,14 @@ export default function CheckoutPage() {
 
       // Only overwrite fields the buyer hasn't typed themselves yet.
       if (data.line1 && !line1.trim()) setLine1(data.line1);
+      if (data.line2 && !line2.trim()) setLine2(data.line2);
       if (data.city && !city.trim()) setCity(data.city);
       if (data.state && !stateName.trim()) setStateName(data.state);
       if (data.pincode && !pincode.trim()) setPincode(data.pincode);
 
-      setGeoStatus("Address auto-filled. Edit anything before paying.");
+      setGeoStatus(
+        "Area auto-filled. Please add your flat / house / building no. above.",
+      );
     } catch (err: unknown) {
       const msg =
         err instanceof GeolocationPositionError
@@ -455,6 +459,41 @@ export default function CheckoutPage() {
     return () => {
       cancelled = true;
     };
+  }, [pincode]);
+
+  // Pincode → city/state autofill (India Post API). Fires whenever the
+  // pincode hits 6 digits and only overwrites empty fields. This is the
+  // desktop-safe replacement for GPS, which on desktop falls back to wildly
+  // inaccurate IP geolocation. Buyers still see the GPS button on mobile.
+  useEffect(() => {
+    if (pincode.length !== 6) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`/api/geocode/pincode?pincode=${pincode}`);
+        if (!r.ok) return;
+        const data = (await r.json()) as {
+          ok?: boolean;
+          city?: string;
+          state?: string;
+          areas?: string[];
+        };
+        if (cancelled || !data.ok) return;
+        if (data.city && !city.trim()) setCity(data.city);
+        if (data.state && !stateName.trim()) setStateName(data.state);
+        // Only seed line2 with the first known area for this pincode if the
+        // buyer hasn't typed anything there yet — gives a courier-readable
+        // locality without overwriting a real address.
+        if (data.areas?.length && !line2.trim()) setLine2(data.areas[0]);
+      } catch {
+        /* silent — buyer can still type city/state manually */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // city/stateName/line2 intentionally excluded — we only react to pincode.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pincode]);
 
   function clearCoupon() {
