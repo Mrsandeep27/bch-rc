@@ -4,5 +4,37 @@
       "path": "/api/cron/sync-shipments",
       "schedule": "0 3 * * *"
     }
+  ],
+  "redirects": [
+    { "source": "/products", "destination": "/#sku", "permanent": true },
+    { "source": "/products/", "destination": "/#sku", "permanent": true },
+    { "source": "/shop", "destination": "/#sku", "permanent": true },
+    { "source": "/collection", "destination": "/#sku", "permanent": true },
+    { "source": "/collections", "destination": "/#sku", "permanent": true },
+    { "source": "/cart", "destination": "/?openCart=1", "permanent": false }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(self), interest-cohort=()" },
+        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin-allow-popups" }
+      ]
+    },
+    {
+      "source": "/(robots.txt|sitemap.xml)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=3600, s-maxage=86400" }
+      ]
+    },
+    {
+      "source": "/ugc/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    }
   ]
 }

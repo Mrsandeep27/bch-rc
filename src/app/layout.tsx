@@ -22,6 +22,9 @@ export const metadata: Metadata = {
     default: "Mini RC Drift Cars from ₹1,299 | PRC Cars",
     template: "%s | PRC Cars",
   },
+  alternates: {
+    canonical: "/",
+  },
   description:
     "India's most-gifted mini RC drift cars. LED headlights, swappable drift wheels, 1:64 scale. From ₹1,299. Pan-India COD. Ships in 24 hrs from Bangalore.",
   keywords: [
@@ -72,7 +75,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html
-      lang="en"
+      lang="en-IN"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-white text-brand-ink">

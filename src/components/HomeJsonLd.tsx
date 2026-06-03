@@ -91,16 +91,37 @@ export default function HomeJsonLd({ faqs }: { faqs: QA[] }) {
     })),
   };
 
+  const website = {
+    "@type": "WebSite",
+    "@id": `${base}#website`,
+    url: base,
+    name: THEME.brandName,
+    inLanguage: "en-IN",
+    publisher: { "@id": `${base}#org` },
+    potentialAction: {
+      "@type": "SearchAction",
+      target: {
+        "@type": "EntryPoint",
+        urlTemplate: `${base}/?q={search_term_string}`,
+      },
+      "query-input": "required name=search_term_string",
+    },
+  };
+
   const graph = {
     "@context": "https://schema.org",
-    "@graph": [organization, itemList, faqPage],
+    "@graph": [organization, website, itemList, faqPage],
   };
+
+  // CRITICAL: escape `<` so a `</script>` substring inside any FAQ answer
+  // cannot break out of the JSON-LD <script> tag. The previous unescaped
+  // mount took down the home page (server error digest 4226259087).
+  const safeJson = JSON.stringify(graph).replace(/</g, "\\u003c");
 
   return (
     <script
       type="application/ld+json"
-      // Server-rendered, never user-generated — safe to inline.
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(graph) }}
+      dangerouslySetInnerHTML={{ __html: safeJson }}
     />
   );
 }

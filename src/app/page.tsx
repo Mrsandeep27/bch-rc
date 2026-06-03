@@ -15,10 +15,13 @@ import WhatsAppFab from "@/components/WhatsAppFab";
 import CartDrawer from "@/components/CartDrawer";
 import ExitIntentModal from "@/components/ExitIntentModal";
 import StickyMobileCTA from "@/components/StickyMobileCTA";
+import HomeJsonLd from "@/components/HomeJsonLd";
+import { HOME_FAQS } from "@/lib/faqs";
 
 export default function Page() {
   return (
     <>
+      <HomeJsonLd faqs={HOME_FAQS} />
       <AnnouncementBar />
       <Header />
       <main className="flex-1 -mt-16 sm:-mt-20">
