@@ -43,8 +43,14 @@ export async function getAdminContext(): Promise<AdminContext | null> {
 
   const email = user.email.toLowerCase();
 
-  // Founder bootstrap: auto-provision OWNER on first sign-in.
-  if (FOUNDER_EMAILS.includes(email)) {
+  // Fast path: read first. The admin row exists in >99% of layout renders
+  // (anyone who got past login has already been bootstrapped). One SELECT.
+  let [row] = await db.select().from(admins).where(eq(admins.email, email));
+
+  // Slow path: only fall through to the founder bootstrap when the row is
+  // genuinely missing. Avoids the previous "INSERT … ON CONFLICT DO NOTHING"
+  // hitting the database on every single admin-page render.
+  if (!row && FOUNDER_EMAILS.includes(email)) {
     const allSites = await db.select({ id: sites.id }).from(sites);
     const siteIds = allSites.map((s) => s.id);
     await db
@@ -58,9 +64,9 @@ export async function getAdminContext(): Promise<AdminContext | null> {
         active: true,
       })
       .onConflictDoNothing({ target: admins.email });
+    [row] = await db.select().from(admins).where(eq(admins.email, email));
   }
 
-  const [row] = await db.select().from(admins).where(eq(admins.email, email));
   if (!row || !row.active) return null;
 
   return {

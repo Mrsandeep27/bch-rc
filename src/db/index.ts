@@ -46,7 +46,11 @@ if (!connectionString) {
 
 const queryClient = postgres(connectionString, {
   prepare: false,
-  max: 1,
+  // max: 3 — small enough to keep total pool footprint tiny across many
+  // Lambda instances, large enough that a single request issuing 4-5
+  // queries with Promise.all genuinely parallelises (key for the admin
+  // overview page which fetches several aggregates at once).
+  max: 3,
   idle_timeout: 20,
   connect_timeout: 10,
 });

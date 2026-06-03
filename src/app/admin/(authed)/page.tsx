@@ -14,43 +14,49 @@ export default async function AdminOverview() {
   const last7 = new Date(today);
   last7.setDate(last7.getDate() - 7);
 
-  const [todayStats] = await db
-    .select({
-      orderCount: count(orders.id),
-      revenue: sum(orders.totalInr).mapWith(Number),
-    })
-    .from(orders)
-    .where(
-      and(gte(orders.placedAt, today), inArray(orders.siteId, ctx.siteIds)),
-    );
-
-  const [weekStats] = await db
-    .select({
-      orderCount: count(orders.id),
-      revenue: sum(orders.totalInr).mapWith(Number),
-    })
-    .from(orders)
-    .where(
-      and(gte(orders.placedAt, last7), inArray(orders.siteId, ctx.siteIds)),
-    );
-
-  const [customerStats] = await db
-    .select({ total: count(customers.id) })
-    .from(customers);
-
-  const recent = await db
-    .select({
-      id: orders.id,
-      siteId: orders.siteId,
-      status: orders.status,
-      paymentMethod: orders.paymentMethod,
-      totalInr: orders.totalInr,
-      placedAt: orders.placedAt,
-    })
-    .from(orders)
-    .where(inArray(orders.siteId, ctx.siteIds))
-    .orderBy(desc(orders.placedAt))
-    .limit(8);
+  // Run the four aggregate queries in parallel. With max: 3 on the postgres-js
+  // pool they actually parallelise — total wall-clock is the slowest single
+  // query (~30 ms warm in-region) instead of the sum of all four. This is the
+  // difference between a snappy admin page and a ~4× longer dead-air load.
+  const [todayStats, weekStats, customerStats, recent] = await Promise.all([
+    db
+      .select({
+        orderCount: count(orders.id),
+        revenue: sum(orders.totalInr).mapWith(Number),
+      })
+      .from(orders)
+      .where(
+        and(gte(orders.placedAt, today), inArray(orders.siteId, ctx.siteIds)),
+      )
+      .then((rows) => rows[0]),
+    db
+      .select({
+        orderCount: count(orders.id),
+        revenue: sum(orders.totalInr).mapWith(Number),
+      })
+      .from(orders)
+      .where(
+        and(gte(orders.placedAt, last7), inArray(orders.siteId, ctx.siteIds)),
+      )
+      .then((rows) => rows[0]),
+    db
+      .select({ total: count(customers.id) })
+      .from(customers)
+      .then((rows) => rows[0]),
+    db
+      .select({
+        id: orders.id,
+        siteId: orders.siteId,
+        status: orders.status,
+        paymentMethod: orders.paymentMethod,
+        totalInr: orders.totalInr,
+        placedAt: orders.placedAt,
+      })
+      .from(orders)
+      .where(inArray(orders.siteId, ctx.siteIds))
+      .orderBy(desc(orders.placedAt))
+      .limit(8),
+  ]);
 
   return (
     <div className="space-y-6">
