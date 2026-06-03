@@ -61,7 +61,7 @@ function Tile({ feat, i }: { feat: Feature; i: number }) {
         fill
         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
         className="object-cover transition-transform duration-700 lg:group-hover:scale-105"
-        priority={i < 2}
+        loading="lazy"
       />
 
       {/* Subtle top vignette so eyebrow reads */}

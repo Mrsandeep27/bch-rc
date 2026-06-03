@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Minus, Plus, ShoppingBag, Zap, Truck, Shield, RotateCw } from "lucide-react";
@@ -15,9 +16,22 @@ const LOW_STOCK_THRESHOLD = 5;
 import { useCart } from "@/lib/cart-store";
 import { ProductPlaceholder } from "@/components/ProductPlaceholder";
 import PDPStickyCTA from "@/components/PDPStickyCTA";
-import PDPBundleUpsell from "@/components/PDPBundleUpsell";
-import ReviewsBlock from "@/components/ReviewsBlock";
-import RecentlyViewed, { recordView } from "@/components/RecentlyViewed";
+import { Skeleton } from "@/components/Skeleton";
+import { recordView } from "@/lib/recently-viewed";
+
+// Below-fold sections — split into their own JS chunks so the buy-box +
+// gallery don't wait on their bundle. Skeletons hold the layout so scrolling
+// down doesn't jolt the page when the chunk arrives.
+const PDPBundleUpsell = dynamic(() => import("@/components/PDPBundleUpsell"), {
+  loading: () => <Skeleton className="h-72 w-full my-8" />,
+});
+const ReviewsBlock = dynamic(() => import("@/components/ReviewsBlock"), {
+  loading: () => <Skeleton className="h-96 w-full my-8" />,
+});
+const RecentlyViewed = dynamic(() => import("@/components/RecentlyViewed"), {
+  loading: () => <Skeleton className="h-72 w-full my-8" />,
+  ssr: false,
+});
 
 function swatchBg(swatch: string): string {
   if (swatch.startsWith("gradient:")) {

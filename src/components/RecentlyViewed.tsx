@@ -5,29 +5,14 @@ import Link from "next/link";
 import Image from "next/image";
 import { getProductById, getVisibleProducts, type Sku } from "@/lib/products";
 import { formatINR } from "@/lib/utils";
-
-const STORAGE_KEY = "prc-recently-viewed";
-const MAX = 6;
-
-/** Record a viewed SKU (called from PDP on mount) */
-export function recordView(skuId: string) {
-  if (typeof window === "undefined") return;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const list: string[] = raw ? JSON.parse(raw) : [];
-    const next = [skuId, ...list.filter((id) => id !== skuId)].slice(0, MAX);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  } catch {
-    // localStorage may be unavailable (private mode / quota); silently no-op
-  }
-}
+import { RECENTLY_VIEWED_KEY } from "@/lib/recently-viewed";
 
 export default function RecentlyViewed({ excludeId }: { excludeId?: string }) {
   const [items, setItems] = useState<Sku[]>([]);
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(RECENTLY_VIEWED_KEY);
       const ids: string[] = raw ? JSON.parse(raw) : [];
       const skus = ids
         .filter((id) => id !== excludeId)

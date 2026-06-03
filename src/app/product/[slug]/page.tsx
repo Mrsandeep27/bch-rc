@@ -5,8 +5,7 @@ import { PRODUCTS, getVisibleProducts, type Sku } from "@/lib/products";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import WhatsAppFab from "@/components/WhatsAppFab";
-import CartDrawer from "@/components/CartDrawer";
+import PdpFloatingUi from "@/components/PdpFloatingUi";
 import PDPClient from "@/components/PDPClient";
 import { THEME } from "@/lib/theme";
 
@@ -165,8 +164,7 @@ export default async function ProductPage({
         <PDPClient sku={sku} />
       </main>
       <Footer />
-      <WhatsAppFab />
-      <CartDrawer />
+      <PdpFloatingUi />
     </>
   );
 }
