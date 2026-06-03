@@ -55,9 +55,9 @@ GST*.pdf
 WhatsApp*.ogg
 public/WhatsApp*.ogg
 
-# Scraped UGC raw videos — kept locally, not committed (saves repo size).
-# Site uses click-thru-to-Instagram model with .jpg posters only.
-public/ugc/*.mp4
+# Scraped UGC raw videos — compressed copies ARE committed and served from /public/ugc/.
+# Originals are kept under _orig/ for re-encoding and are NOT committed.
+public/ugc/_orig/
 public/ugc/*.raw.*
 
 # vercel
