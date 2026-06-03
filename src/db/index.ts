@@ -2,12 +2,33 @@
  * Drizzle client — used by Next.js server-side code (route handlers, server actions).
  *
  * Connection strategy:
- * - Runtime queries (API routes, server components) → pooled connection (port 6543)
- *   for Vercel serverless. PgBouncer transaction mode, low connection count.
- * - Migrations (drizzle-kit push/generate) → direct connection (port 5432) via
- *   drizzle.config.ts.
+ * - Runtime queries (API routes, server components) → pooled connection
+ *   (port 6543) via Supabase Supavisor in transaction mode.
+ * - Migrations (drizzle-kit push/generate) → direct connection (port 5432).
  *
- * `prepare: false` is required by Supabase's pgBouncer transaction mode.
+ * Vercel-serverless tuning (the difference between "works" and intermittent
+ * `Connection closed` storms):
+ *
+ *   max: 1
+ *     One connection per Lambda instance. Concurrent requests on Vercel
+ *     spawn new container instances, each with its own pool of size 1, so
+ *     total concurrency is governed by Lambda fan-out, not per-instance
+ *     pooling. Lambdas are short-lived; a per-instance pool >1 just holds
+ *     idle connections that the Supabase pooler / Vercel NAT will reap
+ *     under us — when the pool hands one back, the next query sees
+ *     "Connection closed".
+ *
+ *   idle_timeout: 20
+ *     Evict our side of any connection that's been idle 20 s. Aligned with
+ *     a typical Lambda invocation. Without this we keep dead sockets.
+ *
+ *   connect_timeout: 10
+ *     Fail fast if the pooler is unreachable rather than blocking the
+ *     function for its default 30 s.
+ *
+ *   prepare: false
+ *     Required by Supavisor / pgBouncer transaction mode — prepared
+ *     statements don't survive across transactions on a pooled session.
  */
 
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -25,12 +46,9 @@ if (!connectionString) {
 
 const queryClient = postgres(connectionString, {
   prepare: false,
-  // Higher pool for dev where concurrent requests are common (admin page
-  // fires ~5 queries in parallel). Serverless caps each function to its own
-  // pool so 5 is safe per-instance.
-  max: 5,
+  max: 1,
   idle_timeout: 20,
-  max_lifetime: 60 * 30,
+  connect_timeout: 10,
 });
 
 export const db = drizzle(queryClient, { schema });
