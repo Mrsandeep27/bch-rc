@@ -37,8 +37,17 @@ export type Sku = {
   /** Optional web-optimized MP4 (muted, ~6s loop). Plays on hover in SkuLineup. */
   heroVideo?: string;
   altImages: string[];
-  /** When true, SKU exists in data but is hidden from the storefront grid. */
+  /** When true, SKU exists in data but is hidden from the storefront grid
+   *  AND returns 404 on the PDP — i.e. "doesn't exist as far as anyone can
+   *  reach it". Use for future / discontinued SKUs you want to keep in code
+   *  but not expose at all. */
   hidden?: boolean;
+  /** When true, SKU is filtered from the storefront grid, sitemap, and
+   *  static-params list — but the PDP renders normally for anyone who knows
+   *  the slug. Use for internal QA / ops links (₹1 smoke-test SKU, gift
+   *  cards for staff, etc.) where you need a live URL but don't want
+   *  customers, Google, or the catalog to surface it. */
+  internal?: boolean;
   /** Per-color stock + image. Listed in display order. */
   colors?: ColorVariant[];
   specs: {
@@ -372,6 +381,45 @@ export const PRODUCTS: Sku[] = [
       drift: "Pro drift mode",
     },
   },
+  // -----------------------------------------------------------------------
+  // INTERNAL QA SKU — accessible via /product/qa-1rs but excluded from the
+  // catalog, sitemap, and static params. Priced so that subtotal (₹16) plus
+  // shipping (₹85, no free-ship since <₹1099) minus the UPI prepaid
+  // discount (₹100) lands exactly at ₹1. Use for end-to-end live smoke
+  // tests without burning ₹1,299 per attempt. Stock is seeded by
+  // src/db/seed-inventory.ts with variant_slug = ''.
+  // -----------------------------------------------------------------------
+  {
+    id: "qa-1rs",
+    slug: "qa-1rs",
+    scale: "1:64",
+    name: "QA — Test Purchase ₹1",
+    tagline: "Internal smoke-test SKU — DO NOT FULFIL",
+    retailINR: 16,
+    mrpINR: 16,
+    landingCostINR: 0,
+    bullets: [
+      "Internal QA only — do not ship",
+      "Buy via UPI to land at ₹1 total",
+      "Refund the payment in Razorpay after the test",
+      "Hidden from catalog, sitemap, and search",
+    ],
+    bodyShape: "n/a — diagnostic SKU",
+    internal: true,
+    heroImage: "/products/PRC-bmw.jpg",
+    altImages: [],
+    specs: {
+      lengthMM: 0,
+      drive: "2WD",
+      topSpeedKmh: 0,
+      batteryMin: 0,
+      chargeMin: 0,
+      rangeM: 0,
+      minAge: 0,
+      led: "n/a",
+      drift: "n/a",
+    },
+  },
 ];
 
 export const HERO_SKU_ID = "pocket-porsche";
@@ -382,7 +430,7 @@ export function getProductById(id: string): Sku | undefined {
 
 /** Storefront grid — excludes anything flagged `hidden`. */
 export function getVisibleProducts(): Sku[] {
-  return PRODUCTS.filter((p) => !p.hidden);
+  return PRODUCTS.filter((p) => !p.hidden && !p.internal);
 }
 
 export function getHeroSku(): Sku {
