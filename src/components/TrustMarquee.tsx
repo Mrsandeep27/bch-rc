@@ -11,16 +11,19 @@ type Brand = {
   name: string;
 };
 
+// Product spec badges only — DO NOT add trust/policy items (Pan-India COD,
+// 7-day replacement, ships-in-24-hrs, warehouse claims). Those live in the
+// StatsStrip below this section; duplicating them here makes the two sections
+// look like one long list of repeating slogans.
 const BRANDS: Brand[] = [
-  { name: "TRASPED" },
-  { name: "HENGGUAN" },
+  { name: "MADE IN INDIA" },
   { name: "2.4 GHz" },
   { name: "USB-C" },
   { name: "DIE-CAST ALLOY" },
   { name: "LED HEADLIGHTS" },
-  { name: "MADE IN INDIA" },
-  { name: "SHIPROCKET" },
-  { name: "BIS COMPLIANT" },
+  { name: "DRIFT WHEELS INCLUDED" },
+  { name: "1:64 SCALE" },
+  { name: "SHIPROCKET LOGISTICS" },
 ];
 
 function Item({ brand }: { brand: Brand }) {

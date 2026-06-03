@@ -50,13 +50,17 @@ function Tile({ feat, i }: { feat: Feature; i: number }) {
       transition={{ duration: 0.5, delay: i * 0.08, ease: "easeOut" }}
       className="relative rounded-3xl overflow-hidden aspect-[4/5] flex flex-col text-white isolate group bg-brand-ink"
     >
-      {/* Background image — full-bleed */}
+      {/* Background image — full-bleed. Hover-scale is gated to devices that
+          actually have hover (desktop). On mobile, touch fires the hover
+          state mid-swipe and the 700ms scale transform feels like the image
+          is shaking. `lg:` + Tailwind hover variant keeps the desktop polish
+          without the mobile jitter. */}
       <Image
         src={feat.bgImage}
         alt=""
         fill
         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-        className="object-cover transition-transform duration-700 group-hover:scale-105"
+        className="object-cover transition-transform duration-700 lg:group-hover:scale-105"
         priority={i < 2}
       />
 
@@ -108,14 +112,17 @@ export default function FeatureCarousel() {
           </p>
         </div>
 
-        {/* Mobile: horizontal snap-scroll (one tile per swipe).
-            Desktop: standard 2/4 col grid. */}
-        <div className="mt-6 sm:mt-10 -mx-4 sm:mx-0 overflow-x-auto sm:overflow-visible snap-x snap-mandatory sm:snap-none no-scrollbar">
-          <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 px-4 sm:px-0 pb-2 sm:pb-0">
+        {/* Mobile: one full card per swipe (snap-x snap-mandatory + 92vw
+            cards). Eliminates the earlier "stuck-between-cards" feel from
+            the old 78%-wide peek layout — now you swipe and a single card
+            lands centered, with only ~4% of the next card visible as an
+            affordance hint. Desktop (sm+): standard 2/4 col static grid. */}
+        <div className="mt-6 sm:mt-10 -mx-4 sm:mx-0 overflow-x-auto sm:overflow-visible snap-x snap-mandatory sm:snap-none no-scrollbar touch-pan-x overscroll-x-contain">
+          <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 px-4 sm:px-0 pb-2 sm:pb-0">
             {FEATURES.map((f, i) => (
               <div
                 key={f.title}
-                className="snap-center shrink-0 w-[78%] sm:w-auto"
+                className="snap-center shrink-0 w-[92%] sm:w-auto"
               >
                 <Tile feat={f} i={i} />
               </div>

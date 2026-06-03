@@ -50,18 +50,18 @@ export function ProductImage({
 
   return (
     <div
-      className={`relative w-full h-full ${className ?? ""}`}
+      className={`relative w-full h-full bg-brand-cream ${className ?? ""}`}
       onMouseEnter={startVideo}
       onMouseLeave={stopVideo}
       onTouchStart={startVideo}
       onTouchEnd={stopVideo}
     >
-      {/* Placeholder behind so the card never looks empty during image load */}
-      <div className="absolute inset-0">
-        <ProductPlaceholder sku={sku} showLabel={false} />
-      </div>
-
-      {/* Static image — always rendered, fades out when video plays */}
+      {/* Static image — always rendered, fades out when video plays.
+          The parent's `bg-brand-cream` is the load-state backdrop; we no
+          longer render a coloured SVG car silhouette behind the image
+          because it flashed for ~1s before the real photo arrived. The
+          `onError` fallback above still swaps to the ProductPlaceholder
+          if the image fails to load entirely. */}
       <Image
         src={sku.heroImage}
         alt={sku.name}

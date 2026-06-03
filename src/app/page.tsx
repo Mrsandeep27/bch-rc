@@ -1,9 +1,7 @@
-import { Suspense } from "react";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
 import TrustMarquee from "@/components/TrustMarquee";
-import StatsStrip from "@/components/StatsStrip";
 import SkuLineup from "@/components/SkuLineup";
 import FeatureCarousel from "@/components/FeatureCarousel";
 import OurStorySection from "@/components/OurStorySection";
@@ -16,8 +14,7 @@ import Footer from "@/components/Footer";
 import WhatsAppFab from "@/components/WhatsAppFab";
 import CartDrawer from "@/components/CartDrawer";
 import ExitIntentModal from "@/components/ExitIntentModal";
-import SocialProofToast from "@/components/SocialProofToast";
-import Loader from "@/components/Loader";
+import StickyMobileCTA from "@/components/StickyMobileCTA";
 
 export default function Page() {
   return (
@@ -25,17 +22,12 @@ export default function Page() {
       <AnnouncementBar />
       <Header />
       <main className="flex-1 -mt-16 sm:-mt-20">
-        <Suspense
-          fallback={
-            <div className="min-h-screen bg-brand-ink flex items-center justify-center">
-              <Loader label="Revving up…" className="text-white" />
-            </div>
-          }
-        >
-          <Hero />
-        </Suspense>
+        <Hero />
+        {/* StickyMobileCTA observes this sentinel — when it scrolls above the
+            viewport (i.e. the user is past the hero), the sticky buy bar
+            appears. */}
+        <div id="hero-end-sentinel" aria-hidden className="h-px w-full" />
         <TrustMarquee />
-        <StatsStrip />
         <SkuLineup />
         <FeatureCarousel />
         <OurStorySection />
@@ -48,7 +40,7 @@ export default function Page() {
       <Footer />
       <WhatsAppFab />
       <CartDrawer />
-      <SocialProofToast />
+      <StickyMobileCTA />
       <ExitIntentModal />
     </>
   );

@@ -132,7 +132,11 @@ export default function UgcGrid() {
                   {isMp4 ? (
                     <video
                       src={card.src}
-                      poster={card.poster}
+                      // Every scraped .mp4 has a sibling .jpg poster the
+                      // scrape script wrote alongside it — derive the path
+                      // by swapping the extension so the tile shows a frame
+                      // instantly while autoplay/metadata still loads.
+                      poster={card.poster ?? card.src.replace(/\.mp4$/i, ".jpg")}
                       muted
                       loop
                       playsInline

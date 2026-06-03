@@ -40,7 +40,10 @@ export default function Header() {
 
   // Treat any non-home route as "scrolled" so the dark logo + dark nav
   // always render against the solid white header bg.
-  const useSolidStyle = !isHomePage || scrolled;
+  // Also force solid style when the mobile menu is open — otherwise the
+  // white logo / hamburger / cart icon are invisible against the open
+  // white drawer, and the user has no way to close the menu.
+  const useSolidStyle = !isHomePage || scrolled || mobileOpen;
 
   return (
     <header

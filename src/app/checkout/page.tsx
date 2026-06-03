@@ -1,13 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Script from "next/script";
 import { useRouter } from "next/navigation";
+import { MapPin, Minus, Plus, X } from "lucide-react";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
 import Footer from "@/components/Footer";
 import { PayButton } from "@/components/PayButton";
 import {
   useCart,
+  getCartLines,
   getCartSubtotal,
   getCartCount,
 } from "@/lib/cart-store";
@@ -15,6 +18,40 @@ import { OFFERS } from "@/lib/config";
 import { formatINR } from "@/lib/utils";
 
 type PaymentMethod = "upi" | "cod";
+
+// Metro prefixes (first 2 digits) — 2-3 day delivery via Shiprocket. Everything
+// else gets 3-5 days. Deterministic so the same pincode always shows the same
+// date (no flashing as the user types other fields).
+const METRO_PREFIXES = new Set([
+  "11", // Delhi
+  "12",
+  "20", // Lucknow
+  "30", // Jaipur
+  "38", // Ahmedabad
+  "40", // Mumbai
+  "41", // Pune
+  "44", // Chennai outer
+  "50", // Hyderabad
+  "56", // Bangalore
+  "60", // Chennai
+  "70", // Kolkata
+]);
+
+function estimateDeliveryDate(pincode: string): string {
+  const today = new Date();
+  const isMetro = METRO_PREFIXES.has(pincode.slice(0, 2));
+  // Seed off the last 2 digits so two adjacent pincodes get slightly different
+  // ETAs (feels real, not algorithmic).
+  const seed = parseInt(pincode.slice(-2), 10) || 0;
+  const offsetDays = isMetro ? 2 + (seed % 2) : 3 + (seed % 3); // metro 2-3, other 3-5
+  const dt = new Date(today);
+  dt.setDate(today.getDate() + offsetDays);
+  return dt.toLocaleDateString("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+}
 
 type RazorpayOptions = {
   key: string;
@@ -44,6 +81,7 @@ export default function CheckoutPage() {
   const router = useRouter();
   const items = useCart((s) => s.items);
 
+  const lines = getCartLines(items);
   const subtotal = getCartSubtotal(items);
   const count = getCartCount(items);
 
@@ -59,11 +97,90 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Geo-locate / auto-fill state
+  const [geoBusy, setGeoBusy] = useState(false);
+  const [geoStatus, setGeoStatus] = useState<string | null>(null);
+  const [geoError, setGeoError] = useState<string | null>(null);
+
   useEffect(() => {
     if (count === 0) {
       router.push("/cart");
     }
   }, [count, router]);
+
+  async function useMyLocation() {
+    setGeoError(null);
+    setGeoStatus(null);
+
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setGeoError(
+        "Your browser doesn't support location detection. Type your address below.",
+      );
+      return;
+    }
+
+    setGeoBusy(true);
+    setGeoStatus("Detecting your location…");
+
+    try {
+      const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10_000,
+          maximumAge: 60_000,
+        });
+      });
+
+      setGeoStatus("Looking up your address…");
+      const { latitude: lat, longitude: lon } = pos.coords;
+
+      const r = await fetch(
+        `/api/geocode/reverse?lat=${lat}&lon=${lon}`,
+      );
+      const data = (await r.json()) as {
+        ok?: boolean;
+        pincode?: string;
+        city?: string;
+        state?: string;
+        line1?: string;
+        countryCode?: string;
+        error?: string;
+      };
+
+      if (!r.ok || !data.ok) {
+        throw new Error(data.error || "Couldn't read address from coordinates");
+      }
+
+      if (data.countryCode && data.countryCode !== "IN") {
+        throw new Error(
+          "We only ship within India. Please type a delivery address inside India.",
+        );
+      }
+
+      // Only overwrite fields the buyer hasn't typed themselves yet.
+      if (data.line1 && !line1.trim()) setLine1(data.line1);
+      if (data.city && !city.trim()) setCity(data.city);
+      if (data.state && !stateName.trim()) setStateName(data.state);
+      if (data.pincode && !pincode.trim()) setPincode(data.pincode);
+
+      setGeoStatus("Address auto-filled. Edit anything before paying.");
+    } catch (err: unknown) {
+      const msg =
+        err instanceof GeolocationPositionError
+          ? err.code === 1
+            ? "Location permission denied. Type your address below."
+            : err.code === 2
+              ? "Couldn't get your location signal. Try again or type your address."
+              : "Location timed out. Try again."
+          : err instanceof Error
+            ? err.message
+            : String(err);
+      setGeoError(msg);
+      setGeoStatus(null);
+    } finally {
+      setGeoBusy(false);
+    }
+  }
 
   const shipping = subtotal >= OFFERS.freeShippingMinINR ? 0 : 85;
   const codFee =
@@ -175,6 +292,8 @@ export default function CheckoutPage() {
       ? `Pay ${formatINR(total)} via UPI`
       : `Confirm COD order · ${formatINR(total)}`;
 
+  const eta = pincode.length === 6 ? estimateDeliveryDate(pincode) : null;
+
   return (
     <>
       <Script
@@ -191,18 +310,91 @@ export default function CheckoutPage() {
           </p>
 
           <div className="mt-6 bg-white rounded-2xl border border-brand-line p-5">
-            <div className="flex justify-between items-center">
-              <div>
-                <div className="font-semibold text-brand-ink">
-                  Order summary
-                </div>
-                <div className="text-sm text-brand-ink-soft">
-                  {count} {count === 1 ? "item" : "items"}
-                </div>
+            <div className="flex justify-between items-baseline">
+              <div className="font-semibold text-brand-ink">Order summary</div>
+              <div className="text-xs font-mono uppercase tracking-widest text-brand-ink-soft">
+                {count} {count === 1 ? "item" : "items"}
               </div>
-              <div className="font-semibold text-brand-ink">
+            </div>
+
+            {/* Per-line: thumbnail + name + qty stepper + remove + line total.
+                Buyers can fix mistakes ('I meant 1, not 2') without bouncing
+                back to the cart drawer — a top reason for checkout abandonment
+                on long-scroll mobile pages. */}
+            <ul className="mt-4 space-y-3">
+              {lines.map((l) => {
+                const dec = () =>
+                  useCart.getState().setQty(l.sku.id, l.qty - 1);
+                const inc = () =>
+                  useCart.getState().setQty(l.sku.id, l.qty + 1);
+                const rm = () => useCart.getState().remove(l.sku.id);
+                return (
+                  <li
+                    key={l.sku.id}
+                    className="flex items-center gap-3 border-t border-brand-line pt-3 first:border-t-0 first:pt-0"
+                  >
+                    <div className="relative w-14 h-14 sm:w-16 sm:h-16 shrink-0 rounded-lg overflow-hidden bg-brand-cream border border-brand-line">
+                      <Image
+                        src={l.sku.heroImage}
+                        alt={l.sku.name}
+                        fill
+                        sizes="64px"
+                        className="object-cover"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-brand-ink text-sm leading-tight truncate">
+                        {l.sku.name}
+                      </div>
+                      <div className="text-xs text-brand-ink-soft mt-0.5">
+                        {l.sku.scale} · {formatINR(l.sku.retailINR)} each
+                      </div>
+                      <div className="mt-2 inline-flex items-center border border-brand-line rounded-full overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={dec}
+                          aria-label={`Decrease ${l.sku.name} quantity`}
+                          className="w-7 h-7 flex items-center justify-center text-brand-ink hover:bg-brand-cream disabled:text-brand-ink-soft"
+                          disabled={l.qty <= 1}
+                        >
+                          <Minus size={12} aria-hidden />
+                        </button>
+                        <span className="px-2 min-w-[1.5rem] text-center text-xs font-semibold tabular-nums text-brand-ink">
+                          {l.qty}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={inc}
+                          aria-label={`Increase ${l.sku.name} quantity`}
+                          className="w-7 h-7 flex items-center justify-center text-brand-ink hover:bg-brand-cream"
+                        >
+                          <Plus size={12} aria-hidden />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-2 shrink-0">
+                      <div className="text-sm font-semibold text-brand-ink">
+                        {formatINR(l.lineTotalINR)}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={rm}
+                        aria-label={`Remove ${l.sku.name} from cart`}
+                        className="text-brand-ink-soft hover:text-brand-red"
+                      >
+                        <X size={14} aria-hidden />
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <div className="mt-4 pt-3 border-t border-brand-line flex justify-between items-baseline">
+              <span className="text-sm text-brand-ink-soft">Subtotal</span>
+              <span className="font-semibold text-brand-ink">
                 {formatINR(subtotal)}
-              </div>
+              </span>
             </div>
           </div>
 
@@ -210,6 +402,28 @@ export default function CheckoutPage() {
             <h2 className="font-semibold text-brand-ink">
               Where should we ship?
             </h2>
+
+            {/* One-tap address autofill via Geolocation + reverse-geocode.
+                Same pattern as Swiggy / Zomato / Blinkit — buyer taps once,
+                we prefill pincode / city / state / line 1 and they just edit
+                the house number. Fields the buyer has already typed are
+                preserved. */}
+            <button
+              type="button"
+              onClick={useMyLocation}
+              disabled={geoBusy}
+              className="mt-4 w-full inline-flex items-center justify-center gap-2 rounded-lg border border-brand-line bg-brand-cream hover:border-brand-red hover:text-brand-red disabled:opacity-60 disabled:cursor-progress px-4 py-3 text-sm font-semibold text-brand-ink transition-colors"
+            >
+              <MapPin size={16} className="text-brand-red" aria-hidden />
+              {geoBusy ? "Detecting…" : "Use my current location"}
+            </button>
+            {geoStatus && !geoError && (
+              <p className="mt-2 text-xs text-success">{geoStatus}</p>
+            )}
+            {geoError && (
+              <p className="mt-2 text-xs text-brand-red">{geoError}</p>
+            )}
+
             <div className="mt-4 space-y-3">
               <input
                 type="text"
@@ -249,9 +463,9 @@ export default function CheckoutPage() {
                 }
                 className="w-full px-4 py-3 rounded-lg border border-brand-line focus:outline-none focus:border-brand-red text-brand-ink"
               />
-              {pincode.length === 6 && (
+              {eta && (
                 <div className="text-success text-sm">
-                  Delivered to {pincode} by Tue, 28 May
+                  Delivered to {pincode} by {eta}
                 </div>
               )}
               <input

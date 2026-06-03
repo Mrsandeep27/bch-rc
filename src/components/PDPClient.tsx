@@ -268,7 +268,7 @@ export default function PDPClient({ sku }: { sku: Sku }) {
           <div className="p-3 border border-brand-line rounded-lg">
             <Shield size={18} className="mx-auto text-brand-red" />
             <p className="text-[11px] font-semibold text-brand-ink mt-1.5">
-              BIS Certified
+              Recommended
             </p>
             <p className="text-[10px] text-brand-ink-soft">Age {sku.specs.minAge}+</p>
           </div>

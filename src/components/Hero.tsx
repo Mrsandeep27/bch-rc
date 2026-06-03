@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Truck, PackageCheck, ShieldCheck } from "lucide-react";
 import { HERO_VARIANTS, type HeroVariant } from "@/lib/copy";
@@ -10,28 +9,11 @@ import { getHeroSku } from "@/lib/products";
 import { useCart } from "@/lib/cart-store";
 import LaunchCountdown from "@/components/LaunchCountdown";
 
-function getVariantFromSource(source: string | null): HeroVariant {
-  switch (source) {
-    case "ig_gift":
-      return "gift";
-    case "ig_couple":
-      return "couple";
-    case "ig_parent":
-      return "parent";
-    case "ig_carride":
-      return "carride";
-    case "ig_drift":
-    case "yt_drift":
-      return "enthusiast";
-    default:
-      return "default";
-  }
-}
-
-export default function Hero() {
-  const searchParams = useSearchParams();
-  const utmSource = searchParams.get("utm_source");
-  const variant = getVariantFromSource(utmSource);
+export default function Hero({
+  variant = "default",
+}: {
+  variant?: HeroVariant;
+}) {
   const { h1, sub, ctaLabel } = HERO_VARIANTS[variant];
 
   const handlePrimaryCta = () => {
@@ -56,12 +38,16 @@ export default function Hero() {
       />
 
       {/* Readability gradient.
-          Mobile: top-down dark fade (text sits at top, car body shows below).
-          Desktop: left-to-right dark fade (text on left, car on right). */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-black/50 to-black/30 sm:bg-gradient-to-r sm:from-black sm:via-black/70 sm:to-transparent" />
+          Mobile: heavy top-down dark fade — the hero image has bright zones
+          (red car, smoke highlights) that compete with the H1 if the overlay
+          is too light. Keeps text readable on every device. The bottom 30%
+          stays semi-transparent so the car body still peeks through under
+          the proof strip. */}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/95 via-black/80 to-black/55 sm:bg-gradient-to-r sm:from-black sm:via-black/70 sm:to-transparent" />
 
-      {/* Subtle bottom-vignette */}
-      <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black to-transparent" />
+      {/* Bottom vignette — taller on mobile so the trust strip pinned at the
+          bottom always has a fully-dark backdrop. */}
+      <div className="absolute inset-x-0 bottom-0 h-40 sm:h-32 bg-gradient-to-t from-black via-black/80 to-transparent" />
 
       {/* Content stack — left-aligned on desktop, centered on mobile */}
       <div className="relative z-10 max-w-7xl mx-auto px-5 sm:px-10 py-16 sm:py-28 min-h-[100svh] flex pb-36 sm:pb-40">
@@ -91,7 +77,7 @@ export default function Hero() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.05, ease: "easeOut" }}
-            className="font-mono text-[10px] sm:text-xs uppercase tracking-[0.2em] text-white/65 mb-4 sm:mb-5"
+            className="font-mono text-[10px] sm:text-xs uppercase tracking-[0.2em] text-white/80 mb-4 sm:mb-5 drop-shadow"
           >
             Made in Bangalore · 1:64 scale
           </motion.span>
@@ -100,7 +86,7 @@ export default function Hero() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.05, ease: "easeOut" }}
-            className="font-display text-white text-[2.75rem] leading-[0.95] sm:text-6xl md:text-7xl lg:text-8xl font-bold text-balance"
+            className="font-display text-white text-[2.75rem] leading-[0.95] sm:text-6xl md:text-7xl lg:text-8xl font-bold text-balance [text-shadow:0_2px_24px_rgba(0,0,0,0.55)]"
           >
             {variant === "default" ? (
               <>
@@ -115,16 +101,48 @@ export default function Hero() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.15, ease: "easeOut" }}
-            className="text-white/85 text-base sm:text-lg md:text-xl max-w-md mt-5 sm:mt-7"
+            className="text-white text-base sm:text-lg md:text-xl max-w-md mt-5 sm:mt-7 [text-shadow:0_1px_12px_rgba(0,0,0,0.5)]"
           >
             {sub}
           </motion.p>
+
+          {/* Proof strip — three concrete differentiators in one line. Replaces
+              vague "youthful" copy with the three lines that separate PRC from
+              Amazon toy listings, surfaced before the price. */}
+          <motion.ul
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.2, ease: "easeOut" }}
+            className="mt-5 sm:mt-6 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] sm:text-xs font-mono uppercase tracking-widest text-white/90 max-w-md [text-shadow:0_1px_8px_rgba(0,0,0,0.6)]"
+            aria-label="Why PRC Cars"
+          >
+            <li className="flex items-center gap-1.5">
+              <span className="w-1 h-1 rounded-full bg-brand-red" />
+              Everything in the box
+            </li>
+            <li className="flex items-center gap-1.5">
+              <span className="w-1 h-1 rounded-full bg-brand-red" />
+              Tested on tile, marble &amp; concrete
+            </li>
+            <li className="flex items-center gap-1.5">
+              <span className="w-1 h-1 rounded-full bg-brand-red" />
+              Real Yelahanka warehouse
+            </li>
+          </motion.ul>
+
+          {/* SEO-friendly money-keyword headline — visually small, semantically
+              an h2 so Google sees "Mini RC Drift Cars from ₹1,199" while users
+              still see the brand H1 above. */}
+          <h2 className="sr-only">
+            Mini RC Drift Cars from ₹1,199 — 2.4&nbsp;GHz, USB-C, Die-Cast
+            alloy body. Pan-India COD, ships in 24&nbsp;hrs from Bangalore.
+          </h2>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.25, ease: "easeOut" }}
-            className="mt-8 sm:mt-10 flex flex-col items-start gap-4"
+            className="mt-7 sm:mt-9 flex flex-col items-start gap-3"
           >
             <button
               type="button"
@@ -169,8 +187,8 @@ export default function Hero() {
           />
           <HeroTrustItem
             icon={<ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5" />}
-            title="BIS certified"
-            sub="Age 8+ · 7-day returns"
+            title="7-day replacement"
+            sub="Age 8+ · WhatsApp support"
           />
         </div>
       </motion.div>

@@ -98,14 +98,23 @@ export default function Footer() {
               </li>
               <li className="flex items-start gap-2.5">
                 <Phone size={16} className="text-brand-red shrink-0 mt-0.5" />
-                <a
-                  href={waLink()}
-                  target="_blank"
-                  rel="noopener"
-                  className="hover:text-white"
-                >
-                  {THEME.phoneDisplay}
-                </a>
+                <span className="leading-snug">
+                  <a
+                    href={`tel:+${THEME.whatsappNumber}`}
+                    className="hover:text-white"
+                  >
+                    {THEME.phoneDisplay}
+                  </a>
+                  <span className="text-neutral-500"> · </span>
+                  <a
+                    href={waLink()}
+                    target="_blank"
+                    rel="noopener"
+                    className="text-whatsapp-green hover:text-white"
+                  >
+                    WhatsApp
+                  </a>
+                </span>
               </li>
               <li className="flex items-start gap-2.5">
                 <Mail size={16} className="text-brand-red shrink-0 mt-0.5" />

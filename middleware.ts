@@ -43,7 +43,9 @@ export const config = {
      * - _next/image (image optimization)
      * - favicon.ico
      * - images / videos / fonts
+     * - api/webhooks/* (external services like Shiprocket/Razorpay — must respond
+     *   fast and never need a Supabase session refresh)
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|woff2|ttf)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/webhooks|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|woff2|ttf)$).*)",
   ],
 };

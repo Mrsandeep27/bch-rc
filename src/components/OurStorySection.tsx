@@ -169,6 +169,29 @@ export default function OurStorySection() {
             <span className="hidden sm:inline">Pick your drift — from ₹1,299</span>
             <ArrowRight size={14} className="hidden sm:block" />
           </Link>
+
+          {/* Named founder signal — replaces an abstract "real people" claim
+              with a real human and a real first name. The cheapest, highest-
+              converting trust artefact for an Instagram-sourced buyer. */}
+          <figure className="hidden sm:flex mt-7 items-start gap-3 border-t border-brand-line pt-5">
+            <span
+              aria-hidden
+              className="shrink-0 w-11 h-11 rounded-full bg-brand-ink text-white font-display font-bold text-base flex items-center justify-center"
+            >
+              S
+            </span>
+            <blockquote className="text-sm text-brand-ink-soft leading-relaxed">
+              &ldquo;Every car ships from my warehouse in Yelahanka. If yours
+              arrives broken or stops working in the first 7 days, message me
+              on WhatsApp — I&rsquo;ll replace it.&rdquo;
+              <footer className="mt-2 text-xs font-mono uppercase tracking-widest text-brand-ink not-italic">
+                — Syed,{" "}
+                <span className="text-brand-ink-soft">
+                  Founder · PRC Cars · Bangalore
+                </span>
+              </footer>
+            </blockquote>
+          </figure>
         </motion.div>
       </div>
     </section>

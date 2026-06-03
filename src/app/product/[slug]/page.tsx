@@ -41,13 +41,10 @@ function productJsonLd(sku: Sku) {
         name: THEME.legal.tradeName,
       },
     },
-    aggregateRating: {
-      "@type": "AggregateRating",
-      ratingValue: "4.8",
-      reviewCount: "6",
-      bestRating: "5",
-      worstRating: "1",
-    },
+    // No aggregateRating until we have verifiable, named customer reviews.
+    // Google's structured-data policy prohibits fabricated ratings, and a
+    // bare "4.8 / 6 reviews" without on-page proof poisons trust for the
+    // scam-wary buyer who is the primary conversion target here.
   };
 }
 

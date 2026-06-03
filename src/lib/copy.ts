@@ -27,7 +27,7 @@ export const HERO_VARIANTS: Record<
   },
   parent: {
     h1: "Swap His Screen Time for Real Play",
-    sub: "USB-C · 30-min runtime · drop-tested · BIS-friendly. From ₹1,299.",
+    sub: "USB-C · 30-min runtime · drop-tested · Age 8+. From ₹1,299.",
     ctaLabel: "Order for Your Kid — ₹1,299",
   },
   carride: {
@@ -55,28 +55,24 @@ export type Announcement = {
 export const ANNOUNCEMENTS: Announcement[] = [
   {
     tag: "CODE",
-    text: "PRC100 — ₹100 OFF YOUR FIRST DRIFT",
+    text: "CODEPRC100 — ₹100 OFF YOUR FIRST DRIFT",
   },
   {
-    text: "Extra 3% OFF on prepaid orders",
+    text: "Pay prepaid → ₹1,199 (save ₹100)",
   },
   {
-    emoji: "🟢",
-    text: "New 1:64 drops every Friday on WhatsApp — Join 3,000+ collectors",
-    href: "https://wa.me/919999999999?text=Add%20me%20to%20PRC%20Cars%20drops",
+    text: "Ships in 24 hrs from Bangalore · Free shipping over ₹1,099",
   },
   {
-    text: "Trusted by 5,000+ drifters across India · COD pan-India",
-  },
-  {
-    text: "Ships in 24 hrs from Bangalore · Free shipping ₹1,099+",
+    emoji: "📦",
+    text: "Pan-India COD · 7-day replacement · WhatsApp support",
   },
 ];
 
 export const USPS = [
   { iconKey: "usbc", title: "USB-C charging", sub: "30-min full charge" },
   { iconKey: "drop", title: "Drop-tested 1.5m", sub: "Replaceable shell ₹99" },
-  { iconKey: "shield", title: "BIS certified", sub: "Age 6+" },
+  { iconKey: "shield", title: "7-day replacement", sub: "Age 8+ recommended" },
   { iconKey: "india", title: "Assembled in India", sub: "GST-paid" },
 ] as const;
 
