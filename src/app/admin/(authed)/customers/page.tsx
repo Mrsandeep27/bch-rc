@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { sql, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { customers, orders } from "@/db/schema";
@@ -51,11 +52,14 @@ export default async function AdminCustomers() {
             </thead>
             <tbody className="divide-y divide-brand-line">
               {list.map((c) => (
-                <tr key={c.id}>
+                <tr key={c.id} className="hover:bg-brand-cream transition-colors">
                   <td className="px-5 py-3">
-                    <div className="font-semibold text-brand-ink">
+                    <Link
+                      href={`/admin/customers/${c.id}`}
+                      className="block font-semibold text-brand-ink hover:text-brand-red"
+                    >
                       {c.name ?? "—"}
-                    </div>
+                    </Link>
                     {c.email && (
                       <div className="text-xs text-brand-ink-soft">
                         {c.email}
