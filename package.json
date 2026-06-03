@@ -12,7 +12,8 @@
     "db:migrate": "node --env-file=.env.local --import tsx src/db/migrate.ts",
     "db:studio": "node --env-file=.env.local node_modules/drizzle-kit/bin.cjs studio",
     "db:seed": "node --env-file=.env.local --import tsx src/db/seed.ts",
-    "db:seed-inventory": "node --env-file=.env.local --import tsx src/db/seed-inventory.ts"
+    "db:seed-inventory": "node --env-file=.env.local --import tsx src/db/seed-inventory.ts",
+    "admin:reset-password": "node --env-file=.env.local --import tsx scripts/reset-admin-password.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",
