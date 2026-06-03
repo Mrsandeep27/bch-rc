@@ -8,9 +8,9 @@ import {
   TrendingUp,
   Users,
 } from "lucide-react";
-import { and, count, desc, gte, inArray, lt, sql, sum } from "drizzle-orm";
+import { desc, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { customers, inventory, orders } from "@/db/schema";
+import { orders } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
 import { formatINR } from "@/lib/utils";
 
@@ -44,106 +44,122 @@ export default async function AdminOverview() {
   const last30 = new Date(today);
   last30.setDate(last30.getDate() - 30);
 
-  // Eight aggregates in parallel. Pool max:3, so the rest queue — still
-  // ~3-4× faster than sequential awaits, and well under the cold-start
-  // budget. Defensive `.then(r => r[0])` flattens single-row results.
-  const [
-    todayStats,
-    weekStats,
-    customerStats,
-    aovStats,
-    returningStats,
-    lowStockStats,
-    topSkuOrders,
-    recent,
-  ] = await Promise.all([
-    db
-      .select({
-        orderCount: count(orders.id),
-        revenue: sum(orders.totalInr).mapWith(Number),
-      })
-      .from(orders)
-      .where(
-        and(gte(orders.placedAt, today), inArray(orders.siteId, ctx.siteIds)),
-      )
-      .then((rows) => rows[0]),
-    db
-      .select({
-        orderCount: count(orders.id),
-        revenue: sum(orders.totalInr).mapWith(Number),
-      })
-      .from(orders)
-      .where(
-        and(gte(orders.placedAt, last7), inArray(orders.siteId, ctx.siteIds)),
-      )
-      .then((rows) => rows[0]),
-    db
-      .select({ total: count(customers.id) })
-      .from(customers)
-      .then((rows) => rows[0]),
-    // AOV over the last 7 paid days only. Average of PENDING-included orders
-    // is misleading because the buyer never paid.
-    db
-      .select({
-        orderCount: count(orders.id),
-        revenue: sum(orders.totalInr).mapWith(Number),
-      })
-      .from(orders)
-      .where(
-        and(
-          gte(orders.placedAt, last7),
-          inArray(orders.siteId, ctx.siteIds),
-          inArray(orders.status, [...PAID_STATUSES]),
-        ),
-      )
-      .then((rows) => rows[0]),
-    // Returning-customer % uses the `customers.total_orders` denormalised
-    // counter that's bumped at order create. Single row, no GROUP BY needed.
-    db
-      .select({
-        returning: sql<number>`count(*) filter (where ${customers.totalOrders} > 1)::int`,
-        total: count(customers.id),
-      })
-      .from(customers)
-      .then((rows) => rows[0]),
-    db
-      .select({ count: count(inventory.skuId) })
-      .from(inventory)
-      .where(
-        and(
-          inArray(inventory.siteId, ctx.siteIds),
-          lt(inventory.stock, LOW_STOCK_THRESHOLD),
-        ),
-      )
-      .then((rows) => rows[0]),
-    // Top SKUs — pull last 30d of paid orders + aggregate the JSONB `items`
-    // array in Node. Postgres-side jsonb_array_elements would also work but
-    // is awkward through Drizzle; for the operator's volume (<1000/mo) the
-    // in-process pass is comfortably sub-100ms and easier to maintain.
-    db
-      .select({ items: orders.items })
-      .from(orders)
-      .where(
-        and(
-          gte(orders.placedAt, last30),
-          inArray(orders.siteId, ctx.siteIds),
-          inArray(orders.status, [...PAID_STATUSES]),
-        ),
-      ),
-    db
-      .select({
-        id: orders.id,
-        siteId: orders.siteId,
-        status: orders.status,
-        paymentMethod: orders.paymentMethod,
-        totalInr: orders.totalInr,
-        placedAt: orders.placedAt,
-      })
-      .from(orders)
-      .where(inArray(orders.siteId, ctx.siteIds))
-      .orderBy(desc(orders.placedAt))
-      .limit(8),
-  ]);
+  // Three round-trips instead of eight. The first two queries use FILTER
+  // clauses to fold what used to be five separate aggregates into single
+  // SQL statements — Postgres scans the relevant rows once, computes every
+  // counter on that pass. Wall-clock collapses from ~5-batch sequential
+  // (max:3 pool) to a single batch.
+  //
+  // Each query has a defensive try/catch with safe defaults so the dashboard
+  // renders even if one section's query times out — an empty Top-SKUs panel
+  // beats a stuck skeleton.
+  const paidIn = sql.raw(
+    `('${PAID_STATUSES.join("','")}')`,
+  ); // safe — no user input, constant tuple
+  const siteIdsLiteral = sql.raw(
+    `ARRAY[${ctx.siteIds.map((s) => `'${s.replace(/'/g, "''")}'`).join(",")}]::text[]`,
+  );
+
+  const [orderAggRow, customerAggRow, topSkuOrders, recent] = await Promise.all(
+    [
+      // Combined orders aggregate: today / 7d / 7d-paid + low-stock count
+      // co-tenant in the same trip (inventory join would be expensive — keep
+      // separate). Returns one row.
+      db
+        .execute(
+          sql`
+        SELECT
+          count(*) filter (where placed_at >= ${today})::int as today_count,
+          coalesce(sum(total_inr) filter (where placed_at >= ${today}), 0)::int as today_revenue,
+          count(*) filter (where placed_at >= ${last7})::int as week_count,
+          coalesce(sum(total_inr) filter (where placed_at >= ${last7}), 0)::int as week_revenue,
+          count(*) filter (
+            where placed_at >= ${last7}
+            and status in ${paidIn}
+          )::int as week_paid_count,
+          coalesce(sum(total_inr) filter (
+            where placed_at >= ${last7}
+            and status in ${paidIn}
+          ), 0)::int as week_paid_revenue
+        FROM orders
+        WHERE site_id = ANY(${siteIdsLiteral})
+      `,
+        )
+        .then((res) => (res as unknown as { rows?: Record<string, number>[] }).rows?.[0] ?? null)
+        .catch(() => null),
+
+      // Customers (returning + total) + low-stock count combined.
+      db
+        .execute(
+          sql`
+        SELECT
+          (SELECT count(*)::int FROM customers) as total_customers,
+          (SELECT count(*) filter (where total_orders > 1)::int FROM customers) as returning_customers,
+          (
+            SELECT count(*)::int FROM inventory
+            WHERE site_id = ANY(${siteIdsLiteral})
+              AND stock < ${LOW_STOCK_THRESHOLD}
+          ) as low_stock_count
+      `,
+        )
+        .then((res) => (res as unknown as { rows?: Record<string, number>[] }).rows?.[0] ?? null)
+        .catch(() => null),
+
+      // Top SKUs — capped at last 100 paid orders. More than enough for a
+      // top-5 ranking; reduces JSONB payload size on cold-start by an order
+      // of magnitude when there's a long history.
+      db
+        .select({ items: orders.items })
+        .from(orders)
+        .where(
+          sql`placed_at >= ${last30} AND site_id = ANY(${siteIdsLiteral}) AND status IN ${paidIn}`,
+        )
+        .orderBy(desc(orders.placedAt))
+        .limit(100)
+        .catch(() => [] as Array<{ items: unknown }>),
+
+      db
+        .select({
+          id: orders.id,
+          siteId: orders.siteId,
+          status: orders.status,
+          paymentMethod: orders.paymentMethod,
+          totalInr: orders.totalInr,
+          placedAt: orders.placedAt,
+        })
+        .from(orders)
+        .where(inArray(orders.siteId, ctx.siteIds))
+        .orderBy(desc(orders.placedAt))
+        .limit(8)
+        .catch(() => [] as Array<{
+          id: string;
+          siteId: string;
+          status: string;
+          paymentMethod: string;
+          totalInr: number;
+          placedAt: Date;
+        }>),
+    ],
+  );
+
+  const todayStats = {
+    orderCount: orderAggRow?.today_count ?? 0,
+    revenue: orderAggRow?.today_revenue ?? 0,
+  };
+  const weekStats = {
+    orderCount: orderAggRow?.week_count ?? 0,
+    revenue: orderAggRow?.week_revenue ?? 0,
+  };
+  const aovStats = {
+    orderCount: orderAggRow?.week_paid_count ?? 0,
+    revenue: orderAggRow?.week_paid_revenue ?? 0,
+  };
+  const customerStats = { total: customerAggRow?.total_customers ?? 0 };
+  const returningStats = {
+    returning: customerAggRow?.returning_customers ?? 0,
+    total: customerAggRow?.total_customers ?? 0,
+  };
+  const lowStockStats = { count: customerAggRow?.low_stock_count ?? 0 };
 
   const aov =
     aovStats?.orderCount && aovStats.orderCount > 0
