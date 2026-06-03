@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
@@ -14,10 +15,13 @@ import {
 import { OFFERS, waLink } from "@/lib/config";
 import { formatINR } from "@/lib/utils";
 
-export default function CartDrawer() {
+export default function CartDrawer({
+  initialOpen = false,
+}: { initialOpen?: boolean }) {
   const items = useCart((s) => s.items);
   const isOpen = useCart((s) => s.isOpen);
   const close = useCart((s) => s.close);
+  const open = useCart((s) => s.open);
   const setQty = useCart((s) => s.setQty);
   const remove = useCart((s) => s.remove);
 
@@ -27,7 +31,7 @@ export default function CartDrawer() {
   const delta = getFreeShippingDelta(subtotal);
   const progressPct = Math.min(
     100,
-    (subtotal / OFFERS.freeShippingMinINR) * 100
+    (subtotal / OFFERS.freeShippingMinINR) * 100,
   );
 
   const waMessage =
@@ -35,11 +39,74 @@ export default function CartDrawer() {
     lines
       .map(
         (l) =>
-          `- ${l.qty}× ${l.sku.name} (${l.sku.scale}) — ${formatINR(
-            l.lineTotalINR
-          )}`
+          `- ${l.qty}× ${l.sku.name}${l.variantName ? ` (${l.variantName})` : ""} (${l.sku.scale}) — ${formatINR(
+            l.lineTotalINR,
+          )}`,
       )
       .join("\n");
+
+  // Open from ?openCart=1 query param on first mount.
+  const initialOpenAppliedRef = useRef(false);
+  useEffect(() => {
+    if (initialOpen && !initialOpenAppliedRef.current) {
+      initialOpenAppliedRef.current = true;
+      open();
+    }
+  }, [initialOpen, open]);
+
+  // Escape closes the drawer.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isOpen, close]);
+
+  // Focus trap + scroll lock while open.
+  const panelRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!isOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    const prevFocused = document.activeElement as HTMLElement | null;
+    document.body.style.overflow = "hidden";
+
+    const focusFirst = () => {
+      const focusables = panelRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"]), input, select, textarea',
+      );
+      focusables?.[0]?.focus();
+    };
+    const t = setTimeout(focusFirst, 50);
+
+    const onTab = (e: KeyboardEvent) => {
+      if (e.key !== "Tab" || !panelRef.current) return;
+      const focusables = Array.from(
+        panelRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"]), input, select, textarea',
+        ),
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", onTab);
+
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("keydown", onTab);
+      document.body.style.overflow = prevOverflow;
+      prevFocused?.focus?.();
+    };
+  }, [isOpen]);
 
   return (
     <AnimatePresence>
@@ -53,9 +120,14 @@ export default function CartDrawer() {
             transition={{ duration: 0.2 }}
             onClick={close}
             className="fixed inset-0 bg-black/50 z-50"
+            aria-hidden="true"
           />
           <motion.aside
             key="cart-panel"
+            ref={panelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Cart"
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
@@ -70,7 +142,7 @@ export default function CartDrawer() {
                 type="button"
                 onClick={close}
                 aria-label="Close cart"
-                className="text-brand-ink-soft hover:text-brand-ink"
+                className="h-11 w-11 flex items-center justify-center text-brand-ink-soft hover:text-brand-ink"
               >
                 <X size={22} />
               </button>
@@ -86,9 +158,7 @@ export default function CartDrawer() {
               >
                 {delta > 0 ? (
                   <>
-                    <div>
-                      Add {formatINR(delta)} more for FREE shipping
-                    </div>
+                    <div>Add {formatINR(delta)} more for FREE shipping</div>
                     <div className="h-1 bg-white/60 rounded-full mt-2 overflow-hidden">
                       <div
                         className="h-full bg-brand-red"
@@ -105,12 +175,9 @@ export default function CartDrawer() {
             <div className="flex-1 overflow-y-auto px-5">
               {count === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center gap-4 py-10">
-                  <ShoppingBag
-                    size={48}
-                    className="text-brand-ink-soft"
-                  />
+                  <ShoppingBag size={48} className="text-brand-ink-soft" />
                   <p className="text-brand-ink-soft text-sm">
-                    Cart is empty. Pick a Storm above.
+                    Cart is empty. Pick a car below.
                   </p>
                   <button
                     type="button"
@@ -124,14 +191,18 @@ export default function CartDrawer() {
                 <ul>
                   {lines.map((line) => (
                     <li
-                      key={line.sku.id}
+                      key={`${line.sku.id}-${line.variantSlug ?? "default"}`}
                       className="flex gap-4 py-4 border-b border-brand-line last:border-b-0"
                     >
                       <div className="w-20 h-20 rounded-lg bg-brand-cream relative overflow-hidden flex-shrink-0">
                         <Image
-                          src={line.sku.heroImage}
-                          alt={line.sku.name}
+                          src={line.variantImage ?? line.sku.heroImage}
+                          alt={
+                            line.sku.name +
+                            (line.variantName ? ` (${line.variantName})` : "")
+                          }
                           fill
+                          sizes="80px"
                           className="object-contain p-2"
                         />
                       </div>
@@ -141,29 +212,30 @@ export default function CartDrawer() {
                         </div>
                         <div className="text-xs text-brand-ink-soft">
                           {line.sku.scale}
+                          {line.variantName ? ` · ${line.variantName}` : ""}
                         </div>
                         <div className="mt-1 text-sm text-brand-ink">
-                          {formatINR(line.sku.retailINR)}
+                          {formatINR(line.unitPriceINR)}
                         </div>
                         <div className="flex items-center gap-1 mt-2 border border-brand-line rounded-lg w-fit">
                           <button
                             type="button"
                             onClick={() =>
-                              setQty(line.sku.id, line.qty - 1)
+                              setQty(line.sku.id, line.variantSlug, line.qty - 1)
                             }
                             aria-label="Decrease quantity"
-                            className="w-8 h-8 flex items-center justify-center text-brand-ink-soft hover:text-brand-ink"
+                            className="h-11 w-11 flex items-center justify-center text-brand-ink-soft hover:text-brand-ink"
                           >
                             <Minus size={14} />
                           </button>
-                          <span className="px-3 text-sm">{line.qty}</span>
+                          <span className="px-3 text-sm tabular-nums">{line.qty}</span>
                           <button
                             type="button"
                             onClick={() =>
-                              setQty(line.sku.id, line.qty + 1)
+                              setQty(line.sku.id, line.variantSlug, line.qty + 1)
                             }
                             aria-label="Increase quantity"
-                            className="w-8 h-8 flex items-center justify-center text-brand-ink-soft hover:text-brand-ink"
+                            className="h-11 w-11 flex items-center justify-center text-brand-ink-soft hover:text-brand-ink"
                           >
                             <Plus size={14} />
                           </button>
@@ -175,9 +247,9 @@ export default function CartDrawer() {
                         </div>
                         <button
                           type="button"
-                          onClick={() => remove(line.sku.id)}
+                          onClick={() => remove(line.sku.id, line.variantSlug)}
                           aria-label={`Remove ${line.sku.name}`}
-                          className="text-brand-ink-soft hover:text-brand-red"
+                          className="h-11 w-11 flex items-center justify-center text-brand-ink-soft hover:text-brand-red"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -192,9 +264,7 @@ export default function CartDrawer() {
               <div className="border-t border-brand-line p-5 space-y-3">
                 <div className="flex justify-between text-brand-ink">
                   <span>Subtotal</span>
-                  <span className="font-semibold">
-                    {formatINR(subtotal)}
-                  </span>
+                  <span className="font-semibold">{formatINR(subtotal)}</span>
                 </div>
                 <p className="text-xs text-brand-ink-soft">
                   Shipping & taxes calculated at checkout

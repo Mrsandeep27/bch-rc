@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ShoppingBag } from "lucide-react";
 import { useCart } from "@/lib/cart-store";
-import { getHeroSku, type Sku } from "@/lib/products";
+import { defaultVariantSlug, getHeroSku, type Sku } from "@/lib/products";
+import { THEME } from "@/lib/theme";
 import { formatINR } from "@/lib/utils";
 
 const SENTINEL_ID = "hero-end-sentinel";
@@ -53,11 +54,11 @@ export default function StickyMobileCTA({
   }, [sentinelId]);
 
   const handleAdd = () => {
-    useCart.getState().add(hero.id);
+    useCart.getState().add(hero.id, defaultVariantSlug(hero));
     useCart.getState().open();
   };
 
-  const prepaidPrice = hero.retailINR - 100;
+  const prepaidPrice = hero.retailINR - THEME.prepaidDiscountINR;
 
   return (
     <AnimatePresence>

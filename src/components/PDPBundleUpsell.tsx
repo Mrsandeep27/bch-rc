@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Check, Plus } from "lucide-react";
 import type { Sku } from "@/lib/products";
-import { getVisibleProducts } from "@/lib/products";
+import { defaultVariantSlug, getVisibleProducts } from "@/lib/products";
 import { formatINR, cn } from "@/lib/utils";
 import { useCart } from "@/lib/cart-store";
 import { THEME } from "@/lib/theme";
@@ -37,8 +37,8 @@ export default function PDPBundleUpsell({ sku }: { sku: Sku }) {
 
   function addBundle() {
     const cart = useCart.getState();
-    cart.add(sku.id, 1);
-    if (includePair) cart.add(pair!.id, 1);
+    cart.add(sku.id, defaultVariantSlug(sku), 1);
+    if (includePair) cart.add(pair!.id, defaultVariantSlug(pair!), 1);
     router.push("/checkout");
   }
 

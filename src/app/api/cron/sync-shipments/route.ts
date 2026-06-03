@@ -18,6 +18,8 @@ import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
 import { orders, events } from "@/db/schema";
 import { getShipmentStatus, mapShiprocketStatus } from "@/lib/shiprocket";
+import { drainNotificationsOutbox } from "@/lib/notifications/drain";
+import { logError } from "@/lib/logger";
 
 // Statuses where polling is still useful — terminal statuses (DELIVERED,
 // CANCELLED, RETURNED, REFUNDED) get skipped.
@@ -117,11 +119,21 @@ export async function GET(req: Request) {
     }
   }
 
+  // Backstop: drain the notifications outbox as part of the same cron run.
+  // On Vercel Hobby we only get one daily cron slot, so we co-locate.
+  let notificationStats = { drained: 0, sent: 0, failed: 0, exhausted: 0 };
+  try {
+    notificationStats = await drainNotificationsOutbox(200);
+  } catch (err) {
+    logError("cron:drain-outbox", err);
+  }
+
   return NextResponse.json({
     ok: true,
     polled: inFlight.length,
     changed: results.filter((r) => r.changed).length,
     errors: results.filter((r) => r.error).length,
     results,
+    notifications: notificationStats,
   });
 }

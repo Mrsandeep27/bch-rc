@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { Truck, PackageCheck, ShieldCheck } from "lucide-react";
 import { HERO_VARIANTS, type HeroVariant } from "@/lib/copy";
 import { THEME } from "@/lib/theme";
-import { getHeroSku } from "@/lib/products";
+import { defaultVariantSlug, getHeroSku } from "@/lib/products";
 import { useCart } from "@/lib/cart-store";
 import LaunchCountdown from "@/components/LaunchCountdown";
 
@@ -18,7 +18,7 @@ export default function Hero({
 
   const handlePrimaryCta = () => {
     const heroSku = getHeroSku();
-    useCart.getState().add(heroSku.id);
+    useCart.getState().add(heroSku.id, defaultVariantSlug(heroSku));
     useCart.getState().open();
   };
 

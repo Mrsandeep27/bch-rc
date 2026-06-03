@@ -24,6 +24,10 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { orders, events, webhooksInbound } from "@/db/schema";
 import { verifyWebhookSignature } from "@/lib/razorpay";
+import { enqueueNotification } from "@/lib/notifications/enqueue";
+import { sendOutboxRow } from "@/lib/notifications/drain";
+import { triggerShipmentBackground } from "@/lib/fulfillment/create-shipment";
+import { logError } from "@/lib/logger";
 
 export async function POST(req: Request) {
   const rawBody = await req.text();
@@ -83,7 +87,7 @@ export async function POST(req: Request) {
           .select()
           .from(orders)
           .where(eq(orders.razorpayOrderId, payment.order_id));
-        if (order && order.paymentStatus !== "CAPTURED") {
+        if (order && order.paymentStatus !== "CAPTURED" && order.paymentStatus !== "FAILED" && order.paymentStatus !== "REFUNDED") {
           await db
             .update(orders)
             .set({
@@ -102,6 +106,38 @@ export async function POST(req: Request) {
             payload: { paymentId: payment.id, amount: payment.amount },
             source: "webhook",
           });
+
+          // Confirmation email + shipment trigger — webhook is the safety net
+          // for customers who closed the tab before /verify fired.
+          const addr = order.shippingAddress as { fullName: string; email?: string };
+          const itemsArr = order.items as Array<{ name: string; qty: number; lineTotalInr: number }>;
+          if (addr.email) {
+            try {
+              const notificationId = await enqueueNotification({
+                siteId: order.siteId,
+                orderId: order.id,
+                customerId: order.customerId,
+                channel: "email",
+                template: "PAYMENT_CAPTURED",
+                payload: {
+                  to: addr.email,
+                  customerName: addr.fullName,
+                  orderId: order.id,
+                  totalInr: order.totalInr,
+                  paymentMethod: order.paymentMethod,
+                  items: itemsArr.map((i) => ({
+                    name: i.name,
+                    qty: i.qty,
+                    lineTotalInr: i.lineTotalInr,
+                  })),
+                },
+              });
+              sendOutboxRow(notificationId).catch(() => {});
+            } catch (err) {
+              logError("webhook:enqueue-email", err, { orderId: order.id });
+            }
+          }
+          triggerShipmentBackground(order.id);
         }
         break;
       }

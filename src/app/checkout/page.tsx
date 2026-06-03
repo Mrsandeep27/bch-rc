@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Script from "next/script";
 import { useRouter } from "next/navigation";
-import { MapPin, Minus, Plus, X } from "lucide-react";
+import { MapPin, Minus, Plus, Tag, X } from "lucide-react";
+import { nanoid } from "nanoid";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
 import Footer from "@/components/Footer";
 import { PayButton } from "@/components/PayButton";
@@ -97,14 +98,27 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Coupon UI state.
+  const [couponCode, setCouponCode] = useState("");
+  const [couponDiscountInr, setCouponDiscountInr] = useState(0);
+  const [couponMessage, setCouponMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const [couponBusy, setCouponBusy] = useState(false);
+  const [couponApplied, setCouponApplied] = useState<string | null>(null);
+
   // Geo-locate / auto-fill state
   const [geoBusy, setGeoBusy] = useState(false);
   const [geoStatus, setGeoStatus] = useState<string | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
 
+  // Idempotency key — generated ONCE per checkout session. Same key on retry
+  // → server short-circuits and returns the original order. Cleared after a
+  // successful order so a fresh "Buy again" cycle starts a new key.
+  const idempotencyKey = useMemo(() => nanoid(24), []);
+  const submittingRef = useRef(false);
+
   useEffect(() => {
     if (count === 0) {
-      router.push("/cart");
+      router.push("/");
     }
   }, [count, router]);
 
@@ -188,11 +202,14 @@ export default function CheckoutPage() {
       ? OFFERS.codFeeINR
       : 0;
   const prepaidDiscount = payment === "upi" ? OFFERS.prepaidDiscountINR : 0;
-  const total = subtotal + shipping + codFee - prepaidDiscount;
+  const total = Math.max(0, subtotal + shipping + codFee - prepaidDiscount - couponDiscountInr);
 
   function validate(): string | null {
     if (name.trim().length < 2) return "Please enter your full name.";
     if (!/^\d{10}$/.test(phone)) return "Enter a valid 10-digit mobile number.";
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) {
+      return "Enter a valid email — we send your order confirmation there.";
+    }
     if (!/^\d{6}$/.test(pincode)) return "Enter a valid 6-digit pincode.";
     if (line1.trim().length < 3) return "Please enter your address.";
     if (city.trim().length < 2) return "Please enter your city.";
@@ -200,14 +217,60 @@ export default function CheckoutPage() {
     return null;
   }
 
+  async function applyCoupon() {
+    const code = couponCode.trim().toUpperCase();
+    if (!code) {
+      setCouponMessage({ kind: "error", text: "Enter a code" });
+      return;
+    }
+    setCouponBusy(true);
+    setCouponMessage(null);
+    try {
+      const r = await fetch(
+        `/api/coupons/validate?code=${encodeURIComponent(code)}&siteId=prc&subtotalInr=${subtotal}&shippingInr=${shipping}`,
+      );
+      const data = (await r.json()) as {
+        ok: boolean;
+        code?: string;
+        discountInr?: number;
+        error?: string;
+      };
+      if (!data.ok) {
+        setCouponDiscountInr(0);
+        setCouponApplied(null);
+        setCouponMessage({ kind: "error", text: data.error ?? "Coupon rejected" });
+        return;
+      }
+      setCouponDiscountInr(data.discountInr ?? 0);
+      setCouponApplied(data.code ?? code);
+      setCouponMessage({
+        kind: "ok",
+        text: `Applied ${data.code ?? code} — ${formatINR(data.discountInr ?? 0)} off`,
+      });
+    } catch {
+      setCouponMessage({ kind: "error", text: "Couldn't reach coupon service" });
+    } finally {
+      setCouponBusy(false);
+    }
+  }
+
+  function clearCoupon() {
+    setCouponCode("");
+    setCouponApplied(null);
+    setCouponDiscountInr(0);
+    setCouponMessage(null);
+  }
+
   async function handlePlaceOrder() {
+    // Synchronous guard against React state-batching double-fire.
+    if (submittingRef.current) return;
     setError(null);
     const validation = validate();
     if (validation) {
       setError(validation);
       return;
     }
-
+    submittingRef.current = true;
     setLoading(true);
     try {
       const res = await fetch("/api/orders/create", {
@@ -215,7 +278,12 @@ export default function CheckoutPage() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           siteId: "prc",
-          items: items.map((i) => ({ skuId: i.skuId, qty: i.qty })),
+          idempotencyKey,
+          items: items.map((i) => ({
+            skuId: i.skuId,
+            variantSlug: i.variantSlug,
+            qty: i.qty,
+          })),
           address: {
             fullName: name.trim(),
             phone,
@@ -227,6 +295,7 @@ export default function CheckoutPage() {
             pincode,
           },
           paymentMethod: payment === "upi" ? "UPI" : "COD",
+          couponCode: couponApplied || undefined,
         }),
       });
       const data = await res.json();
@@ -277,12 +346,16 @@ export default function CheckoutPage() {
           }
         },
         modal: {
-          ondismiss: () => setLoading(false),
+          ondismiss: () => {
+            submittingRef.current = false;
+            setLoading(false);
+          },
         },
       });
       rzp.open();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      submittingRef.current = false;
       setLoading(false);
     }
   }
@@ -324,19 +397,21 @@ export default function CheckoutPage() {
             <ul className="mt-4 space-y-3">
               {lines.map((l) => {
                 const dec = () =>
-                  useCart.getState().setQty(l.sku.id, l.qty - 1);
+                  useCart.getState().setQty(l.sku.id, l.variantSlug, l.qty - 1);
                 const inc = () =>
-                  useCart.getState().setQty(l.sku.id, l.qty + 1);
-                const rm = () => useCart.getState().remove(l.sku.id);
+                  useCart.getState().setQty(l.sku.id, l.variantSlug, l.qty + 1);
+                const rm = () =>
+                  useCart.getState().remove(l.sku.id, l.variantSlug);
+                const labelSuffix = l.variantName ? ` (${l.variantName})` : "";
                 return (
                   <li
-                    key={l.sku.id}
+                    key={`${l.sku.id}-${l.variantSlug ?? "default"}`}
                     className="flex items-center gap-3 border-t border-brand-line pt-3 first:border-t-0 first:pt-0"
                   >
                     <div className="relative w-14 h-14 sm:w-16 sm:h-16 shrink-0 rounded-lg overflow-hidden bg-brand-cream border border-brand-line">
                       <Image
-                        src={l.sku.heroImage}
-                        alt={l.sku.name}
+                        src={l.variantImage ?? l.sku.heroImage}
+                        alt={l.sku.name + labelSuffix}
                         fill
                         sizes="64px"
                         className="object-cover"
@@ -345,30 +420,33 @@ export default function CheckoutPage() {
                     <div className="flex-1 min-w-0">
                       <div className="font-semibold text-brand-ink text-sm leading-tight truncate">
                         {l.sku.name}
+                        {l.variantName ? (
+                          <span className="text-brand-ink-soft font-normal"> · {l.variantName}</span>
+                        ) : null}
                       </div>
                       <div className="text-xs text-brand-ink-soft mt-0.5">
-                        {l.sku.scale} · {formatINR(l.sku.retailINR)} each
+                        {l.sku.scale} · {formatINR(l.unitPriceINR)} each
                       </div>
                       <div className="mt-2 inline-flex items-center border border-brand-line rounded-full overflow-hidden">
                         <button
                           type="button"
                           onClick={dec}
-                          aria-label={`Decrease ${l.sku.name} quantity`}
-                          className="w-7 h-7 flex items-center justify-center text-brand-ink hover:bg-brand-cream disabled:text-brand-ink-soft"
+                          aria-label={`Decrease ${l.sku.name}${labelSuffix} quantity`}
+                          className="h-11 w-11 flex items-center justify-center text-brand-ink hover:bg-brand-cream disabled:text-brand-ink-soft"
                           disabled={l.qty <= 1}
                         >
-                          <Minus size={12} aria-hidden />
+                          <Minus size={14} aria-hidden />
                         </button>
-                        <span className="px-2 min-w-[1.5rem] text-center text-xs font-semibold tabular-nums text-brand-ink">
+                        <span className="px-2 min-w-[1.5rem] text-center text-sm font-semibold tabular-nums text-brand-ink">
                           {l.qty}
                         </span>
                         <button
                           type="button"
                           onClick={inc}
-                          aria-label={`Increase ${l.sku.name} quantity`}
-                          className="w-7 h-7 flex items-center justify-center text-brand-ink hover:bg-brand-cream"
+                          aria-label={`Increase ${l.sku.name}${labelSuffix} quantity`}
+                          className="h-11 w-11 flex items-center justify-center text-brand-ink hover:bg-brand-cream"
                         >
-                          <Plus size={12} aria-hidden />
+                          <Plus size={14} aria-hidden />
                         </button>
                       </div>
                     </div>
@@ -379,10 +457,10 @@ export default function CheckoutPage() {
                       <button
                         type="button"
                         onClick={rm}
-                        aria-label={`Remove ${l.sku.name} from cart`}
-                        className="text-brand-ink-soft hover:text-brand-red"
+                        aria-label={`Remove ${l.sku.name}${labelSuffix} from cart`}
+                        className="h-11 w-11 flex items-center justify-center text-brand-ink-soft hover:text-brand-red"
                       >
-                        <X size={14} aria-hidden />
+                        <X size={16} aria-hidden />
                       </button>
                     </div>
                   </li>
@@ -562,6 +640,55 @@ export default function CheckoutPage() {
             </div>
           </div>
 
+          <div className="mt-6 bg-white rounded-2xl border border-brand-line p-5">
+            <h2 className="font-semibold text-brand-ink flex items-center gap-2">
+              <Tag size={16} className="text-brand-red" aria-hidden />
+              Coupon code
+            </h2>
+            <div className="mt-3 flex items-stretch gap-2">
+              <input
+                type="text"
+                inputMode="text"
+                autoComplete="off"
+                placeholder="e.g. CODEPRC100"
+                value={couponCode}
+                onChange={(e) =>
+                  setCouponCode(e.target.value.toUpperCase().slice(0, 40))
+                }
+                disabled={!!couponApplied || couponBusy}
+                className="flex-1 px-4 py-3 rounded-lg border border-brand-line focus:outline-none focus:border-brand-red text-brand-ink disabled:bg-brand-cream"
+              />
+              {couponApplied ? (
+                <button
+                  type="button"
+                  onClick={clearCoupon}
+                  className="px-4 py-3 rounded-lg border border-brand-line bg-white text-brand-ink-soft font-semibold hover:text-brand-red"
+                >
+                  Remove
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={applyCoupon}
+                  disabled={couponBusy || !couponCode.trim()}
+                  className="px-5 py-3 rounded-lg bg-brand-ink text-white font-semibold disabled:opacity-50"
+                >
+                  {couponBusy ? "Checking…" : "Apply"}
+                </button>
+              )}
+            </div>
+            {couponMessage && (
+              <p
+                className={
+                  "mt-2 text-xs " +
+                  (couponMessage.kind === "ok" ? "text-success" : "text-brand-red")
+                }
+              >
+                {couponMessage.text}
+              </p>
+            )}
+          </div>
+
           <div className="mt-6 bg-white rounded-2xl border border-brand-line p-5 space-y-2 text-brand-ink">
             <div className="flex justify-between">
               <span>Subtotal</span>
@@ -583,6 +710,12 @@ export default function CheckoutPage() {
               <div className="flex justify-between text-success">
                 <span>Prepaid discount</span>
                 <span>-{formatINR(prepaidDiscount)}</span>
+              </div>
+            )}
+            {couponDiscountInr > 0 && (
+              <div className="flex justify-between text-success">
+                <span>Coupon{couponApplied ? ` (${couponApplied})` : ""}</span>
+                <span>-{formatINR(couponDiscountInr)}</span>
               </div>
             )}
             <div className="flex justify-between border-t border-brand-line pt-3 mt-3 font-bold text-lg">

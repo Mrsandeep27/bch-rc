@@ -1,11 +1,12 @@
 "use client";
 
 import { useCart } from "@/lib/cart-store";
-import { getHeroSku } from "@/lib/products";
+import { defaultVariantSlug, getHeroSku } from "@/lib/products";
 
 export default function FinalCta() {
   const handleAdd = () => {
-    useCart.getState().add(getHeroSku().id);
+    const hero = getHeroSku();
+    useCart.getState().add(hero.id, defaultVariantSlug(hero));
     useCart.getState().open();
   };
 

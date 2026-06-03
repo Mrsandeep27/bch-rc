@@ -395,6 +395,16 @@ export function totalStock(sku: Sku): number {
   return sku.colors.reduce((sum, c) => sum + c.stock, 0);
 }
 
+/**
+ * Default variant slug for quick-add CTAs (Hero, FinalCta, sticky bars, bundle).
+ * Picks the first IN-STOCK color, falls back to the first color, falls back
+ * to null for SKUs without colors. The PDP color picker can always override.
+ */
+export function defaultVariantSlug(sku: Sku): string | null {
+  if (!sku.colors?.length) return null;
+  return sku.colors.find((c) => c.stock > 0)?.slug ?? sku.colors[0].slug;
+}
+
 export const WHOLESALE_TIERS = [
   { id: "starter", label: "Starter", moq: 12, discountPct: 35 },
   { id: "standard", label: "Standard", moq: 48, discountPct: 45 },

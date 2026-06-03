@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { ShoppingBag } from "lucide-react";
 import type { Sku } from "@/lib/products";
+import { defaultVariantSlug } from "@/lib/products";
 import { formatINR } from "@/lib/utils";
 import { useCart } from "@/lib/cart-store";
 
@@ -16,9 +17,11 @@ import { useCart } from "@/lib/cart-store";
  */
 export default function PDPStickyCTA({
   sku,
+  selectedColorSlug,
   selectedColorName,
 }: {
   sku: Sku;
+  selectedColorSlug?: string | null;
   selectedColorName?: string;
 }) {
   const router = useRouter();
@@ -31,13 +34,15 @@ export default function PDPStickyCTA({
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  const variantSlug = selectedColorSlug ?? defaultVariantSlug(sku);
+
   function buyNow() {
-    useCart.getState().add(sku.id, 1);
+    useCart.getState().add(sku.id, variantSlug, 1);
     router.push("/checkout");
   }
 
   function addToCart() {
-    useCart.getState().add(sku.id, 1);
+    useCart.getState().add(sku.id, variantSlug, 1);
     useCart.getState().open();
   }
 

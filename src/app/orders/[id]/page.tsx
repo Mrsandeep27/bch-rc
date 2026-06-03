@@ -5,6 +5,7 @@
 
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { CheckCircle2, Package } from "lucide-react";
 import { eq } from "drizzle-orm";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
@@ -19,6 +20,7 @@ import { orders } from "@/db/schema";
 
 type OrderItem = {
   skuId: string;
+  variantSlug: string | null;
   name: string;
   image: string | null;
   unitPriceInr: number;
@@ -90,14 +92,21 @@ export default async function OrderSuccessPage({
           <div className="mt-6 bg-white rounded-2xl border border-brand-line p-5 sm:p-6">
             <h2 className="font-semibold text-brand-ink mb-4">Order summary</h2>
             <div className="space-y-3">
-              {items.map((item) => (
-                <div key={item.skuId} className="flex items-center gap-3">
+              {items.map((item, idx) => (
+                <div
+                  key={`${item.skuId}-${item.variantSlug ?? "default"}-${idx}`}
+                  className="flex items-center gap-3"
+                >
                   {item.image && (
-                    <img
-                      src={item.image}
-                      alt={item.name}
-                      className="w-16 h-16 rounded-lg object-cover border border-brand-line"
-                    />
+                    <div className="relative w-16 h-16 shrink-0 rounded-lg overflow-hidden border border-brand-line bg-brand-cream">
+                      <Image
+                        src={item.image}
+                        alt={item.name}
+                        fill
+                        sizes="64px"
+                        className="object-cover"
+                      />
+                    </div>
                   )}
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-brand-ink truncate">

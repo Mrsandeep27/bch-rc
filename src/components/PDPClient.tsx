@@ -73,11 +73,11 @@ export default function PDPClient({ sku }: { sku: Sku }) {
   const activeSrc = gallery[activeImage] ?? heroSrc;
 
   function addToCart() {
-    useCart.getState().add(sku.id, qty);
+    useCart.getState().add(sku.id, selectedColorSlug, qty);
   }
 
   function buyNow() {
-    useCart.getState().add(sku.id, qty);
+    useCart.getState().add(sku.id, selectedColorSlug, qty);
     router.push("/checkout");
   }
 
@@ -318,7 +318,11 @@ export default function PDPClient({ sku }: { sku: Sku }) {
     <RecentlyViewed excludeId={sku.id} />
 
     {/* Desktop sticky CTA bar — slides in after scroll past Buy Now */}
-    <PDPStickyCTA sku={sku} selectedColorName={selectedColor?.name} />
+    <PDPStickyCTA
+      sku={sku}
+      selectedColorSlug={selectedColorSlug}
+      selectedColorName={selectedColor?.name}
+    />
     </>
   );
 }

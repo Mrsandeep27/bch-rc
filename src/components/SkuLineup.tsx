@@ -157,7 +157,10 @@ function SkuCard({ sku, index }: SkuCardProps) {
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            useCart.getState().add(sku.id);
+            // Default to the first in-stock colour. PDP picker can override.
+            const firstInStock =
+              sku.colors?.find((c) => c.stock > 0)?.slug ?? sku.colors?.[0]?.slug ?? null;
+            useCart.getState().add(sku.id, firstInStock);
           }}
           className="pointer-events-auto bg-brand-red hover:bg-brand-red-hover text-white rounded-full py-2.5 px-4 transition-colors inline-flex items-center justify-center gap-2 font-semibold text-sm"
         >

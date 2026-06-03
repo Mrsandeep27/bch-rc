@@ -65,10 +65,12 @@ export default function BundlePicker() {
 
   const handleAdd = () => {
     const hero = getHeroSku();
+    // Default to the first in-stock colour for the hero SKU. If the SKU has
+    // no colour variants, pass null.
+    const firstInStock =
+      hero.colors?.find((c) => c.stock > 0)?.slug ?? hero.colors?.[0]?.slug ?? null;
     const { add, open } = useCart.getState();
-    for (let i = 0; i < selectedQty; i++) {
-      add(hero.id);
-    }
+    add(hero.id, firstInStock, selectedQty);
     open();
   };
 

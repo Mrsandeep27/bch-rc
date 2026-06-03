@@ -294,6 +294,8 @@ export const orders = pgTable(
     customerId: uuid("customer_id")
       .notNull()
       .references(() => customers.id),
+    /** Client-generated idempotency key. UNIQUE — second submit returns the original order. */
+    idempotencyKey: text("idempotency_key"),
     status: orderStatusEnum("status").notNull().default("PENDING"),
     /** Snapshot of line items at order time (name, image, price, variant). */
     items: jsonb("items").notNull(),
@@ -339,6 +341,40 @@ export const orders = pgTable(
     index("orders_status_idx").on(t.status),
     index("orders_razorpay_order_idx").on(t.razorpayOrderId),
     index("orders_awb_idx").on(t.awbCode),
+    index("orders_shiprocket_shipment_idx").on(t.shiprocketShipmentId),
+    unique("orders_idempotency_key_unique").on(t.idempotencyKey),
+  ],
+);
+
+// ============================================================
+// 8b. NOTIFICATIONS OUTBOX — order/payment/shipment emails
+// ============================================================
+
+export const notificationsOutbox = pgTable(
+  "notifications_outbox",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: text("site_id").references(() => sites.id),
+    orderId: text("order_id").references(() => orders.id),
+    customerId: uuid("customer_id").references(() => customers.id),
+    channel: text("channel").notNull(), // "email" | "whatsapp"
+    template: text("template").notNull(), // ORDER_CONFIRMED | PAYMENT_CAPTURED | SHIPMENT_CREATED | DELIVERED
+    /** Snapshot of recipient + variables at enqueue time. */
+    payload: jsonb("payload").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    /** When the worker should next try this row. */
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("notifications_pending_idx").on(t.sentAt, t.nextAttemptAt),
+    index("notifications_order_idx").on(t.orderId),
   ],
 );
 
@@ -465,3 +501,5 @@ export type Coupon = typeof coupons.$inferSelect;
 export type EventRow = typeof events.$inferSelect;
 export type WebhookInbound = typeof webhooksInbound.$inferSelect;
 export type AdminRow = typeof admins.$inferSelect;
+export type NotificationRow = typeof notificationsOutbox.$inferSelect;
+export type NewNotification = typeof notificationsOutbox.$inferInsert;

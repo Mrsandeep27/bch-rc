@@ -18,7 +18,13 @@ import StickyMobileCTA from "@/components/StickyMobileCTA";
 import HomeJsonLd from "@/components/HomeJsonLd";
 import { HOME_FAQS } from "@/lib/faqs";
 
-export default function Page() {
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ openCart?: string }>;
+}) {
+  const sp = await searchParams;
+  const openCart = sp.openCart === "1" || sp.openCart === "true";
   return (
     <>
       <HomeJsonLd faqs={HOME_FAQS} />
@@ -42,7 +48,7 @@ export default function Page() {
       </main>
       <Footer />
       <WhatsAppFab />
-      <CartDrawer />
+      <CartDrawer initialOpen={openCart} />
       <StickyMobileCTA />
       <ExitIntentModal />
     </>

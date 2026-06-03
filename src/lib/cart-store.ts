@@ -7,47 +7,60 @@ import { OFFERS } from "./config";
 
 export type CartItem = {
   skuId: string;
+  /** Selected color variant slug, e.g. "blue". null for SKUs without colors. */
+  variantSlug: string | null;
   qty: number;
 };
 
 type CartState = {
   items: CartItem[];
   isOpen: boolean;
-  add: (skuId: string, qty?: number) => void;
-  remove: (skuId: string) => void;
-  setQty: (skuId: string, qty: number) => void;
+  add: (skuId: string, variantSlug: string | null, qty?: number) => void;
+  remove: (skuId: string, variantSlug: string | null) => void;
+  setQty: (skuId: string, variantSlug: string | null, qty: number) => void;
   clear: () => void;
   open: () => void;
   close: () => void;
   toggle: () => void;
 };
 
+function sameLine(a: CartItem, skuId: string, variantSlug: string | null): boolean {
+  return a.skuId === skuId && (a.variantSlug ?? null) === (variantSlug ?? null);
+}
+
 export const useCart = create<CartState>()(
   persist(
     (set) => ({
       items: [],
       isOpen: false,
-      add: (skuId, qty = 1) =>
+      add: (skuId, variantSlug, qty = 1) =>
         set((s) => {
-          const existing = s.items.find((i) => i.skuId === skuId);
+          const existing = s.items.find((i) => sameLine(i, skuId, variantSlug));
           if (existing) {
             return {
               items: s.items.map((i) =>
-                i.skuId === skuId ? { ...i, qty: i.qty + qty } : i
+                sameLine(i, skuId, variantSlug) ? { ...i, qty: i.qty + qty } : i,
               ),
               isOpen: true,
             };
           }
-          return { items: [...s.items, { skuId, qty }], isOpen: true };
+          return {
+            items: [...s.items, { skuId, variantSlug, qty }],
+            isOpen: true,
+          };
         }),
-      remove: (skuId) =>
-        set((s) => ({ items: s.items.filter((i) => i.skuId !== skuId) })),
-      setQty: (skuId, qty) =>
+      remove: (skuId, variantSlug) =>
+        set((s) => ({
+          items: s.items.filter((i) => !sameLine(i, skuId, variantSlug)),
+        })),
+      setQty: (skuId, variantSlug, qty) =>
         set((s) => ({
           items:
             qty <= 0
-              ? s.items.filter((i) => i.skuId !== skuId)
-              : s.items.map((i) => (i.skuId === skuId ? { ...i, qty } : i)),
+              ? s.items.filter((i) => !sameLine(i, skuId, variantSlug))
+              : s.items.map((i) =>
+                  sameLine(i, skuId, variantSlug) ? { ...i, qty } : i,
+                ),
         })),
       clear: () => set({ items: [] }),
       open: () => set({ isOpen: true }),
@@ -55,16 +68,28 @@ export const useCart = create<CartState>()(
       toggle: () => set((s) => ({ isOpen: !s.isOpen })),
     }),
     {
+      // v2: variantSlug added. Older v1 carts are discarded by migrate().
       name: "prc-cart",
+      version: 2,
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({ items: s.items }),
-    }
-  )
+      migrate: (_state, fromVersion) => {
+        if (fromVersion < 2) {
+          return { items: [], isOpen: false } as Partial<CartState>;
+        }
+        return _state as Partial<CartState>;
+      },
+    },
+  ),
 );
 
 export type CartLine = {
   sku: Sku;
+  variantSlug: string | null;
+  variantName: string | null;
+  variantImage: string | null;
   qty: number;
+  unitPriceINR: number;
   lineTotalINR: number;
 };
 
@@ -73,7 +98,19 @@ export function getCartLines(items: CartItem[]): CartLine[] {
     .map((i) => {
       const sku = PRODUCTS.find((p) => p.id === i.skuId);
       if (!sku) return null;
-      return { sku, qty: i.qty, lineTotalINR: sku.retailINR * i.qty };
+      const variant = i.variantSlug
+        ? sku.colors?.find((c) => c.slug === i.variantSlug) ?? null
+        : null;
+      const unitPriceINR = sku.retailINR;
+      return {
+        sku,
+        variantSlug: i.variantSlug,
+        variantName: variant?.name ?? null,
+        variantImage: variant?.image ?? null,
+        qty: i.qty,
+        unitPriceINR,
+        lineTotalINR: unitPriceINR * i.qty,
+      };
     })
     .filter((l): l is CartLine => l !== null);
 }
