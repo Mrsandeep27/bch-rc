@@ -8,9 +8,9 @@ import {
   TrendingUp,
   Users,
 } from "lucide-react";
-import { desc, inArray, sql } from "drizzle-orm";
+import { and, desc, inArray, lt, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { orders } from "@/db/schema";
+import { customers, inventory, orders } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
 import { formatINR } from "@/lib/utils";
 
@@ -44,122 +44,109 @@ export default async function AdminOverview() {
   const last30 = new Date(today);
   last30.setDate(last30.getDate() - 30);
 
-  // Three round-trips instead of eight. The first two queries use FILTER
-  // clauses to fold what used to be five separate aggregates into single
-  // SQL statements — Postgres scans the relevant rows once, computes every
-  // counter on that pass. Wall-clock collapses from ~5-batch sequential
-  // (max:3 pool) to a single batch.
+  // Five fully type-safe queries via db.select() with sql column expressions.
+  // FILTER aggregates fold what used to be separate queries into single
+  // column expressions, so we issue 5 queries (orderAgg, customerAgg,
+  // lowStockAgg, topSkus, recent) instead of the original 8. With pool max:3
+  // that's 2 batches instead of 3.
   //
-  // Each query has a defensive try/catch with safe defaults so the dashboard
-  // renders even if one section's query times out — an empty Top-SKUs panel
-  // beats a stuck skeleton.
-  const paidIn = sql.raw(
-    `('${PAID_STATUSES.join("','")}')`,
-  ); // safe — no user input, constant tuple
-  const siteIdsLiteral = sql.raw(
-    `ARRAY[${ctx.siteIds.map((s) => `'${s.replace(/'/g, "''")}'`).join(",")}]::text[]`,
-  );
+  // Avoiding db.execute() because postgres-js returns the result as an
+  // Array-like Result object (not { rows }) — the previous version was
+  // reading .rows which is undefined on that driver, silently swallowing
+  // every aggregate to zero. db.select() returns typed Array<Row>, which
+  // matches postgres-js's actual return shape.
+  const orderAggP = db
+    .select({
+      todayCount: sql<number>`count(*) filter (where ${orders.placedAt} >= ${today})::int`,
+      todayRevenue: sql<number>`coalesce(sum(${orders.totalInr}) filter (where ${orders.placedAt} >= ${today}), 0)::int`,
+      weekCount: sql<number>`count(*) filter (where ${orders.placedAt} >= ${last7})::int`,
+      weekRevenue: sql<number>`coalesce(sum(${orders.totalInr}) filter (where ${orders.placedAt} >= ${last7}), 0)::int`,
+      weekPaidCount: sql<number>`count(*) filter (where ${orders.placedAt} >= ${last7} and ${orders.status} in ('PAID','PACKED','SHIPPED','DELIVERED'))::int`,
+      weekPaidRevenue: sql<number>`coalesce(sum(${orders.totalInr}) filter (where ${orders.placedAt} >= ${last7} and ${orders.status} in ('PAID','PACKED','SHIPPED','DELIVERED')), 0)::int`,
+    })
+    .from(orders)
+    .where(inArray(orders.siteId, ctx.siteIds));
 
-  const [orderAggRow, customerAggRow, topSkuOrders, recent] = await Promise.all(
-    [
-      // Combined orders aggregate: today / 7d / 7d-paid + low-stock count
-      // co-tenant in the same trip (inventory join would be expensive — keep
-      // separate). Returns one row.
-      db
-        .execute(
-          sql`
-        SELECT
-          count(*) filter (where placed_at >= ${today})::int as today_count,
-          coalesce(sum(total_inr) filter (where placed_at >= ${today}), 0)::int as today_revenue,
-          count(*) filter (where placed_at >= ${last7})::int as week_count,
-          coalesce(sum(total_inr) filter (where placed_at >= ${last7}), 0)::int as week_revenue,
-          count(*) filter (
-            where placed_at >= ${last7}
-            and status in ${paidIn}
-          )::int as week_paid_count,
-          coalesce(sum(total_inr) filter (
-            where placed_at >= ${last7}
-            and status in ${paidIn}
-          ), 0)::int as week_paid_revenue
-        FROM orders
-        WHERE site_id = ANY(${siteIdsLiteral})
-      `,
-        )
-        .then((res) => (res as unknown as { rows?: Record<string, number>[] }).rows?.[0] ?? null)
-        .catch(() => null),
+  const customerAggP = db
+    .select({
+      total: sql<number>`count(*)::int`,
+      returning: sql<number>`count(*) filter (where ${customers.totalOrders} > 1)::int`,
+    })
+    .from(customers);
 
-      // Customers (returning + total) + low-stock count combined.
-      db
-        .execute(
-          sql`
-        SELECT
-          (SELECT count(*)::int FROM customers) as total_customers,
-          (SELECT count(*) filter (where total_orders > 1)::int FROM customers) as returning_customers,
-          (
-            SELECT count(*)::int FROM inventory
-            WHERE site_id = ANY(${siteIdsLiteral})
-              AND stock < ${LOW_STOCK_THRESHOLD}
-          ) as low_stock_count
-      `,
-        )
-        .then((res) => (res as unknown as { rows?: Record<string, number>[] }).rows?.[0] ?? null)
-        .catch(() => null),
+  const lowStockAggP = db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(inventory)
+    .where(
+      and(
+        inArray(inventory.siteId, ctx.siteIds),
+        lt(inventory.stock, LOW_STOCK_THRESHOLD),
+      ),
+    );
 
-      // Top SKUs — capped at last 100 paid orders. More than enough for a
-      // top-5 ranking; reduces JSONB payload size on cold-start by an order
-      // of magnitude when there's a long history.
-      db
-        .select({ items: orders.items })
-        .from(orders)
-        .where(
-          sql`placed_at >= ${last30} AND site_id = ANY(${siteIdsLiteral}) AND status IN ${paidIn}`,
-        )
-        .orderBy(desc(orders.placedAt))
-        .limit(100)
-        .catch(() => [] as Array<{ items: unknown }>),
+  const topSkuP = db
+    .select({ items: orders.items })
+    .from(orders)
+    .where(
+      and(
+        sql`${orders.placedAt} >= ${last30}`,
+        inArray(orders.siteId, ctx.siteIds),
+        inArray(orders.status, [...PAID_STATUSES]),
+      ),
+    )
+    .orderBy(desc(orders.placedAt))
+    .limit(100);
 
-      db
-        .select({
-          id: orders.id,
-          siteId: orders.siteId,
-          status: orders.status,
-          paymentMethod: orders.paymentMethod,
-          totalInr: orders.totalInr,
-          placedAt: orders.placedAt,
-        })
-        .from(orders)
-        .where(inArray(orders.siteId, ctx.siteIds))
-        .orderBy(desc(orders.placedAt))
-        .limit(8)
-        .catch(() => [] as Array<{
-          id: string;
-          siteId: string;
-          status: string;
-          paymentMethod: string;
-          totalInr: number;
-          placedAt: Date;
-        }>),
-    ],
-  );
+  const recentP = db
+    .select({
+      id: orders.id,
+      siteId: orders.siteId,
+      status: orders.status,
+      paymentMethod: orders.paymentMethod,
+      totalInr: orders.totalInr,
+      placedAt: orders.placedAt,
+    })
+    .from(orders)
+    .where(inArray(orders.siteId, ctx.siteIds))
+    .orderBy(desc(orders.placedAt))
+    .limit(8);
+
+  // Per-promise .catch with safe default so a single timed-out query doesn't
+  // throw the whole layout into the error boundary.
+  const [orderAggRow, customerAggRow, lowStockAggRow, topSkuOrders, recent] =
+    await Promise.all([
+      orderAggP.then((r) => r[0] ?? null).catch(() => null),
+      customerAggP.then((r) => r[0] ?? null).catch(() => null),
+      lowStockAggP.then((r) => r[0] ?? null).catch(() => null),
+      topSkuP.catch(() => [] as Array<{ items: unknown }>),
+      recentP.catch(() => [] as Array<{
+        id: string;
+        siteId: string;
+        status: string;
+        paymentMethod: string;
+        totalInr: number;
+        placedAt: Date;
+      }>),
+    ]);
 
   const todayStats = {
-    orderCount: orderAggRow?.today_count ?? 0,
-    revenue: orderAggRow?.today_revenue ?? 0,
+    orderCount: orderAggRow?.todayCount ?? 0,
+    revenue: orderAggRow?.todayRevenue ?? 0,
   };
   const weekStats = {
-    orderCount: orderAggRow?.week_count ?? 0,
-    revenue: orderAggRow?.week_revenue ?? 0,
+    orderCount: orderAggRow?.weekCount ?? 0,
+    revenue: orderAggRow?.weekRevenue ?? 0,
   };
   const aovStats = {
-    orderCount: orderAggRow?.week_paid_count ?? 0,
-    revenue: orderAggRow?.week_paid_revenue ?? 0,
+    orderCount: orderAggRow?.weekPaidCount ?? 0,
+    revenue: orderAggRow?.weekPaidRevenue ?? 0,
   };
-  const customerStats = { total: customerAggRow?.total_customers ?? 0 };
+  const customerStats = { total: customerAggRow?.total ?? 0 };
   const returningStats = {
-    returning: customerAggRow?.returning_customers ?? 0,
-    total: customerAggRow?.total_customers ?? 0,
+    returning: customerAggRow?.returning ?? 0,
+    total: customerAggRow?.total ?? 0,
   };
-  const lowStockStats = { count: customerAggRow?.low_stock_count ?? 0 };
+  const lowStockStats = { count: lowStockAggRow?.count ?? 0 };
 
   const aov =
     aovStats?.orderCount && aovStats.orderCount > 0
