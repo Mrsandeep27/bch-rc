@@ -1,10 +1,38 @@
 import Link from "next/link";
-import { ArrowUpRight, IndianRupee, Package, Users } from "lucide-react";
-import { and, count, desc, gte, inArray, sum } from "drizzle-orm";
+import {
+  AlertTriangle,
+  ArrowUpRight,
+  IndianRupee,
+  Package,
+  Repeat,
+  TrendingUp,
+  Users,
+} from "lucide-react";
+import { and, count, desc, gte, inArray, lt, sql, sum } from "drizzle-orm";
 import { db } from "@/db";
-import { orders, customers } from "@/db/schema";
+import { customers, inventory, orders } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
 import { formatINR } from "@/lib/utils";
+
+// SKUs sold below this stock-count threshold appear in the Low-Stock card.
+// Tuned to the operator's lead time from Syed (≈48 hrs to top up).
+const LOW_STOCK_THRESHOLD = 10;
+
+// Orders we consider "paid" for AOV + top-SKU aggregates. Excludes PENDING
+// (UPI carts that never captured) and anything terminal-unhappy.
+const PAID_STATUSES = [
+  "PAID",
+  "PACKED",
+  "SHIPPED",
+  "DELIVERED",
+] as const;
+
+type OrderItemForAgg = {
+  skuId: string;
+  name?: string;
+  qty: number;
+  lineTotalInr: number;
+};
 
 export default async function AdminOverview() {
   const ctx = await requireAdmin();
@@ -13,12 +41,22 @@ export default async function AdminOverview() {
   today.setHours(0, 0, 0, 0);
   const last7 = new Date(today);
   last7.setDate(last7.getDate() - 7);
+  const last30 = new Date(today);
+  last30.setDate(last30.getDate() - 30);
 
-  // Run the four aggregate queries in parallel. With max: 3 on the postgres-js
-  // pool they actually parallelise — total wall-clock is the slowest single
-  // query (~30 ms warm in-region) instead of the sum of all four. This is the
-  // difference between a snappy admin page and a ~4× longer dead-air load.
-  const [todayStats, weekStats, customerStats, recent] = await Promise.all([
+  // Eight aggregates in parallel. Pool max:3, so the rest queue — still
+  // ~3-4× faster than sequential awaits, and well under the cold-start
+  // budget. Defensive `.then(r => r[0])` flattens single-row results.
+  const [
+    todayStats,
+    weekStats,
+    customerStats,
+    aovStats,
+    returningStats,
+    lowStockStats,
+    topSkuOrders,
+    recent,
+  ] = await Promise.all([
     db
       .select({
         orderCount: count(orders.id),
@@ -43,6 +81,55 @@ export default async function AdminOverview() {
       .select({ total: count(customers.id) })
       .from(customers)
       .then((rows) => rows[0]),
+    // AOV over the last 7 paid days only. Average of PENDING-included orders
+    // is misleading because the buyer never paid.
+    db
+      .select({
+        orderCount: count(orders.id),
+        revenue: sum(orders.totalInr).mapWith(Number),
+      })
+      .from(orders)
+      .where(
+        and(
+          gte(orders.placedAt, last7),
+          inArray(orders.siteId, ctx.siteIds),
+          inArray(orders.status, PAID_STATUSES as unknown as string[]),
+        ),
+      )
+      .then((rows) => rows[0]),
+    // Returning-customer % uses the `customers.total_orders` denormalised
+    // counter that's bumped at order create. Single row, no GROUP BY needed.
+    db
+      .select({
+        returning: sql<number>`count(*) filter (where ${customers.totalOrders} > 1)::int`,
+        total: count(customers.id),
+      })
+      .from(customers)
+      .then((rows) => rows[0]),
+    db
+      .select({ count: count(inventory.skuId) })
+      .from(inventory)
+      .where(
+        and(
+          inArray(inventory.siteId, ctx.siteIds),
+          lt(inventory.stock, LOW_STOCK_THRESHOLD),
+        ),
+      )
+      .then((rows) => rows[0]),
+    // Top SKUs — pull last 30d of paid orders + aggregate the JSONB `items`
+    // array in Node. Postgres-side jsonb_array_elements would also work but
+    // is awkward through Drizzle; for the operator's volume (<1000/mo) the
+    // in-process pass is comfortably sub-100ms and easier to maintain.
+    db
+      .select({ items: orders.items })
+      .from(orders)
+      .where(
+        and(
+          gte(orders.placedAt, last30),
+          inArray(orders.siteId, ctx.siteIds),
+          inArray(orders.status, PAID_STATUSES as unknown as string[]),
+        ),
+      ),
     db
       .select({
         id: orders.id,
@@ -58,6 +145,41 @@ export default async function AdminOverview() {
       .limit(8),
   ]);
 
+  const aov =
+    aovStats?.orderCount && aovStats.orderCount > 0
+      ? Math.round((aovStats.revenue ?? 0) / aovStats.orderCount)
+      : 0;
+
+  const returningPct =
+    returningStats?.total && returningStats.total > 0
+      ? Math.round(((returningStats.returning ?? 0) / returningStats.total) * 100)
+      : 0;
+
+  // Aggregate top SKUs by qty (volume) — the operator's restock signal.
+  // Tie-break by revenue so a ₹1,899 SKU outranks a ₹16 QA SKU at the
+  // same qty.
+  const skuAggregate = new Map<
+    string,
+    { name: string; qty: number; revenue: number }
+  >();
+  for (const row of topSkuOrders) {
+    const items = (row.items as OrderItemForAgg[]) ?? [];
+    for (const item of items) {
+      const entry = skuAggregate.get(item.skuId) ?? {
+        name: item.name ?? item.skuId,
+        qty: 0,
+        revenue: 0,
+      };
+      entry.qty += item.qty ?? 0;
+      entry.revenue += item.lineTotalInr ?? 0;
+      skuAggregate.set(item.skuId, entry);
+    }
+  }
+  const topSkus = Array.from(skuAggregate.entries())
+    .map(([skuId, v]) => ({ skuId, ...v }))
+    .sort((a, b) => (b.qty - a.qty) || (b.revenue - a.revenue))
+    .slice(0, 5);
+
   return (
     <div className="space-y-6">
       <div>
@@ -71,6 +193,7 @@ export default async function AdminOverview() {
         </p>
       </div>
 
+      {/* Row 1 — order velocity */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard
           label="Today"
@@ -85,13 +208,119 @@ export default async function AdminOverview() {
           icon={IndianRupee}
         />
         <StatCard
-          label="Customers (all-time)"
-          value={customerStats?.total ?? 0}
-          sub="Across all sites"
-          icon={Users}
+          label="AOV (7d, paid)"
+          value={formatINR(aov)}
+          sub={
+            aovStats?.orderCount
+              ? `Across ${aovStats.orderCount} paid order${aovStats.orderCount === 1 ? "" : "s"}`
+              : "No paid orders yet"
+          }
+          icon={TrendingUp}
         />
       </div>
 
+      {/* Row 2 — customer + operations health */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <StatCard
+          label="Customers (all-time)"
+          value={customerStats?.total ?? 0}
+          sub="Unique phone numbers"
+          icon={Users}
+        />
+        <StatCard
+          label="Returning customers"
+          value={`${returningPct}%`}
+          sub={
+            returningStats?.total
+              ? `${returningStats.returning ?? 0} of ${returningStats.total} bought again`
+              : "Need first orders to compute"
+          }
+          icon={Repeat}
+        />
+        <Link
+          href="/admin/inventory"
+          className="bg-white rounded-2xl border border-brand-line p-5 hover:border-brand-red transition-colors"
+        >
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-mono font-bold uppercase tracking-widest text-brand-ink-soft">
+              Low stock (&lt;{LOW_STOCK_THRESHOLD})
+            </p>
+            <AlertTriangle
+              size={16}
+              className={
+                (lowStockStats?.count ?? 0) > 0
+                  ? "text-brand-red"
+                  : "text-brand-ink-soft"
+              }
+            />
+          </div>
+          <p
+            className={`font-display text-3xl font-bold mt-2 ${
+              (lowStockStats?.count ?? 0) > 0
+                ? "text-brand-red"
+                : "text-brand-ink"
+            }`}
+          >
+            {lowStockStats?.count ?? 0}
+          </p>
+          <p className="text-xs text-brand-ink-soft mt-1">
+            {(lowStockStats?.count ?? 0) > 0
+              ? "Variant SKUs need restock — tap to fix"
+              : "All variants stocked"}
+          </p>
+        </Link>
+      </div>
+
+      {/* Top SKUs */}
+      <div className="bg-white rounded-2xl border border-brand-line">
+        <div className="px-5 py-4 border-b border-brand-line flex items-center justify-between">
+          <h2 className="font-semibold text-brand-ink">
+            Top SKUs <span className="text-brand-ink-soft font-normal">— last 30 days, paid only</span>
+          </h2>
+          <Link
+            href="/admin/inventory"
+            className="text-sm text-brand-red hover:underline inline-flex items-center gap-1"
+          >
+            Inventory <ArrowUpRight size={14} />
+          </Link>
+        </div>
+        {topSkus.length === 0 ? (
+          <p className="px-5 py-10 text-center text-sm text-brand-ink-soft">
+            No paid orders in the last 30 days yet.
+          </p>
+        ) : (
+          <ul className="divide-y divide-brand-line">
+            {topSkus.map((s, i) => (
+              <li
+                key={s.skuId}
+                className="flex items-center gap-4 px-5 py-3"
+              >
+                <span className="font-mono text-xs text-brand-ink-soft w-6 tabular-nums">
+                  #{i + 1}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-brand-ink truncate">
+                    {s.name}
+                  </div>
+                  <div className="text-xs text-brand-ink-soft font-mono mt-0.5">
+                    {s.skuId}
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="font-semibold text-brand-ink tabular-nums">
+                    {s.qty} sold
+                  </div>
+                  <div className="text-xs text-brand-ink-soft tabular-nums mt-0.5">
+                    {formatINR(s.revenue)}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Recent orders */}
       <div className="bg-white rounded-2xl border border-brand-line">
         <div className="px-5 py-4 border-b border-brand-line flex items-center justify-between">
           <h2 className="font-semibold text-brand-ink">Recent orders</h2>
@@ -147,7 +376,7 @@ function StatCard({
   icon: Icon,
 }: {
   label: string;
-  value: number;
+  value: number | string;
   sub: string;
   icon: React.ComponentType<{ size?: number }>;
 }) {
