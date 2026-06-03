@@ -88,9 +88,10 @@ export default function PDPClient({ sku }: { sku: Sku }) {
   }, [sku.id]);
 
   return (
+    <>
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-12 max-w-6xl mx-auto px-4 py-6 sm:py-8">
       {/* Image gallery */}
-      <div className="lg:sticky lg:top-20 lg:self-start space-y-3">
+      <div className="lg:sticky lg:top-20 lg:self-start space-y-3 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto no-scrollbar">
         <div className="aspect-square rounded-2xl overflow-hidden border border-brand-line bg-white relative">
           <GalleryImage src={activeSrc} sku={sku} alt={sku.name} priority />
         </div>
@@ -309,14 +310,15 @@ export default function PDPClient({ sku }: { sku: Sku }) {
             visually thanks to mt + border-t inside ReviewsBlock */}
         <ReviewsBlock skuId={sku.id} />
       </div>
-
-      {/* Recently-viewed strip — full-width below the two-column PDP grid */}
-      <div className="col-span-1 lg:col-span-2 -mx-4 lg:mx-0">
-        <RecentlyViewed excludeId={sku.id} />
-      </div>
-
-      {/* Desktop sticky CTA bar — slides in after scroll past Buy Now */}
-      <PDPStickyCTA sku={sku} selectedColorName={selectedColor?.name} />
     </div>
+
+    {/* Recently-viewed strip — full-width below the two-column PDP grid.
+        Lives OUTSIDE the grid so the sticky image's stacking context
+        cannot overlap these cards. */}
+    <RecentlyViewed excludeId={sku.id} />
+
+    {/* Desktop sticky CTA bar — slides in after scroll past Buy Now */}
+    <PDPStickyCTA sku={sku} selectedColorName={selectedColor?.name} />
+    </>
   );
 }

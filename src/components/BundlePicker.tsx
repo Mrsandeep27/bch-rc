@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { motion } from "framer-motion";
-import { Check, ShoppingBag } from "lucide-react";
+import { Check, ShoppingBag, Plus } from "lucide-react";
 import { THEME } from "@/lib/theme";
 import { getHeroSku } from "@/lib/products";
 import { useCart } from "@/lib/cart-store";
@@ -16,9 +17,14 @@ type BundleOption = {
   saveINR: number;
   badge?: "MOST POPULAR" | "BEST VALUE";
   sub: string;
+  cars: { src: string; alt: string }[];
 };
 
 const SINGLE_PRICE = 1299;
+
+const CAR_BMW = { src: "/products/PRC-bmw.jpg", alt: "Pocket BMW" };
+const CAR_PORSCHE = { src: "/products/PRC-porsche.jpg", alt: "Pocket Porsche" };
+const CAR_MONSTER = { src: "/products/PRC-monster.jpg", alt: "Pocket Monster Truck" };
 
 const OPTIONS: BundleOption[] = [
   {
@@ -28,6 +34,7 @@ const OPTIONS: BundleOption[] = [
     perCarINR: SINGLE_PRICE,
     saveINR: 0,
     sub: "Just for me",
+    cars: [CAR_BMW],
   },
   {
     qty: 2,
@@ -37,6 +44,7 @@ const OPTIONS: BundleOption[] = [
     saveINR: THEME.bundle2SaveINR,
     badge: "MOST POPULAR",
     sub: "Gift + keep",
+    cars: [CAR_BMW, CAR_PORSCHE],
   },
   {
     qty: 3,
@@ -46,6 +54,7 @@ const OPTIONS: BundleOption[] = [
     saveINR: THEME.bundle3SaveINR,
     badge: "BEST VALUE",
     sub: "Race night",
+    cars: [CAR_BMW, CAR_PORSCHE, CAR_MONSTER],
   },
 ];
 
@@ -64,23 +73,23 @@ export default function BundlePicker() {
   };
 
   return (
-    <section id="bundles" className="py-8 sm:py-14 bg-brand-cream">
+    <section id="bundles" className="py-6 sm:py-14 bg-brand-cream">
       <div className="max-w-5xl mx-auto px-4">
         <div className="text-center">
-          <span className="font-mono text-xs uppercase tracking-widest text-brand-red">
+          <span className="font-mono text-[11px] sm:text-xs uppercase tracking-widest text-brand-red">
             Bundle &amp; save
           </span>
-          <h2 className="font-display text-3xl sm:text-5xl font-bold text-brand-ink mt-2 text-balance">
+          <h2 className="font-display text-2xl sm:text-5xl font-bold text-brand-ink mt-1.5 sm:mt-2 text-balance">
             More cars. Bigger savings.
           </h2>
-          <p className="text-brand-ink-soft text-base sm:text-lg mt-3 max-w-xl mx-auto">
-            Mix any cars — BMW, Porsche, Thar, Monster Truck, F1, Beetle. The more you stack, the lower the per-car price.
+          <p className="text-brand-ink-soft text-sm sm:text-lg mt-2 sm:mt-3 max-w-xl mx-auto">
+            Mix any cars. The more you stack, the lower the per-car price.
           </p>
         </div>
 
         {/* Mobile: horizontal snap-scroll (3 cards, swipe). Desktop: 3-col grid. */}
-        <div className="mt-6 sm:mt-10 -mx-4 sm:mx-0 overflow-x-auto sm:overflow-visible snap-x snap-mandatory sm:snap-none no-scrollbar">
-          <div className="flex sm:grid sm:grid-cols-3 gap-4 sm:gap-6 px-4 sm:px-0 pb-2 sm:pb-0 pt-4 sm:pt-0">
+        <div className="mt-4 sm:mt-10 -mx-4 sm:mx-0 overflow-x-auto sm:overflow-visible snap-x snap-mandatory sm:snap-none no-scrollbar">
+          <div className="flex items-start sm:items-stretch sm:grid sm:grid-cols-3 gap-3 sm:gap-6 px-4 sm:px-0 pb-2 sm:pb-0 pt-3 sm:pt-0">
           {OPTIONS.map((opt, i) => {
             const isSelected = opt.qty === selectedQty;
             return (
@@ -93,7 +102,7 @@ export default function BundlePicker() {
                 viewport={{ once: true }}
                 transition={{ duration: 0.4, delay: i * 0.08, ease: "easeOut" }}
                 className={cn(
-                  "snap-center shrink-0 w-[88%] sm:w-auto relative text-left bg-white rounded-2xl p-5 sm:p-7 border-2 transition-all",
+                  "snap-center shrink-0 w-[82%] sm:w-auto relative text-center bg-white rounded-2xl p-4 sm:p-7 border-2 transition-all",
                   isSelected
                     ? "border-brand-red shadow-2xl scale-[1.02]"
                     : "border-brand-line hover:border-brand-ink/40 hover:shadow-md"
@@ -113,28 +122,53 @@ export default function BundlePicker() {
                   </span>
                 )}
 
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono text-[11px] sm:text-xs uppercase tracking-widest text-brand-ink font-semibold truncate">
-                    {opt.sub}
-                  </span>
-                  <span
-                    className={cn(
-                      "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors",
-                      isSelected
-                        ? "border-brand-red bg-brand-red text-white"
-                        : "border-brand-line"
-                    )}
-                    aria-hidden
-                  >
-                    {isSelected && <Check size={14} strokeWidth={3} />}
-                  </span>
-                </div>
+                <span
+                  className={cn(
+                    "absolute top-3 right-3 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors",
+                    isSelected
+                      ? "border-brand-red bg-brand-red text-white"
+                      : "border-brand-line"
+                  )}
+                  aria-hidden
+                >
+                  {isSelected && <Check size={14} strokeWidth={3} />}
+                </span>
 
-                <h3 className="font-display text-3xl sm:text-4xl font-bold text-brand-ink mt-3">
+                <span className="block font-mono text-[11px] sm:text-xs uppercase tracking-widest text-brand-ink font-semibold">
+                  {opt.sub}
+                </span>
+
+                <h3 className="font-display text-2xl sm:text-4xl font-bold text-brand-ink mt-2 sm:mt-3">
                   {opt.label}
                 </h3>
 
-                <div className="mt-4 flex items-baseline gap-2 flex-wrap">
+                <div
+                  className="mt-2 sm:mt-3 flex items-center justify-center gap-1 sm:gap-1.5"
+                  aria-hidden
+                >
+                  {opt.cars.map((car, idx) => (
+                    <div key={idx} className="flex items-center gap-1 sm:gap-1.5">
+                      {idx > 0 && (
+                        <Plus
+                          size={12}
+                          strokeWidth={2.5}
+                          className="text-brand-ink-soft shrink-0"
+                        />
+                      )}
+                      <div className="relative w-10 h-10 sm:w-14 sm:h-14 rounded-lg bg-brand-cream border border-brand-line overflow-hidden shrink-0">
+                        <Image
+                          src={car.src}
+                          alt={car.alt}
+                          fill
+                          sizes="56px"
+                          className="object-cover"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-3 sm:mt-4 flex items-baseline justify-center gap-2 flex-wrap">
                   <span className="text-2xl sm:text-3xl font-bold text-brand-ink">
                     {formatINR(opt.priceINR)}
                   </span>
@@ -149,27 +183,27 @@ export default function BundlePicker() {
                   {formatINR(opt.perCarINR)} per car
                 </div>
 
-                {opt.saveINR > 0 && (
-                  <div className="mt-3 inline-block bg-success/10 text-success text-xs font-bold px-2.5 py-1 rounded-full">
-                    SAVE {formatINR(opt.saveINR)}
-                  </div>
-                )}
+                <div className="mt-2.5 sm:mt-3 inline-block bg-success/10 text-success text-xs font-bold px-2.5 py-1 rounded-full">
+                  {opt.saveINR > 0
+                    ? `SAVE ${formatINR(opt.saveINR)}`
+                    : "FREE SHIPPING"}
+                </div>
               </motion.button>
             );
           })}
           </div>
         </div>
 
-        <div className="mt-8 sm:mt-10 flex flex-col items-center">
+        <div className="mt-5 sm:mt-10 flex flex-col items-center">
           <button
             type="button"
             onClick={handleAdd}
-            className="bg-brand-red hover:bg-brand-red-hover text-white px-8 py-4 sm:py-5 rounded-full font-semibold text-base sm:text-lg shadow-2xl transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2"
+            className="bg-brand-red hover:bg-brand-red-hover text-white px-7 sm:px-8 py-3.5 sm:py-5 rounded-full font-semibold text-base sm:text-lg shadow-2xl transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2"
           >
             <ShoppingBag size={20} aria-hidden />
             Add {selectedQty} {selectedQty === 1 ? "car" : "cars"} — {formatINR(selected.priceINR)}
           </button>
-          <p className="text-brand-ink text-xs sm:text-sm mt-3 font-mono font-medium text-center">
+          <p className="text-brand-ink text-[11px] sm:text-sm mt-2.5 sm:mt-3 font-mono font-medium text-center">
             Free shipping · COD pan-India · 24-hr dispatch
           </p>
         </div>

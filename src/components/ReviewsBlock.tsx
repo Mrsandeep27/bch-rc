@@ -106,7 +106,7 @@ export default function ReviewsBlock({ skuId }: { skuId?: string }) {
     if (skuId && b.forSkuId === skuId && a.forSkuId !== skuId) return 1;
     return 0;
   });
-  const [shown, setShown] = useState(3);
+  const [shown, setShown] = useState(2);
   const visible = sorted.slice(0, shown);
 
   const average = avg(REVIEWS);
@@ -116,23 +116,23 @@ export default function ReviewsBlock({ skuId }: { skuId?: string }) {
   return (
     <section
       id="reviews"
-      className="mt-10 pt-8 border-t border-brand-line"
+      className="mt-6 pt-5 border-t border-brand-line"
       aria-label="Customer reviews"
     >
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+      <div className="flex flex-row items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-mono font-bold uppercase tracking-widest text-brand-red">
+          <p className="text-[10px] sm:text-xs font-mono font-bold uppercase tracking-widest text-brand-red">
             Verified buyers
           </p>
-          <h2 className="text-2xl sm:text-3xl font-bold text-brand-ink mt-1">
+          <h2 className="text-lg sm:text-2xl font-bold text-brand-ink mt-0.5">
             What drifters are saying
           </h2>
         </div>
 
         {/* Rating summary */}
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-3 sm:gap-5">
           <div className="text-center">
-            <p className="font-display text-4xl font-bold text-brand-ink leading-none">
+            <p className="font-display text-2xl sm:text-3xl font-bold text-brand-ink leading-none">
               {average.toFixed(1)}
             </p>
             <div className="flex items-center gap-0.5 justify-center mt-1">
@@ -153,8 +153,8 @@ export default function ReviewsBlock({ skuId }: { skuId?: string }) {
             </p>
           </div>
 
-          {/* Bar distribution */}
-          <div className="flex-1 max-w-[160px] space-y-1">
+          {/* Bar distribution — hidden on mobile to save space */}
+          <div className="hidden sm:block flex-1 max-w-[160px] space-y-1">
             {([5, 4, 3, 2, 1] as const).map((r) => {
               const count = dist[r] ?? 0;
               const pct = total ? (count / total) * 100 : 0;
@@ -179,19 +179,19 @@ export default function ReviewsBlock({ skuId }: { skuId?: string }) {
       </div>
 
       {/* Reviews list */}
-      <ul className="mt-6 space-y-4">
+      <ul className="mt-4 space-y-2.5">
         {visible.map((r, i) => (
           <li
             key={`${r.name}-${i}`}
-            className="border border-brand-line rounded-xl p-4 bg-white"
+            className="border border-brand-line rounded-xl p-3 bg-white"
           >
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <span className="w-8 h-8 rounded-full bg-brand-red-soft text-brand-red flex items-center justify-center text-xs font-bold">
+                <span className="w-7 h-7 rounded-full bg-brand-red-soft text-brand-red flex items-center justify-center text-[11px] font-bold">
                   {r.name.charAt(0)}
                 </span>
                 <div>
-                  <p className="text-sm font-semibold text-brand-ink">
+                  <p className="text-[13px] font-semibold text-brand-ink leading-tight">
                     {r.name}
                   </p>
                   <p className="text-[10px] font-mono uppercase tracking-widest text-brand-ink-soft">
@@ -203,7 +203,7 @@ export default function ReviewsBlock({ skuId }: { skuId?: string }) {
                 {[1, 2, 3, 4, 5].map((i) => (
                   <Star
                     key={i}
-                    size={12}
+                    size={11}
                     className={cn(
                       i <= r.rating ? "text-gold fill-gold" : "text-brand-line"
                     )}
@@ -211,16 +211,16 @@ export default function ReviewsBlock({ skuId }: { skuId?: string }) {
                 ))}
               </div>
             </div>
-            <p className="font-semibold text-brand-ink mt-3 text-sm">
+            <p className="font-semibold text-brand-ink mt-2 text-[13px] leading-tight">
               {r.title}
             </p>
-            <p className="text-sm text-brand-ink-soft mt-1 leading-relaxed">
+            <p className="text-[13px] text-brand-ink-soft mt-0.5 leading-snug line-clamp-3">
               {r.body}
             </p>
             {r.verified && (
-              <p className="mt-2 inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-widest text-success">
-                <CheckCircle2 size={12} className="fill-success text-white" />
-                Verified purchase
+              <p className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-widest text-success">
+                <CheckCircle2 size={11} className="fill-success text-white" />
+                Verified
               </p>
             )}
           </li>
@@ -230,8 +230,8 @@ export default function ReviewsBlock({ skuId }: { skuId?: string }) {
       {shown < sorted.length && (
         <button
           type="button"
-          onClick={() => setShown((n) => n + 3)}
-          className="mt-5 w-full sm:w-auto sm:px-6 inline-flex items-center justify-center gap-2 py-2.5 border border-brand-line rounded-xl text-sm font-semibold text-brand-ink hover:bg-brand-cream"
+          onClick={() => setShown((n) => n + 2)}
+          className="mt-3 w-full sm:w-auto sm:px-5 inline-flex items-center justify-center gap-2 py-2 border border-brand-line rounded-xl text-[13px] font-semibold text-brand-ink hover:bg-brand-cream"
         >
           Show more reviews <ChevronDown size={14} />
         </button>
