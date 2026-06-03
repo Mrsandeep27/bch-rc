@@ -1,22 +1,59 @@
 /**
- * Outbox drainer — shared by the standalone /api/cron/send-notifications
- * route AND the daily /api/cron/sync-shipments route (Vercel Hobby allows
- * one cron job; the daily shipment sync calls this at the end as a backstop).
+ * Outbox drainer — exactly-once delivery under concurrency.
  *
- * Most notifications go out via the inline `sendImmediately` path from the
- * order-create handler. This is the durability net for anything that fails
- * inline.
+ * Rows are CLAIMED before sending: a batch is selected `FOR UPDATE SKIP LOCKED`
+ * and its `next_attempt_at` is leased 3 minutes into the future in the same
+ * statement. So overlapping cron runs (and the inline send) can never grab the
+ * same row, and a crash mid-send just means the lease expires and the row is
+ * retried later. As a final backstop the row's `dedup_key` is sent to the email
+ * provider as an Idempotency-Key, so even a double dispatch is collapsed.
  */
 
-import { and, lte, isNull, asc, sql, eq } from "drizzle-orm";
+import { and, lte, isNull, sql, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { notificationsOutbox, events } from "@/db/schema";
 import { sendEmail } from "./send-email";
-import { renderTemplate, type EmailPayload, type NotificationTemplate } from "./templates";
+import { sendWhatsApp } from "./send-whatsapp";
+import {
+  renderTemplate,
+  renderWhatsApp,
+  type EmailPayload,
+  type NotificationTemplate,
+} from "./templates";
 import { logError } from "@/lib/logger";
 
 const DEFAULT_BATCH = 50;
 const MAX_ATTEMPTS = 10;
+/** How far ahead a claimed row's next attempt is pushed while it's in flight. */
+const LEASE_INTERVAL = "3 minutes";
+
+/**
+ * Render + transport a single outbox row by its channel. The outbox/retry
+ * bookkeeping is identical across channels — only this dispatch differs.
+ */
+async function dispatchRow(
+  channel: string,
+  template: NotificationTemplate,
+  payload: EmailPayload,
+  dedupKey: string | null,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  try {
+    if (channel === "whatsapp") {
+      const { text } = renderWhatsApp(template, payload);
+      return await sendWhatsApp({ toPhone: payload.toPhone ?? "", text });
+    }
+    const rendered = renderTemplate(template, payload);
+    return await sendEmail({
+      to: payload.to,
+      subject: rendered.subject,
+      html: rendered.html,
+      text: rendered.text,
+      idempotencyKey: dedupKey ?? undefined,
+    });
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
 
 function nextDelaySeconds(attempt: number): number {
   if (attempt <= 1) return 60;
@@ -24,135 +61,166 @@ function nextDelaySeconds(attempt: number): number {
   return 1800;
 }
 
+type ClaimedRow = {
+  id: string;
+  site_id: string | null;
+  order_id: string | null;
+  customer_id: string | null;
+  channel: string;
+  template: string;
+  dedup_key: string | null;
+  payload: EmailPayload;
+  attempts: number;
+};
+
+async function settle(
+  row: ClaimedRow,
+  result: { ok: true; id: string } | { ok: false; error: string },
+): Promise<"sent" | "failed" | "exhausted"> {
+  if (result.ok) {
+    await db
+      .update(notificationsOutbox)
+      .set({ sentAt: new Date(), lastError: null })
+      .where(eq(notificationsOutbox.id, row.id));
+    return "sent";
+  }
+
+  const attempts = row.attempts + 1;
+  if (attempts >= MAX_ATTEMPTS) {
+    await db
+      .update(notificationsOutbox)
+      .set({
+        attempts,
+        lastError: result.error.slice(0, 500),
+        nextAttemptAt: new Date(Date.now() + 24 * 3600 * 1000),
+      })
+      .where(eq(notificationsOutbox.id, row.id));
+    if (row.order_id) {
+      await db
+        .insert(events)
+        .values({
+          siteId: row.site_id,
+          orderId: row.order_id,
+          customerId: row.customer_id,
+          type: "NOTIFICATION_EXHAUSTED",
+          payload: { template: row.template, channel: row.channel, error: result.error.slice(0, 500) },
+          source: "system",
+        })
+        .catch(() => {});
+    }
+    return "exhausted";
+  }
+
+  await db
+    .update(notificationsOutbox)
+    .set({
+      attempts,
+      lastError: result.error.slice(0, 500),
+      nextAttemptAt: new Date(Date.now() + nextDelaySeconds(attempts) * 1000),
+    })
+    .where(eq(notificationsOutbox.id, row.id));
+  logError("notifications:drain", new Error(result.error), {
+    notificationId: row.id,
+    template: row.template,
+    attempts,
+  });
+  return "failed";
+}
+
 export async function drainNotificationsOutbox(
   batchSize: number = DEFAULT_BATCH,
 ): Promise<{ drained: number; sent: number; failed: number; exhausted: number }> {
-  const due = await db
-    .select()
-    .from(notificationsOutbox)
-    .where(
-      and(
-        isNull(notificationsOutbox.sentAt),
-        lte(notificationsOutbox.nextAttemptAt, new Date()),
-      ),
+  // Claim a batch atomically: SKIP LOCKED so parallel drains never overlap,
+  // and lease each row forward so the inline path won't re-grab it either.
+  const claimed = await db.execute<ClaimedRow>(sql`
+    WITH due AS (
+      SELECT id FROM notifications_outbox
+      WHERE sent_at IS NULL AND next_attempt_at <= now()
+      ORDER BY next_attempt_at
+      LIMIT ${batchSize}
+      FOR UPDATE SKIP LOCKED
     )
-    .orderBy(asc(notificationsOutbox.nextAttemptAt))
-    .limit(batchSize);
+    UPDATE notifications_outbox n
+      SET next_attempt_at = now() + interval '${sql.raw(LEASE_INTERVAL)}'
+      FROM due WHERE n.id = due.id
+      RETURNING n.id, n.site_id, n.order_id, n.customer_id, n.channel,
+                n.template, n.dedup_key, n.payload, n.attempts
+  `);
 
-  if (due.length === 0) return { drained: 0, sent: 0, failed: 0, exhausted: 0 };
+  const rows = (claimed as unknown as ClaimedRow[]) ?? [];
+  if (rows.length === 0) return { drained: 0, sent: 0, failed: 0, exhausted: 0 };
 
   let sent = 0;
   let failed = 0;
   let exhausted = 0;
 
-  for (const row of due) {
-    const payload = row.payload as EmailPayload;
-    let result: { ok: true; id: string } | { ok: false; error: string };
-
-    try {
-      const rendered = renderTemplate(row.template as NotificationTemplate, payload);
-      result = await sendEmail({
-        to: payload.to,
-        subject: rendered.subject,
-        html: rendered.html,
-        text: rendered.text,
-      });
-    } catch (err) {
-      result = { ok: false, error: err instanceof Error ? err.message : String(err) };
-    }
-
-    if (result.ok) {
-      await db
-        .update(notificationsOutbox)
-        .set({ sentAt: new Date(), lastError: null })
-        .where(eq(notificationsOutbox.id, row.id));
-      sent++;
-      continue;
-    }
-
-    const attempts = row.attempts + 1;
-    if (attempts >= MAX_ATTEMPTS) {
-      await db
-        .update(notificationsOutbox)
-        .set({
-          attempts,
-          lastError: result.error.slice(0, 500),
-          nextAttemptAt: new Date(Date.now() + 24 * 3600 * 1000),
-        })
-        .where(eq(notificationsOutbox.id, row.id));
-
-      if (row.orderId) {
-        await db
-          .insert(events)
-          .values({
-            siteId: row.siteId,
-            orderId: row.orderId,
-            customerId: row.customerId,
-            type: "NOTIFICATION_EXHAUSTED",
-            payload: { template: row.template, channel: row.channel, error: result.error.slice(0, 500) },
-            source: "system",
-          })
-          .catch(() => {});
-      }
-      exhausted++;
-      continue;
-    }
-
-    const nextAttemptAt = new Date(Date.now() + nextDelaySeconds(attempts) * 1000);
-    await db
-      .update(notificationsOutbox)
-      .set({ attempts, lastError: result.error.slice(0, 500), nextAttemptAt })
-      .where(eq(notificationsOutbox.id, row.id));
-    failed++;
-    logError("notifications:drain", new Error(result.error), {
-      notificationId: row.id,
-      template: row.template,
-      attempts,
-    });
+  for (const row of rows) {
+    const result = await dispatchRow(
+      row.channel,
+      row.template as NotificationTemplate,
+      row.payload as EmailPayload,
+      row.dedup_key,
+    );
+    const outcome = await settle(row, result);
+    if (outcome === "sent") sent++;
+    else if (outcome === "exhausted") exhausted++;
+    else failed++;
   }
 
-  return { drained: due.length, sent, failed, exhausted };
+  return { drained: rows.length, sent, failed, exhausted };
 }
 
 /**
- * Best-effort inline send. Called from order-create right after the outbox
- * row is inserted. Idempotent — if the row already has `sent_at`, no-op.
- * Failures are silently absorbed (the cron will retry).
+ * Best-effort inline send. Called right after an outbox row is enqueued.
+ * Claims the row with the same lease-in-WHERE as the cron, so an inline send
+ * and a concurrent cron drain can never both dispatch the same row.
  */
 export async function sendOutboxRow(rowId: string): Promise<boolean> {
-  const [row] = await db
-    .select()
-    .from(notificationsOutbox)
-    .where(eq(notificationsOutbox.id, rowId));
-  if (!row || row.sentAt) return true;
-
-  const payload = row.payload as EmailPayload;
-  try {
-    const rendered = renderTemplate(row.template as NotificationTemplate, payload);
-    const result = await sendEmail({
-      to: payload.to,
-      subject: rendered.subject,
-      html: rendered.html,
-      text: rendered.text,
+  // Atomic claim: only succeeds if still unsent AND due. Pushes the lease out
+  // so the cron won't double-send. If 0 rows, someone else owns it → no-op.
+  const claimed = await db
+    .update(notificationsOutbox)
+    .set({ nextAttemptAt: sql`now() + interval '${sql.raw(LEASE_INTERVAL)}'` })
+    .where(
+      and(
+        eq(notificationsOutbox.id, rowId),
+        isNull(notificationsOutbox.sentAt),
+        lte(notificationsOutbox.nextAttemptAt, new Date()),
+      ),
+    )
+    .returning({
+      id: notificationsOutbox.id,
+      siteId: notificationsOutbox.siteId,
+      orderId: notificationsOutbox.orderId,
+      customerId: notificationsOutbox.customerId,
+      channel: notificationsOutbox.channel,
+      template: notificationsOutbox.template,
+      dedupKey: notificationsOutbox.dedupKey,
+      payload: notificationsOutbox.payload,
+      attempts: notificationsOutbox.attempts,
     });
-    if (result.ok) {
-      await db
-        .update(notificationsOutbox)
-        .set({ sentAt: new Date(), lastError: null })
-        .where(eq(notificationsOutbox.id, rowId));
-      return true;
-    }
-    await db
-      .update(notificationsOutbox)
-      .set({
-        attempts: row.attempts + 1,
-        lastError: result.error.slice(0, 500),
-        nextAttemptAt: new Date(Date.now() + 60_000),
-      })
-      .where(eq(notificationsOutbox.id, rowId));
-    return false;
-  } catch (err) {
-    logError("notifications:inline-send", err, { rowId });
-    return false;
-  }
+
+  if (claimed.length === 0) return true; // already sent or owned by the cron
+
+  const c = claimed[0];
+  const row: ClaimedRow = {
+    id: c.id,
+    site_id: c.siteId,
+    order_id: c.orderId,
+    customer_id: c.customerId,
+    channel: c.channel,
+    template: c.template,
+    dedup_key: c.dedupKey,
+    payload: c.payload as EmailPayload,
+    attempts: c.attempts,
+  };
+
+  const result = await dispatchRow(
+    row.channel,
+    row.template as NotificationTemplate,
+    row.payload,
+    row.dedup_key,
+  );
+  const outcome = await settle(row, result);
+  return outcome === "sent";
 }

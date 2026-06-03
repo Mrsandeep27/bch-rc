@@ -1,12 +1,13 @@
 /**
  * POST /api/orders/[id]/ship  (ADMIN ONLY)
  *
- * Manual admin retry of Shiprocket shipment creation. The post-payment
- * auto-trigger does NOT call this HTTP route — it calls
- * `triggerShipmentBackground()` in-process from /api/orders/create.
+ * Manual admin retry of Shiprocket shipment creation. Routes through the same
+ * durable job queue as the auto-trigger, so an admin clicking "retry" can never
+ * race the post-payment path into a duplicate shipment — both contend for the
+ * single job row and exactly one wins the atomic claim.
  *
- * Idempotent: if the order is already shipped (shiprocket_order_id +
- * awb_code present) we return the existing record without recreating.
+ * Idempotent: if the order already has a shipment (or the job is already DONE),
+ * we return the existing record without recreating.
  */
 
 import { NextResponse } from "next/server";
@@ -14,11 +15,7 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { orders } from "@/db/schema";
-import {
-  createShipmentForOrder,
-  NotShippableError,
-  OrderNotFoundError,
-} from "@/lib/fulfillment/create-shipment";
+import { runShipmentJobOnce } from "@/lib/fulfillment/shipment-queue";
 import { logError } from "@/lib/logger";
 
 export async function POST(
@@ -38,15 +35,40 @@ export async function POST(
   }
 
   try {
-    const result = await createShipmentForOrder(id);
-    return NextResponse.json({ ok: true, ...result });
+    const out = await runShipmentJobOnce(id);
+
+    if (out.result) {
+      return NextResponse.json({ ok: true, ...out.result });
+    }
+
+    // Job already claimed/finished by another worker (the auto-trigger).
+    // Re-read the order; if a shipment exists, return it idempotently.
+    if (!out.ran || out.alreadyDone) {
+      const [fresh] = await db.select().from(orders).where(eq(orders.id, id));
+      if (fresh?.shiprocketOrderId) {
+        return NextResponse.json({
+          ok: true,
+          idempotent: true,
+          shiprocketOrderId: fresh.shiprocketOrderId,
+          shipmentId: fresh.shiprocketShipmentId,
+          awbCode: fresh.awbCode,
+          courierName: fresh.courierName,
+          trackingUrl: fresh.trackingUrl,
+        });
+      }
+      return NextResponse.json(
+        { ok: true, pending: true, message: "Shipment is being processed — refresh shortly." },
+        { status: 202 },
+      );
+    }
+
+    // The job ran but failed (transient or permanent). Surface the reason; the
+    // queue has already scheduled a retry (or parked + alerted on exhaustion).
+    return NextResponse.json(
+      { error: out.error ?? "Shipment creation failed", retrying: true },
+      { status: 422 },
+    );
   } catch (err) {
-    if (err instanceof OrderNotFoundError) {
-      return NextResponse.json({ error: "Order not found" }, { status: 404 });
-    }
-    if (err instanceof NotShippableError) {
-      return NextResponse.json({ error: err.reason }, { status: 400 });
-    }
     logError("ship:route", err, { orderId: id, adminEmail: ctx.email });
     return NextResponse.json(
       { error: "Shipment creation failed" },

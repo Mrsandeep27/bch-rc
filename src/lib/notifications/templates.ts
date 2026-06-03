@@ -16,7 +16,10 @@ export type NotificationTemplate =
   | "DELIVERED";
 
 export type EmailPayload = {
+  /** Destination email (email channel). */
   to: string;
+  /** Destination phone in E.164-ish digits (whatsapp channel). */
+  toPhone?: string | null;
   customerName: string;
   orderId: string;
   totalInr: number;
@@ -25,6 +28,10 @@ export type EmailPayload = {
   awbCode?: string | null;
   courierName?: string | null;
   trackingUrl?: string | null;
+  /** Razorpay payment id — shown as the transaction reference on receipts. */
+  paymentReference?: string | null;
+  /** Human delivery estimate, e.g. "Wed, 04 Jun–Fri, 06 Jun". */
+  etaText?: string | null;
 };
 
 function escapeHtml(s: string): string {
@@ -88,13 +95,13 @@ ${codBlock}
 <tr><td style="padding-top:10px;border-top:1px solid #eee;font-weight:700">Total</td><td style="padding-top:10px;border-top:1px solid #eee;text-align:right;font-weight:700">${formatINR(p.totalInr)}</td></tr>
 </table>
 <p><a href="${trackUrl}" style="display:inline-block;background:#e11d2a;color:#fff;text-decoration:none;padding:12px 22px;border-radius:999px;font-weight:600">Track your order</a></p>
-<p style="color:#444">Ships in 24 hrs from our Yelahanka, Bangalore warehouse via Shiprocket.</p>`;
+<p style="color:#444">Ships in 24 hrs from our Yelahanka, Bangalore warehouse via Shiprocket.${p.etaText ? ` Estimated delivery <b>${escapeHtml(p.etaText)}</b>.` : ""}</p>`;
       const text = `Hi ${p.customerName}, your ${BRAND} order ${p.orderId} is confirmed.
 ${codBlockText}
 
 ${lineItemsText(p.items)}
 Total: ${formatINR(p.totalInr)}
-
+${p.etaText ? `Estimated delivery: ${p.etaText}\n` : ""}
 Track: ${trackUrl}
 
 Questions? WhatsApp ${SUPPORT_PHONE}.
@@ -103,10 +110,14 @@ Questions? WhatsApp ${SUPPORT_PHONE}.
     }
     case "PAYMENT_CAPTURED": {
       const subject = `Payment received for order ${p.orderId}`;
+      const refLine = p.paymentReference
+        ? `<p style="color:#444">Transaction reference <b style="font-family:monospace">${escapeHtml(p.paymentReference)}</b> — keep this for your records.</p>`
+        : "";
       const body = `
 <h1 style="font-size:24px;margin:14px 0 4px">Payment received</h1>
-<p>${formatINR(p.totalInr)} captured for order <b style="font-family:monospace">${escapeHtml(p.orderId)}</b>. We'll dispatch within 24 hrs.</p>`;
-      const text = `Payment of ${formatINR(p.totalInr)} received for order ${p.orderId}. Dispatching within 24 hrs.`;
+<p>${formatINR(p.totalInr)} captured for order <b style="font-family:monospace">${escapeHtml(p.orderId)}</b>. We'll dispatch within 24 hrs.${p.etaText ? ` Estimated delivery <b>${escapeHtml(p.etaText)}</b>.` : ""}</p>
+${refLine}`;
+      const text = `Payment of ${formatINR(p.totalInr)} received for order ${p.orderId}. Dispatching within 24 hrs.${p.paymentReference ? `\nTransaction ref: ${p.paymentReference}` : ""}${p.etaText ? `\nEstimated delivery: ${p.etaText}` : ""}`;
       return { subject, html: shell(subject, body), text };
     }
     case "SHIPMENT_CREATED": {
@@ -143,5 +154,50 @@ ${p.paymentMethod === "COD" ? `<p>Have <b>${formatINR(p.totalInr)}</b> ready for
       const text = `Your ${BRAND} order ${p.orderId} was delivered. Tag @164prccars on IG for a reshare. 7-day defect replacement — WhatsApp ${SUPPORT_PHONE}.`;
       return { subject, html: shell(subject, body), text };
     }
+  }
+}
+
+/**
+ * WhatsApp body for a template. Plain text (WhatsApp doesn't render HTML); we
+ * reuse the email plain-text where it already reads well. Kept separate so the
+ * messaging team can tune WhatsApp copy without touching email. Wired through
+ * the same outbox/drain machinery as email — only the transport differs.
+ */
+export function renderWhatsApp(
+  template: NotificationTemplate,
+  p: EmailPayload,
+): { text: string } {
+  const track = `${BASE_URL}/orders/${p.orderId}`;
+  switch (template) {
+    case "ORDER_CONFIRMED":
+      return {
+        text: `✅ *${BRAND}* — order *${p.orderId}* confirmed.\n${
+          p.paymentMethod === "COD"
+            ? `Pay ${formatINR(p.totalInr)} cash on delivery.`
+            : `Payment of ${formatINR(p.totalInr)} received.`
+        }${p.etaText ? `\nEstimated delivery: ${p.etaText}` : ""}\nTrack: ${track}`,
+      };
+    case "PAYMENT_CAPTURED":
+      return {
+        text: `✅ *${BRAND}* — payment of ${formatINR(p.totalInr)} received for order *${p.orderId}*.${
+          p.paymentReference ? `\nTxn ref: ${p.paymentReference}` : ""
+        }\nDispatching within 24 hrs. Track: ${track}`,
+      };
+    case "SHIPMENT_CREATED":
+      return {
+        text: `📦 *${BRAND}* — order *${p.orderId}* shipped!${
+          p.awbCode ? `\nAWB: ${p.awbCode}${p.courierName ? ` (${p.courierName})` : ""}` : ""
+        }${p.trackingUrl ? `\nTrack: ${p.trackingUrl}` : `\nTrack: ${track}`}`,
+      };
+    case "OUT_FOR_DELIVERY":
+      return {
+        text: `🚚 *${BRAND}* — order *${p.orderId}* is out for delivery today!${
+          p.paymentMethod === "COD" ? `\nKeep ${formatINR(p.totalInr)} cash ready.` : ""
+        }`,
+      };
+    case "DELIVERED":
+      return {
+        text: `🎉 *${BRAND}* — order *${p.orderId}* delivered. Enjoy the drift! 7-day defect replacement — reply here with your order ID.`,
+      };
   }
 }

@@ -11,6 +11,7 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { orders } from "@/db/schema";
+import { resolveServiceability } from "@/lib/serviceability";
 
 export async function GET(
   _req: Request,
@@ -24,10 +25,19 @@ export async function GET(
   }
 
   // Mask phone in shippingAddress for the public response.
-  const addr = order.shippingAddress as { phone?: string } & Record<string, unknown>;
+  const addr = order.shippingAddress as { phone?: string; pincode?: string } & Record<
+    string,
+    unknown
+  >;
   const maskedPhone = addr?.phone
     ? `••••• ${String(addr.phone).slice(-4)}`
     : null;
+
+  // Delivery expectation — only meaningful before it's actually delivered.
+  const etaText =
+    addr?.pincode && order.status !== "DELIVERED"
+      ? resolveServiceability(addr.pincode).etaText || null
+      : null;
 
   return NextResponse.json({
     id: order.id,
@@ -44,6 +54,10 @@ export async function GET(
     courierName: order.courierName,
     trackingUrl: order.trackingUrl,
     awbCode: order.awbCode,
+    // Payment receipt reference (Razorpay payment id) — lets the buyer reconcile
+    // against their bank statement. Safe to expose; it's not a secret/credential.
+    paymentReference: order.razorpayPaymentId ?? null,
+    etaText,
     shippingCity: (addr as { city?: string })?.city ?? null,
     shippingPincode: (addr as { pincode?: string })?.pincode ?? null,
     maskedPhone,

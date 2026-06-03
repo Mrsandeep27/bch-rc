@@ -15,6 +15,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { orders, events } from "@/db/schema";
 import { createShipment as shiprocketCreate } from "@/lib/shiprocket";
+import { notifyOrderEvent } from "@/lib/notifications/notify";
 import { logError } from "@/lib/logger";
 
 type OrderItem = {
@@ -142,6 +143,13 @@ export async function createShipmentForOrder(orderId: string): Promise<ShipmentR
     },
     source: "system",
   });
+
+  // Notify the customer their order has shipped — only once an AWB exists so
+  // the email/WhatsApp carries a real tracking number. Idempotent: the early
+  // return above means a re-run for an already-shipped order never gets here.
+  if (result.awbCode) {
+    await notifyOrderEvent(order.id, "SHIPMENT_CREATED");
+  }
 
   return {
     shiprocketOrderId: result.shiprocketOrderId,

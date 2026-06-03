@@ -16,7 +16,7 @@
  *   8. ENQUEUE order confirmation email (outbox row)
  */
 
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import {
@@ -33,8 +33,13 @@ import { OFFERS } from "@/lib/config";
 import { razorpay } from "@/lib/razorpay";
 import { generateOrderId } from "@/lib/order-id";
 import { redeemCoupon, CouponError } from "@/lib/coupons";
-import { triggerShipmentBackground } from "@/lib/fulfillment/create-shipment";
+import {
+  enqueueShipmentJob,
+  runShipmentJobOnce,
+} from "@/lib/fulfillment/shipment-queue";
 import { sendOutboxRow } from "@/lib/notifications/drain";
+import { notifyOrderEvent, whatsappEnabled } from "@/lib/notifications/notify";
+import { resolveServiceability } from "@/lib/serviceability";
 import { logError } from "@/lib/logger";
 
 const PaymentMethod = z.enum(["UPI", "CARD", "NETBANKING", "WALLET", "COD"]);
@@ -150,6 +155,30 @@ export async function POST(req: Request) {
       customerPhone: (o.shippingAddress as { phone: string }).phone,
       replayed: true,
     });
+  }
+
+  // ── 0. Serviceability gate ───────────────────────────────────────
+  // HARD block before we create anything: never accept an order for a pincode
+  // we can't deliver to, or COD where COD isn't available. This is the
+  // authoritative check (the checkout UI previews the same result). Placed
+  // after the idempotency short-circuit so replays of already-valid orders
+  // always succeed.
+  const svc = resolveServiceability(body.address.pincode);
+  if (!svc.serviceable) {
+    return NextResponse.json(
+      { error: svc.reason ?? "We don't deliver to this pincode yet. WhatsApp us to check." },
+      { status: 422 },
+    );
+  }
+  if (body.paymentMethod === "COD" && !svc.codAvailable) {
+    return NextResponse.json(
+      {
+        error:
+          svc.reason ??
+          "COD isn't available for this pincode — pay online to order (you save ₹100).",
+      },
+      { status: 422 },
+    );
   }
 
   // ── 1. Validate every line item against catalog + variant inStock ──
@@ -427,12 +456,15 @@ export async function POST(req: Request) {
               customerId: customer.id,
               channel: "email",
               template: "ORDER_CONFIRMED",
+              dedupKey: `${orderId}:ORDER_CONFIRMED:email`,
               payload: {
                 to: body.address.email,
+                toPhone: body.address.phone,
                 customerName: body.address.fullName,
                 orderId,
                 totalInr: total,
                 paymentMethod: "COD",
+                etaText: svc.etaText,
                 items: lineItems.map((i) => ({
                   name: i.name,
                   qty: i.qty,
@@ -441,7 +473,7 @@ export async function POST(req: Request) {
               },
             })
             .returning({ id: notificationsOutbox.id });
-          notificationId = n.id;
+          notificationId = n?.id ?? null;
         }
 
         return {
@@ -595,17 +627,28 @@ export async function POST(req: Request) {
     source: "user",
   });
 
-  // Outbox row was inserted INSIDE the order transaction (durable). Best-
-  // effort inline send for instant delivery on the happy path; the daily
-  // sync-shipments cron drains anything that didn't send.
-  if (txnResult.notificationId) {
-    sendOutboxRow(txnResult.notificationId).catch((err) =>
-      logError("order:create:inline-send", err, { orderId }),
+  // Outbox row was inserted INSIDE the order transaction (durable). Inline
+  // send via `after()` so it runs past the response without the serverless
+  // instance freezing it mid-flight; the reconcile cron drains any failure.
+  const notificationId = txnResult.notificationId;
+  if (notificationId) {
+    after(() =>
+      sendOutboxRow(notificationId).catch((err) =>
+        logError("order:create:inline-send", err, { orderId }),
+      ),
     );
   }
 
-  // Fire-and-forget in-process shipment creation. NOT an HTTP round-trip.
-  triggerShipmentBackground(orderId);
+  // COD confirmation on WhatsApp too (email above is the durable in-txn row).
+  // Only when enabled; runs past the response so it never blocks checkout.
+  if (whatsappEnabled()) {
+    after(() => notifyOrderEvent(orderId, "ORDER_CONFIRMED", ["whatsapp"]));
+  }
+
+  // Durable, exactly-once shipment creation via the job queue. Enqueue now
+  // (committed), run it in `after()` so it survives serverless teardown.
+  await enqueueShipmentJob(orderId);
+  after(() => runShipmentJobOnce(orderId).catch(() => {}));
 
   return NextResponse.json({
     ok: true,

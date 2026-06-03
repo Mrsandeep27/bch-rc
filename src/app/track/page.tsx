@@ -58,9 +58,12 @@ type OrderApiResponse = {
   id: string;
   status: string;
   paymentStatus: string;
+  paymentMethod: string | null;
   courierName: string | null;
   trackingUrl: string | null;
   awbCode: string | null;
+  paymentReference: string | null;
+  etaText: string | null;
   placedAt: string;
   paidAt: string | null;
   packedAt: string | null;
@@ -305,12 +308,28 @@ export default function TrackPage() {
                 </ol>
               )}
 
-              {order.trackingUrl && (
+              {/* Delivery expectation — only while in flight. */}
+              {!isCancelled &&
+                !isPending &&
+                order.etaText &&
+                order.status !== "DELIVERED" && (
+                  <div className="mt-5 pt-5 border-t border-brand-line">
+                    <p className="text-sm text-brand-ink">
+                      <span className="text-brand-ink-soft">Expected delivery: </span>
+                      <span className="font-semibold">{order.etaText}</span>
+                    </p>
+                  </div>
+                )}
+
+              {/* Courier details. Shown as soon as an AWB exists — even if the
+                  courier's public tracking URL hasn't propagated yet, so the
+                  buyer isn't left at a dead end. */}
+              {(order.awbCode || order.courierName) && (
                 <div className="mt-5 pt-5 border-t border-brand-line">
                   <p className="text-xs text-brand-ink-soft">
                     Courier:{" "}
                     <span className="font-semibold text-brand-ink">
-                      {order.courierName ?? "—"}
+                      {order.courierName ?? "Assigned"}
                     </span>
                     {order.awbCode && (
                       <>
@@ -321,14 +340,33 @@ export default function TrackPage() {
                       </>
                     )}
                   </p>
-                  <a
-                    href={order.trackingUrl}
-                    target="_blank"
-                    rel="noopener"
-                    className="mt-3 inline-flex items-center gap-2 bg-brand-ink hover:bg-brand-ink-soft text-white px-4 py-2.5 rounded-full font-semibold text-sm transition-colors"
-                  >
-                    Track on courier site
-                  </a>
+                  {order.trackingUrl ? (
+                    <a
+                      href={order.trackingUrl}
+                      target="_blank"
+                      rel="noopener"
+                      className="mt-3 inline-flex items-center gap-2 bg-brand-ink hover:bg-brand-ink-soft text-white px-4 py-2.5 rounded-full font-semibold text-sm transition-colors"
+                    >
+                      Track on courier site
+                    </a>
+                  ) : (
+                    <p className="mt-2 text-xs text-brand-ink-soft">
+                      Live courier tracking link will appear here shortly. Use the
+                      AWB above on the courier&apos;s site, or WhatsApp us.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Payment reference — reconcilable proof for prepaid orders. */}
+              {order.paymentReference && (
+                <div className="mt-5 pt-5 border-t border-brand-line">
+                  <p className="text-xs text-brand-ink-soft">
+                    Payment reference:{" "}
+                    <span className="font-mono text-brand-ink break-all">
+                      {order.paymentReference}
+                    </span>
+                  </p>
                 </div>
               )}
 

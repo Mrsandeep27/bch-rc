@@ -1,10 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Script from "next/script";
 import { useRouter } from "next/navigation";
-import { MapPin, Minus, Plus, Tag, X } from "lucide-react";
+import {
+  CheckCircle2,
+  Lock,
+  MapPin,
+  Minus,
+  Plus,
+  RotateCcw,
+  ShieldCheck,
+  Tag,
+  Truck,
+  X,
+} from "lucide-react";
 import { nanoid } from "nanoid";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
 import Footer from "@/components/Footer";
@@ -15,44 +26,32 @@ import {
   getCartSubtotal,
   getCartCount,
 } from "@/lib/cart-store";
-import { OFFERS } from "@/lib/config";
+import { AUTO_COUPON, OFFERS } from "@/lib/config";
 import { formatINR } from "@/lib/utils";
 
 type PaymentMethod = "upi" | "cod";
 
-// Metro prefixes (first 2 digits) — 2-3 day delivery via Shiprocket. Everything
-// else gets 3-5 days. Deterministic so the same pincode always shows the same
-// date (no flashing as the user types other fields).
-const METRO_PREFIXES = new Set([
-  "11", // Delhi
-  "12",
-  "20", // Lucknow
-  "30", // Jaipur
-  "38", // Ahmedabad
-  "40", // Mumbai
-  "41", // Pune
-  "44", // Chennai outer
-  "50", // Hyderabad
-  "56", // Bangalore
-  "60", // Chennai
-  "70", // Kolkata
-]);
+// Note: delivery ETA + serviceability now come from /api/serviceability
+// (src/lib/serviceability.ts) — the same source the server gates orders with.
 
-function estimateDeliveryDate(pincode: string): string {
-  const today = new Date();
-  const isMetro = METRO_PREFIXES.has(pincode.slice(0, 2));
-  // Seed off the last 2 digits so two adjacent pincodes get slightly different
-  // ETAs (feels real, not algorithmic).
-  const seed = parseInt(pincode.slice(-2), 10) || 0;
-  const offsetDays = isMetro ? 2 + (seed % 2) : 3 + (seed % 3); // metro 2-3, other 3-5
-  const dt = new Date(today);
-  dt.setDate(today.getDate() + offsetDays);
-  return dt.toLocaleDateString("en-IN", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  });
-}
+type Serviceability = {
+  serviceable: boolean;
+  codAvailable: boolean;
+  etaText: string;
+  reason: string | null;
+};
+
+type CreateOrderResponse = {
+  ok: boolean;
+  orderId: string;
+  paymentMethod: "UPI" | "COD";
+  razorpayOrderId?: string;
+  razorpayKeyId?: string;
+  amountInr: number;
+  customerName?: string;
+  customerEmail?: string;
+  customerPhone?: string;
+};
 
 /**
  * Poll the public order endpoint until payment shows CAPTURED. The webhook
@@ -99,9 +98,17 @@ type RazorpayOptions = {
   modal?: { ondismiss?: () => void };
 };
 
+type RazorpayInstance = {
+  open(): void;
+  on(
+    event: "payment.failed",
+    cb: (resp: { error?: { description?: string; reason?: string } }) => void,
+  ): void;
+};
+
 declare global {
   interface Window {
-    Razorpay?: new (options: RazorpayOptions) => { open(): void };
+    Razorpay?: new (options: RazorpayOptions) => RazorpayInstance;
   }
 }
 
@@ -140,6 +147,27 @@ export default function CheckoutPage() {
   const [geoBusy, setGeoBusy] = useState(false);
   const [geoStatus, setGeoStatus] = useState<string | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
+
+  // Live pincode serviceability (delivery ETA + COD availability). Previewed
+  // here; the server re-checks authoritatively at order create.
+  const [svc, setSvc] = useState<Serviceability | null>(null);
+  // Only trust the serviceability result while a full pincode is present, so a
+  // result for an old pincode can't linger after the buyer edits it.
+  const svcActive = pincode.length === 6 ? svc : null;
+
+  // Inline-validation: which fields the buyer has touched (so we don't shout
+  // errors before they've typed). Submit marks all as touched.
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const markTouched = (f: string) =>
+    setTouched((t) => (t[f] ? t : { ...t, [f]: true }));
+
+  // Razorpay cancellation / failure recovery. When the modal is dismissed or
+  // payment fails, we keep the cart + order and surface a clear retry.
+  const [paymentCancelled, setPaymentCancelled] = useState<string | null>(null);
+
+  // Whether the auto-coupon has already been attempted this session, so we
+  // don't refire it after the buyer deliberately removes it.
+  const autoCouponTried = useRef(false);
 
   // Idempotency key — generated ONCE per checkout session. Same key on retry
   // → server short-circuits and returns the original order. Cleared after a
@@ -282,27 +310,51 @@ export default function CheckoutPage() {
   const prepaidDiscount = payment === "upi" ? OFFERS.prepaidDiscountINR : 0;
   const total = Math.max(0, subtotal + shipping + codFee - prepaidDiscount - couponDiscountInr);
 
+  // Per-field validity, recomputed live. Drives both the inline red borders /
+  // messages and the submit gate.
+  const fieldErrors = useMemo(() => {
+    const e: Record<string, string> = {};
+    if (name.trim().length < 2) e.name = "Enter your full name.";
+    if (!/^\d{10}$/.test(phone)) e.phone = "Enter a valid 10-digit mobile number.";
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim()))
+      e.email = "Enter a valid email — your confirmation is sent here.";
+    if (!/^\d{6}$/.test(pincode)) e.pincode = "Enter a valid 6-digit pincode.";
+    if (line1.trim().length < 3) e.line1 = "Enter your address.";
+    if (city.trim().length < 2) e.city = "Enter your city.";
+    if (stateName.trim().length < 2) e.stateName = "Enter your state.";
+    return e;
+  }, [name, phone, email, pincode, line1, city, stateName]);
+
+  const FIELD_ORDER = ["name", "phone", "email", "pincode", "line1", "city", "stateName"];
+
   function validate(): string | null {
-    if (name.trim().length < 2) return "Please enter your full name.";
-    if (!/^\d{10}$/.test(phone)) return "Enter a valid 10-digit mobile number.";
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) {
-      return "Enter a valid email — we send your order confirmation there.";
-    }
-    if (!/^\d{6}$/.test(pincode)) return "Enter a valid 6-digit pincode.";
-    if (line1.trim().length < 3) return "Please enter your address.";
-    if (city.trim().length < 2) return "Please enter your city.";
-    if (stateName.trim().length < 2) return "Please enter your state.";
+    for (const f of FIELD_ORDER) if (fieldErrors[f]) return fieldErrors[f];
+    if (svcActive && !svcActive.serviceable)
+      return svcActive.reason ?? "We don't deliver to this pincode yet.";
+    if (payment === "cod" && svcActive && !svcActive.codAvailable)
+      return (
+        svcActive.reason ??
+        "COD isn't available for this pincode — pay online instead."
+      );
     return null;
   }
 
-  async function applyCoupon() {
-    const code = couponCode.trim().toUpperCase();
+  // Show a field's error only once the buyer has touched it (or tried to submit).
+  const showErr = (f: string) => (touched[f] ? fieldErrors[f] : undefined);
+  const inputCls = (f: string) =>
+    `w-full px-4 py-3 rounded-lg border focus:outline-none text-brand-ink ${
+      showErr(f) ? "border-brand-red" : "border-brand-line focus:border-brand-red"
+    }`;
+
+  async function applyCoupon(rawCode?: string, opts?: { silent?: boolean }) {
+    const code = (rawCode ?? couponCode).trim().toUpperCase();
     if (!code) {
-      setCouponMessage({ kind: "error", text: "Enter a code" });
+      if (!opts?.silent)
+        setCouponMessage({ kind: "error", text: "Enter a code" });
       return;
     }
     setCouponBusy(true);
-    setCouponMessage(null);
+    if (!opts?.silent) setCouponMessage(null);
     try {
       const r = await fetch(
         `/api/coupons/validate?code=${encodeURIComponent(code)}&siteId=prc&subtotalInr=${subtotal}&shippingInr=${shipping}`,
@@ -314,11 +366,16 @@ export default function CheckoutPage() {
         error?: string;
       };
       if (!data.ok) {
-        setCouponDiscountInr(0);
-        setCouponApplied(null);
-        setCouponMessage({ kind: "error", text: data.error ?? "Coupon rejected" });
+        // Auto-apply failures are silent — the buyer never typed this code,
+        // so a red error for an offer they didn't request would just confuse.
+        if (!opts?.silent) {
+          setCouponDiscountInr(0);
+          setCouponApplied(null);
+          setCouponMessage({ kind: "error", text: data.error ?? "Coupon rejected" });
+        }
         return;
       }
+      setCouponCode(data.code ?? code);
       setCouponDiscountInr(data.discountInr ?? 0);
       setCouponApplied(data.code ?? code);
       setCouponMessage({
@@ -326,11 +383,79 @@ export default function CheckoutPage() {
         text: `Applied ${data.code ?? code} — ${formatINR(data.discountInr ?? 0)} off`,
       });
     } catch {
-      setCouponMessage({ kind: "error", text: "Couldn't reach coupon service" });
+      if (!opts?.silent)
+        setCouponMessage({ kind: "error", text: "Couldn't reach coupon service" });
     } finally {
       setCouponBusy(false);
     }
   }
+
+  // Auto-apply the headline first-order coupon once the cart has hydrated, so
+  // the discount is never buried behind a code the buyer has to discover/type.
+  // Fires once; if the buyer removes it we don't re-add it. State is only set
+  // after the await (no synchronous setState in the effect body).
+  useEffect(() => {
+    if (autoCouponTried.current) return;
+    if (!hasHydrated || subtotal <= 0 || couponApplied) return;
+    autoCouponTried.current = true;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(
+          `/api/coupons/validate?code=${AUTO_COUPON.code}&siteId=prc&subtotalInr=${subtotal}&shippingInr=${shipping}`,
+        );
+        const data = (await r.json()) as {
+          ok: boolean;
+          code?: string;
+          discountInr?: number;
+        };
+        if (cancelled || !data.ok) return;
+        const applied = data.code ?? AUTO_COUPON.code;
+        setCouponCode(applied);
+        setCouponDiscountInr(data.discountInr ?? 0);
+        setCouponApplied(applied);
+        setCouponMessage({
+          kind: "ok",
+          text: `Applied ${applied} — ${formatINR(data.discountInr ?? 0)} off`,
+        });
+      } catch {
+        /* silent — the buyer can still apply it manually via the chip */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [hasHydrated, subtotal, couponApplied, shipping]);
+
+  // Live serviceability check when a full pincode is entered. All state is set
+  // after the await; staleness on partial pincodes is handled by `svcActive`.
+  useEffect(() => {
+    if (pincode.length !== 6) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`/api/serviceability?pincode=${pincode}`);
+        const data = (await r.json()) as Serviceability & { ok: boolean };
+        if (cancelled) return;
+        setSvc({
+          serviceable: data.serviceable,
+          codAvailable: data.codAvailable,
+          etaText: data.etaText,
+          reason: data.reason,
+        });
+        // If COD isn't available here and the buyer had COD selected, move them
+        // to prepaid so they can't submit an order we'd have to cancel.
+        if (data.serviceable && !data.codAvailable) {
+          setPayment((p) => (p === "cod" ? "upi" : p));
+        }
+      } catch {
+        /* leave previous result; server re-checks authoritatively at submit */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pincode]);
 
   function clearCoupon() {
     setCouponCode("");
@@ -339,58 +464,19 @@ export default function CheckoutPage() {
     setCouponMessage(null);
   }
 
-  async function handlePlaceOrder() {
-    // Synchronous guard against React state-batching double-fire.
-    if (submittingRef.current) return;
-    setError(null);
-    const validation = validate();
-    if (validation) {
-      setError(validation);
-      return;
-    }
-    submittingRef.current = true;
-    setLoading(true);
-    try {
-      const res = await fetch("/api/orders/create", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          siteId: "prc",
-          idempotencyKey,
-          items: items.map((i) => ({
-            skuId: i.skuId,
-            variantSlug: i.variantSlug,
-            qty: i.qty,
-          })),
-          address: {
-            fullName: name.trim(),
-            phone,
-            email: email.trim(),
-            line1: line1.trim(),
-            line2: line2.trim(),
-            city: city.trim(),
-            state: stateName.trim(),
-            pincode,
-          },
-          paymentMethod: payment === "upi" ? "UPI" : "COD",
-          couponCode: couponApplied || undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to create order");
-      }
-
-      if (data.paymentMethod === "COD") {
-        useCart.getState().clear();
-        router.push(`/orders/${data.orderId}`);
+  // Open the Razorpay modal for a created prepaid order. Extracted so the
+  // "Retry payment" flow can reopen it against the SAME razorpay order_id
+  // (Razorpay refuses a second charge on an order already paid, so reopening is
+  // safe and never double-charges).
+  const openRazorpay = useCallback(
+    (data: CreateOrderResponse) => {
+      if (!window.Razorpay || !data.razorpayOrderId || !data.razorpayKeyId) {
+        setError("Razorpay didn't load. Refresh and try again.");
+        submittingRef.current = false;
+        setLoading(false);
         return;
       }
-
-      // Open Razorpay modal for prepaid.
-      if (!window.Razorpay) {
-        throw new Error("Razorpay SDK didn't load. Refresh and try again.");
-      }
+      paidRef.current = false;
       const rzp = new window.Razorpay({
         key: data.razorpayKeyId,
         amount: data.amountInr * 100,
@@ -409,6 +495,7 @@ export default function CheckoutPage() {
           // stranded — if our verify call fails, the webhook still captures it.
           paidRef.current = true;
           setError(null);
+          setPaymentCancelled(null);
           setConfirming(true);
           try {
             const v = await fetch(`/api/orders/${data.orderId}/verify`, {
@@ -442,10 +529,91 @@ export default function CheckoutPage() {
             if (paidRef.current) return;
             submittingRef.current = false;
             setLoading(false);
+            setPaymentCancelled(
+              "Payment wasn't completed — you weren't charged and your order is saved. Tap below to try again.",
+            );
           },
         },
       });
+      // Surface real payment failures (declined card, failed UPI) with a clear
+      // retry, instead of leaving the buyer staring at the form wondering.
+      rzp.on("payment.failed", (resp) => {
+        if (paidRef.current) return;
+        submittingRef.current = false;
+        setLoading(false);
+        const why = resp?.error?.description || resp?.error?.reason;
+        setPaymentCancelled(
+          `Payment failed${why ? ` — ${why}` : ""}. You weren't charged. Try again, or switch to Cash on Delivery.`,
+        );
+      });
       rzp.open();
+    },
+    [router],
+  );
+
+  async function handlePlaceOrder() {
+    // Synchronous guard against React state-batching double-fire.
+    if (submittingRef.current) return;
+    setError(null);
+    setPaymentCancelled(null);
+    // Surface every inline error on submit, even untouched fields.
+    setTouched({
+      name: true,
+      phone: true,
+      email: true,
+      pincode: true,
+      line1: true,
+      city: true,
+      stateName: true,
+    });
+    const validation = validate();
+    if (validation) {
+      setError(validation);
+      return;
+    }
+    submittingRef.current = true;
+    setLoading(true);
+    try {
+      const res = await fetch("/api/orders/create", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          siteId: "prc",
+          idempotencyKey,
+          items: items.map((i) => ({
+            skuId: i.skuId,
+            variantSlug: i.variantSlug,
+            qty: i.qty,
+          })),
+          address: {
+            fullName: name.trim(),
+            phone,
+            email: email.trim(),
+            line1: line1.trim(),
+            line2: line2.trim(),
+            city: city.trim(),
+            state: stateName.trim(),
+            pincode,
+          },
+          paymentMethod: payment === "upi" ? "UPI" : "COD",
+          couponCode: couponApplied || undefined,
+        }),
+      });
+      const data = (await res.json()) as CreateOrderResponse & { error?: string };
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to create order");
+      }
+
+      if (data.paymentMethod === "COD") {
+        useCart.getState().clear();
+        router.push(`/orders/${data.orderId}`);
+        return;
+      }
+
+      // Hand off to the Razorpay modal. Drop the button spinner (the modal is
+      // now the foreground) but keep submittingRef set until the modal resolves.
+      setLoading(false);
+      openRazorpay(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       submittingRef.current = false;
@@ -453,12 +621,16 @@ export default function CheckoutPage() {
     }
   }
 
-  const ctaLabel =
-    payment === "upi"
+  const ctaLabel = paymentCancelled
+    ? `Retry payment · ${formatINR(total)}`
+    : payment === "upi"
       ? `Pay ${formatINR(total)} via UPI`
       : `Confirm COD order · ${formatINR(total)}`;
 
-  const eta = pincode.length === 6 ? estimateDeliveryDate(pincode) : null;
+  const freeShipGap = Math.max(0, OFFERS.freeShippingMinINR - subtotal);
+  // COD is offered unless we've confirmed this pincode can't do COD.
+  const codDisabled = !!svcActive?.serviceable && !svcActive.codAvailable;
+  const notServiceable = !!svcActive && !svcActive.serviceable;
 
   return (
     <>
@@ -596,78 +768,146 @@ export default function CheckoutPage() {
             )}
 
             <div className="mt-4 space-y-3">
-              <input
-                type="text"
-                placeholder="Full name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full px-4 py-3 rounded-lg border border-brand-line focus:outline-none focus:border-brand-red text-brand-ink"
-              />
-              <div className="flex items-stretch border border-brand-line rounded-lg overflow-hidden focus-within:border-brand-red">
-                <span className="px-3 py-3 bg-brand-cream text-brand-ink-soft text-sm font-mono flex items-center">
-                  +91
-                </span>
+              <div>
                 <input
-                  type="tel"
-                  placeholder="10-digit mobile"
-                  value={phone}
-                  onChange={(e) =>
-                    setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))
-                  }
-                  className="flex-1 px-4 py-3 focus:outline-none text-brand-ink"
+                  type="text"
+                  placeholder="Full name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onBlur={() => markTouched("name")}
+                  className={inputCls("name")}
                 />
+                {showErr("name") && (
+                  <p className="mt-1 text-xs text-brand-red">{showErr("name")}</p>
+                )}
+              </div>
+              <div>
+                <div
+                  className={`flex items-stretch border rounded-lg overflow-hidden ${
+                    showErr("phone")
+                      ? "border-brand-red"
+                      : "border-brand-line focus-within:border-brand-red"
+                  }`}
+                >
+                  <span className="px-3 py-3 bg-brand-cream text-brand-ink-soft text-sm font-mono flex items-center">
+                    +91
+                  </span>
+                  <input
+                    type="tel"
+                    placeholder="10-digit mobile"
+                    value={phone}
+                    onChange={(e) =>
+                      setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))
+                    }
+                    onBlur={() => markTouched("phone")}
+                    className="flex-1 px-4 py-3 focus:outline-none text-brand-ink"
+                  />
+                </div>
+                {showErr("phone") && (
+                  <p className="mt-1 text-xs text-brand-red">{showErr("phone")}</p>
+                )}
+              </div>
+              <div>
+                <input
+                  type="email"
+                  placeholder="Email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onBlur={() => markTouched("email")}
+                  className={inputCls("email")}
+                />
+                {showErr("email") && (
+                  <p className="mt-1 text-xs text-brand-red">{showErr("email")}</p>
+                )}
+              </div>
+              <div>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="Pincode (6 digit)"
+                  value={pincode}
+                  onChange={(e) =>
+                    setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                  }
+                  onBlur={() => markTouched("pincode")}
+                  className={inputCls("pincode")}
+                />
+                {showErr("pincode") && (
+                  <p className="mt-1 text-xs text-brand-red">{showErr("pincode")}</p>
+                )}
+                {/* Live delivery ETA + serviceability. Same result the server
+                    gates the order with — no surprise cancellations later. */}
+                {pincode.length === 6 && !svcActive && (
+                  <p className="mt-1.5 text-xs text-brand-ink-soft">
+                    Checking delivery to {pincode}…
+                  </p>
+                )}
+                {svcActive?.serviceable && (
+                  <p className="mt-1.5 inline-flex items-center gap-1.5 text-sm text-success">
+                    <Truck size={14} aria-hidden />
+                    Delivery to {pincode} by {svcActive.etaText}
+                  </p>
+                )}
+                {svcActive && !svcActive.serviceable && (
+                  <p className="mt-1.5 text-sm text-brand-red">
+                    {svcActive.reason ?? "We don't deliver to this pincode yet."}
+                  </p>
+                )}
+                {svcActive?.serviceable && !svcActive.codAvailable && (
+                  <p className="mt-1 text-xs text-brand-ink-soft">
+                    COD isn&apos;t available here — pay online (you save ₹100).
+                  </p>
+                )}
+              </div>
+              <div>
+                <input
+                  type="text"
+                  placeholder="House / flat no, building, street"
+                  value={line1}
+                  onChange={(e) => setLine1(e.target.value)}
+                  onBlur={() => markTouched("line1")}
+                  className={inputCls("line1")}
+                />
+                {showErr("line1") && (
+                  <p className="mt-1 text-xs text-brand-red">{showErr("line1")}</p>
+                )}
               </div>
               <input
-                type="email"
-                placeholder="Email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 rounded-lg border border-brand-line focus:outline-none focus:border-brand-red text-brand-ink"
-              />
-              <input
                 type="text"
-                inputMode="numeric"
-                placeholder="Pincode (6 digit)"
-                value={pincode}
-                onChange={(e) =>
-                  setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))
-                }
-                className="w-full px-4 py-3 rounded-lg border border-brand-line focus:outline-none focus:border-brand-red text-brand-ink"
-              />
-              {eta && (
-                <div className="text-success text-sm">
-                  Delivered to {pincode} by {eta}
-                </div>
-              )}
-              <input
-                type="text"
-                placeholder="Address line 1"
-                value={line1}
-                onChange={(e) => setLine1(e.target.value)}
-                className="w-full px-4 py-3 rounded-lg border border-brand-line focus:outline-none focus:border-brand-red text-brand-ink"
-              />
-              <input
-                type="text"
-                placeholder="Address line 2 (optional)"
+                placeholder="Area / landmark (optional)"
                 value={line2}
                 onChange={(e) => setLine2(e.target.value)}
                 className="w-full px-4 py-3 rounded-lg border border-brand-line focus:outline-none focus:border-brand-red text-brand-ink"
               />
               <div className="grid grid-cols-2 gap-3">
-                <input
-                  type="text"
-                  placeholder="City"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  className="w-full px-4 py-3 rounded-lg border border-brand-line focus:outline-none focus:border-brand-red text-brand-ink"
-                />
-                <input
-                  type="text"
-                  placeholder="State"
-                  value={stateName}
-                  onChange={(e) => setStateName(e.target.value)}
-                  className="w-full px-4 py-3 rounded-lg border border-brand-line focus:outline-none focus:border-brand-red text-brand-ink"
-                />
+                <div>
+                  <input
+                    type="text"
+                    placeholder="City"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    onBlur={() => markTouched("city")}
+                    className={inputCls("city")}
+                  />
+                  {showErr("city") && (
+                    <p className="mt-1 text-xs text-brand-red">{showErr("city")}</p>
+                  )}
+                </div>
+                <div>
+                  <input
+                    type="text"
+                    placeholder="State"
+                    value={stateName}
+                    onChange={(e) => setStateName(e.target.value)}
+                    onBlur={() => markTouched("stateName")}
+                    className={inputCls("stateName")}
+                  />
+                  {showErr("stateName") && (
+                    <p className="mt-1 text-xs text-brand-red">
+                      {showErr("stateName")}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -708,9 +948,11 @@ export default function CheckoutPage() {
 
               <label
                 className={
-                  payment === "cod"
-                    ? "rounded-xl border border-brand-red p-4 cursor-pointer ring-2 ring-brand-red bg-brand-red-soft flex items-start gap-3"
-                    : "rounded-xl border border-brand-line p-4 cursor-pointer flex items-start gap-3"
+                  codDisabled
+                    ? "rounded-xl border border-brand-line p-4 opacity-50 cursor-not-allowed flex items-start gap-3"
+                    : payment === "cod"
+                      ? "rounded-xl border border-brand-red p-4 cursor-pointer ring-2 ring-brand-red bg-brand-red-soft flex items-start gap-3"
+                      : "rounded-xl border border-brand-line p-4 cursor-pointer flex items-start gap-3"
                 }
               >
                 <input
@@ -718,6 +960,7 @@ export default function CheckoutPage() {
                   name="payment"
                   checked={payment === "cod"}
                   onChange={() => setPayment("cod")}
+                  disabled={codDisabled}
                   className="mt-1 accent-brand-red"
                 />
                 <div className="flex-1">
@@ -725,11 +968,26 @@ export default function CheckoutPage() {
                     Cash on Delivery
                   </div>
                   <div className="text-sm text-brand-ink-soft mt-1">
-                    Pay when delivered (₹{OFFERS.codFeeINR} fee on orders
-                    below ₹{OFFERS.codFeeAppliesBelowINR})
+                    {codDisabled
+                      ? "Not available for this pincode — pay online to order."
+                      : `Pay when delivered (₹${OFFERS.codFeeINR} fee on orders below ₹${OFFERS.codFeeAppliesBelowINR})`}
                   </div>
                 </div>
               </label>
+            </div>
+
+            {/* Payment trust badges — accepted methods + secured-by signal. */}
+            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-brand-line pt-4">
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-ink">
+                <Lock size={13} className="text-success" aria-hidden />
+                100% secure payments
+              </span>
+              <span className="text-xs text-brand-ink-soft">
+                UPI · Visa · Mastercard · RuPay · Net Banking
+              </span>
+              <span className="text-[11px] text-brand-ink-soft">
+                Encrypted &amp; processed by Razorpay
+              </span>
             </div>
           </div>
 
@@ -738,12 +996,40 @@ export default function CheckoutPage() {
               <Tag size={16} className="text-brand-red" aria-hidden />
               Coupon code
             </h2>
+
+            {/* Persistent, always-visible offer. Auto-applied on load; if the
+                buyer removes it, a one-tap chip re-applies it. No rotating
+                announcement to miss, no code to hunt for. */}
+            {couponApplied?.toUpperCase() === AUTO_COUPON.code ? (
+              <div className="mt-3 flex items-center gap-2 rounded-lg border border-success/30 bg-success/10 px-3 py-2.5">
+                <CheckCircle2 size={16} className="text-success shrink-0" aria-hidden />
+                <span className="text-sm font-semibold text-success">
+                  {AUTO_COUPON.code} applied — {AUTO_COUPON.label}
+                </span>
+              </div>
+            ) : !couponApplied ? (
+              <button
+                type="button"
+                onClick={() => applyCoupon(AUTO_COUPON.code)}
+                disabled={couponBusy || subtotal <= 0}
+                className="mt-3 w-full flex items-center justify-between gap-2 rounded-lg border border-dashed border-brand-red bg-brand-red-soft px-3 py-2.5 text-left disabled:opacity-50"
+              >
+                <span className="text-sm font-semibold text-brand-ink">
+                  🎁 {AUTO_COUPON.label} ·{" "}
+                  <span className="font-mono">{AUTO_COUPON.code}</span>
+                </span>
+                <span className="text-xs font-bold uppercase tracking-wide text-brand-red">
+                  {couponBusy ? "Applying…" : "Apply"}
+                </span>
+              </button>
+            ) : null}
+
             <div className="mt-3 flex items-stretch gap-2">
               <input
                 type="text"
                 inputMode="text"
                 autoComplete="off"
-                placeholder="e.g. CODEPRC100"
+                placeholder="Have another code?"
                 value={couponCode}
                 onChange={(e) =>
                   setCouponCode(e.target.value.toUpperCase().slice(0, 40))
@@ -762,7 +1048,7 @@ export default function CheckoutPage() {
               ) : (
                 <button
                   type="button"
-                  onClick={applyCoupon}
+                  onClick={() => applyCoupon()}
                   disabled={couponBusy || !couponCode.trim()}
                   className="px-5 py-3 rounded-lg bg-brand-ink text-white font-semibold disabled:opacity-50"
                 >
@@ -793,6 +1079,11 @@ export default function CheckoutPage() {
                 {shipping === 0 ? "FREE" : formatINR(shipping)}
               </span>
             </div>
+            {freeShipGap > 0 && (
+              <p className="text-xs text-brand-red">
+                Add {formatINR(freeShipGap)} more to unlock FREE shipping.
+              </p>
+            )}
             {codFee > 0 && (
               <div className="flex justify-between">
                 <span>COD fee</span>
@@ -817,11 +1108,19 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          <div className="sticky bottom-0 mt-6 -mx-4 px-4 py-3 bg-brand-cream/95 backdrop-blur lg:static lg:bg-transparent lg:mx-0 lg:px-0 lg:py-0">
+          <div className="sticky bottom-0 mt-6 -mx-4 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-brand-cream/95 backdrop-blur border-t border-brand-line lg:static lg:bg-transparent lg:border-0 lg:mx-0 lg:px-0 lg:py-0">
             {confirming ? (
               <div className="mb-3 rounded-lg border border-success bg-success/10 px-4 py-3 text-sm text-success">
                 Payment received — confirming your order… please don&apos;t close
                 this page.
+              </div>
+            ) : paymentCancelled ? (
+              <div className="mb-3 rounded-lg border border-gold bg-gold/10 px-4 py-3 text-sm text-brand-ink">
+                <span className="inline-flex items-center gap-1.5 font-semibold">
+                  <RotateCcw size={14} className="text-gold" aria-hidden />
+                  Payment not completed
+                </span>
+                <p className="mt-1 text-brand-ink-soft">{paymentCancelled}</p>
               </div>
             ) : error ? (
               <div className="mb-3 rounded-lg border border-brand-red bg-brand-red-soft px-4 py-3 text-sm text-brand-red">
@@ -837,12 +1136,14 @@ export default function CheckoutPage() {
                     : ctaLabel
               }
               onClick={handlePlaceOrder}
-              disabled={loading || confirming}
+              disabled={loading || confirming || notServiceable}
               loading={loading || confirming}
               className="w-full text-lg"
             />
-            <p className="text-xs text-brand-ink-soft text-center mt-3">
-              7-Day Free Replacement · Ships in 24 hrs from Bangalore
+            <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-brand-ink-soft text-center">
+              <ShieldCheck size={13} className="text-success" aria-hidden />
+              Secure checkout · 7-Day Free Replacement · Ships in 24 hrs from
+              Bangalore
             </p>
           </div>
         </div>

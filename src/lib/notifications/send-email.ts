@@ -12,6 +12,13 @@ export type SendEmailInput = {
   html: string;
   text: string;
   replyTo?: string;
+  /**
+   * Forwarded to Resend as its `Idempotency-Key` header. If the same key is
+   * submitted twice (e.g. an inline send racing the cron drain), Resend returns
+   * the original send instead of dispatching a second email. Belt-and-suspenders
+   * on top of our outbox dedup_key + row lease.
+   */
+  idempotencyKey?: string;
 };
 
 const FROM_DEFAULT = "PRC Cars <orders@pocketrccars.com>";
@@ -40,6 +47,9 @@ export async function sendEmail(
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
+        ...(input.idempotencyKey
+          ? { "Idempotency-Key": input.idempotencyKey }
+          : {}),
       },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(10000),

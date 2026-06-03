@@ -28,6 +28,15 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { orders, events, webhooksInbound } from "@/db/schema";
 import { mapShiprocketStatus } from "@/lib/shiprocket";
+import { notifyOrderEvent } from "@/lib/notifications/notify";
+import { releaseOrderHoldsBestEffort } from "@/lib/inventory/release";
+import { logWarn } from "@/lib/logger";
+
+// DB status → customer notification on transition into that status.
+const STATUS_NOTIFICATION = {
+  SHIPPED: "OUT_FOR_DELIVERY",
+  DELIVERED: "DELIVERED",
+} as const;
 
 type ShiprocketEvent = {
   awb?: string;
@@ -51,11 +60,16 @@ export async function HEAD() {
 }
 
 export async function POST(req: Request) {
-  // Auth: missing / wrong header → treat as a validator probe, ack 200 and
-  // skip DB writes. Real events from Shiprocket's webhook delivery carry
-  // the correct token.
+  // Auth: NEVER fail open. If the token isn't configured we cannot trust any
+  // POST body, so we ack 200 (so Shiprocket's validator stays happy) but skip
+  // all DB writes. With the token set, a missing/wrong header is treated as a
+  // probe and acked without writes; only a correct header reaches the DB path.
   const expected = process.env.SHIPROCKET_WEBHOOK_TOKEN;
-  if (expected && req.headers.get("x-api-key") !== expected) {
+  if (!expected) {
+    logWarn("courier:webhook", "SHIPROCKET_WEBHOOK_TOKEN unset — refusing to process events");
+    return ok();
+  }
+  if (req.headers.get("x-api-key") !== expected) {
     return ok();
   }
 
@@ -70,10 +84,11 @@ export async function POST(req: Request) {
     return ok();
   }
 
-  // Real-event path. Anything missing from here on is unexpected; we still
-  // ack 200 so Shiprocket doesn't retry storm us, but we log via the
-  // webhooks_inbound row's error column.
-  const externalId = `${event.awb ?? "unknown"}::${event.current_status ?? event.shipment_status ?? "unknown"}::${event.current_status_id ?? 0}`;
+  // Real-event path. Dedup on our ORDER ID first (globally unique per order) so
+  // an AWB-less event for one order can't collide with another order's event;
+  // fall back to AWB only when no order id is present.
+  const dedupSubject = event.order_id ?? event.awb ?? "unknown";
+  const externalId = `${dedupSubject}::${event.current_status ?? event.shipment_status ?? "unknown"}::${event.current_status_id ?? 0}`;
 
   try {
     await db.insert(webhooksInbound).values({
@@ -136,6 +151,15 @@ export async function POST(req: Request) {
       if (mapped === "CANCELLED" && !order.cancelledAt)
         updates.cancelledAt = now;
       await db.update(orders).set(updates).where(eq(orders.id, order.id));
+
+      // Fire the matching customer notification on this transition.
+      const tpl = STATUS_NOTIFICATION[mapped as keyof typeof STATUS_NOTIFICATION];
+      if (tpl) await notifyOrderEvent(order.id, tpl);
+
+      // A cancelled shipment returns its reserved stock + coupon to the pool.
+      if (mapped === "CANCELLED") {
+        await releaseOrderHoldsBestEffort(order.id, "CANCELLED");
+      }
     }
 
     await db.insert(events).values({

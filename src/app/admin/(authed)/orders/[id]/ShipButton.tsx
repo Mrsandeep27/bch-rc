@@ -17,6 +17,7 @@ export function ShipButton({ orderId, hasShipment }: Props) {
   >(null);
 
   async function handleClick() {
+    if (loading) return; // synchronous guard — `disabled` lags a render
     setLoading(true);
     setResult(null);
     try {

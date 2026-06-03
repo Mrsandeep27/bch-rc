@@ -6,7 +6,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { CheckCircle2, Package } from "lucide-react";
+import { CheckCircle2, Clock, Package, Receipt, Truck } from "lucide-react";
 import { eq } from "drizzle-orm";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
 import Header from "@/components/Header";
@@ -15,6 +15,7 @@ import { WhatsAppIcon } from "@/components/BrandIcons";
 import { THEME } from "@/lib/theme";
 import { waLink } from "@/lib/config";
 import { formatINR } from "@/lib/utils";
+import { resolveServiceability } from "@/lib/serviceability";
 import { db } from "@/db";
 import { orders } from "@/db/schema";
 
@@ -43,6 +44,9 @@ export default async function OrderSuccessPage({
   if (!order) notFound();
 
   const isCod = order.paymentMethod === "COD";
+  // Prepaid order whose capture hasn't landed yet (webhook lag). Don't claim
+  // "Payment successful!" until the money is actually confirmed.
+  const awaitingCapture = !isCod && order.paymentStatus !== "CAPTURED";
   const items = order.items as OrderItem[];
   const shippingAddr = order.shippingAddress as {
     city?: string;
@@ -51,6 +55,18 @@ export default async function OrderSuccessPage({
   };
   const maskedPhone = shippingAddr?.phone
     ? `••••• ${String(shippingAddr.phone).slice(-4)}`
+    : null;
+  const etaText = shippingAddr?.pincode
+    ? resolveServiceability(shippingAddr.pincode).etaText
+    : null;
+  const paidAtText = order.paidAt
+    ? new Date(order.paidAt).toLocaleString("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      })
     : null;
 
   return (
@@ -62,16 +78,28 @@ export default async function OrderSuccessPage({
         <section className="max-w-2xl mx-auto px-4 py-8 sm:py-12">
           {/* Success header */}
           <div className="bg-white rounded-2xl border border-brand-line p-6 sm:p-8 text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-success/10 text-success mb-4">
-              <CheckCircle2 size={32} />
+            <div
+              className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 ${
+                awaitingCapture
+                  ? "bg-gold/10 text-gold"
+                  : "bg-success/10 text-success"
+              }`}
+            >
+              {awaitingCapture ? <Clock size={32} /> : <CheckCircle2 size={32} />}
             </div>
             <h1 className="font-display text-3xl sm:text-4xl font-bold text-brand-ink">
-              {isCod ? "Order confirmed!" : "Payment successful!"}
+              {awaitingCapture
+                ? "Order received — confirming payment"
+                : isCod
+                  ? "Order confirmed!"
+                  : "Payment successful!"}
             </h1>
             <p className="text-brand-ink-soft mt-2">
-              {isCod
-                ? "We'll dispatch from Yelahanka in 24 hrs."
-                : "Thanks for your order. Dispatch from Yelahanka in 24 hrs."}
+              {awaitingCapture
+                ? "Your payment is being confirmed by the bank — this usually takes a few seconds. We've saved your order; refresh to see the latest status."
+                : isCod
+                  ? "We'll dispatch from Yelahanka in 24 hrs."
+                  : "Thanks for your order. Dispatch from Yelahanka in 24 hrs."}
             </p>
 
             <div className="mt-6 inline-flex flex-col items-center gap-1 px-5 py-3 rounded-xl bg-brand-cream border border-brand-line">
@@ -83,8 +111,15 @@ export default async function OrderSuccessPage({
               </span>
             </div>
 
+            {etaText && order.status !== "DELIVERED" && (
+              <p className="mt-4 inline-flex items-center justify-center gap-1.5 text-sm text-brand-ink">
+                <Truck size={15} className="text-brand-red" aria-hidden />
+                Estimated delivery {etaText}
+              </p>
+            )}
+
             <p className="text-xs text-brand-ink-soft mt-4">
-              Save this — you'll need it to track or claim a replacement.
+              Save this — you&apos;ll need it to track or claim a replacement.
             </p>
           </div>
 
@@ -153,6 +188,58 @@ export default async function OrderSuccessPage({
                 <span>{formatINR(order.totalInr)}</span>
               </div>
             </div>
+          </div>
+
+          {/* Payment receipt — gives the buyer a reconcilable reference. */}
+          <div className="mt-6 bg-white rounded-2xl border border-brand-line p-5 sm:p-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Receipt size={18} className="text-brand-red" />
+              <h2 className="font-semibold text-brand-ink">Payment receipt</h2>
+            </div>
+            <dl className="text-sm space-y-1.5">
+              <div className="flex justify-between gap-3">
+                <dt className="text-brand-ink-soft">Method</dt>
+                <dd className="text-brand-ink font-medium">
+                  {isCod ? "Cash on Delivery" : "Paid online (UPI / card)"}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-brand-ink-soft">Status</dt>
+                <dd
+                  className={
+                    awaitingCapture
+                      ? "text-gold font-medium"
+                      : "text-success font-medium"
+                  }
+                >
+                  {isCod
+                    ? "To be collected on delivery"
+                    : awaitingCapture
+                      ? "Confirming…"
+                      : "Paid"}
+                </dd>
+              </div>
+              {!isCod && order.razorpayPaymentId && (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-brand-ink-soft">Transaction ref</dt>
+                  <dd className="text-brand-ink font-mono text-xs break-all text-right">
+                    {order.razorpayPaymentId}
+                  </dd>
+                </div>
+              )}
+              {paidAtText && !isCod && (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-brand-ink-soft">Paid on</dt>
+                  <dd className="text-brand-ink">{paidAtText}</dd>
+                </div>
+              )}
+              <div className="flex justify-between gap-3 border-t border-brand-line pt-2 mt-2 font-semibold">
+                <dt className="text-brand-ink">
+                  {isCod ? "Amount due" : "Amount paid"}
+                </dt>
+                <dd className="text-brand-ink">{formatINR(order.totalInr)}</dd>
+              </div>
+            </dl>
           </div>
 
           {/* Ships to */}

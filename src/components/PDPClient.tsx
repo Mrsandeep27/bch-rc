@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Minus, Plus, ShoppingBag, Zap, Truck, Shield, RotateCw } from "lucide-react";
 import type { Sku } from "@/lib/products";
-import { defaultVariantSlug } from "@/lib/products";
 import { formatINR, calcDiscountPct, cn } from "@/lib/utils";
 
 // SKUs without color variants don't track per-unit stock — cap them at a sane
@@ -62,21 +61,62 @@ export default function PDPClient({ sku }: { sku: Sku }) {
   const router = useRouter();
   const [qty, setQty] = useState(1);
   const [activeImage, setActiveImage] = useState(0);
-  // Default to the first IN-STOCK colour (not just the first colour) so the
-  // buyer doesn't land on a sold-out variant.
   const [selectedColorSlug, setSelectedColorSlug] = useState<string | null>(
-    () => defaultVariantSlug(sku)
+    sku.colors?.[0]?.slug ?? null
   );
+
+  // DB inventory is the single source of truth for stock. Fetch the live map
+  // for this SKU on mount; until it loads we stay optimistic (the order-create
+  // endpoint is the hard gate, so an optimistic add can never oversell).
+  const [stockMap, setStockMap] = useState<Record<string, number> | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/stock?skuIds=${encodeURIComponent(sku.id)}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancelled && d && typeof d.stock === "object") setStockMap(d.stock);
+      })
+      .catch(() => {
+        /* leave stock optimistic on failure */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sku.id]);
+
+  const stockLoaded = stockMap !== null;
+  // null while loading (treat as available); a number once loaded (0 = sold out).
+  const stockOf = (slug: string | null): number | null =>
+    stockMap ? stockMap[`${sku.id}:${slug ?? ""}`] ?? 0 : null;
+
+  // Once live stock loads, if the pre-selected colour is sold out, jump to the
+  // first in-stock colour so the buyer never lands on an unavailable variant.
+  useEffect(() => {
+    if (!stockMap || !sku.colors?.length) return;
+    if ((stockMap[`${sku.id}:${selectedColorSlug ?? ""}`] ?? 0) > 0) return;
+    const firstIn = sku.colors.find(
+      (c) => (stockMap[`${sku.id}:${c.slug}`] ?? 0) > 0,
+    );
+    if (firstIn) {
+      setSelectedColorSlug(firstIn.slug);
+      setActiveImage(0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stockMap]);
+
   const selectedColor =
     sku.colors?.find((c) => c.slug === selectedColorSlug) ?? null;
   const hasColors = !!sku.colors?.length;
-  // Out of stock = a colour SKU whose selected colour has no units (or, defensively,
-  // no colour resolved). Colour-less SKUs are always considered purchasable.
-  const outOfStock = hasColors ? (selectedColor?.stock ?? 0) <= 0 : false;
-  // Upper bound for the qty stepper: the selected colour's stock, or the
-  // per-order cap for colour-less SKUs.
+  const selectedStock = stockOf(selectedColorSlug);
+  // Sold out only once live stock has loaded and confirms zero. Colour-less
+  // SKUs stay purchasable (the server caps qty).
+  const outOfStock = hasColors ? stockLoaded && (selectedStock ?? 0) <= 0 : false;
+  // Qty cap: real DB stock once loaded; an optimistic cap while loading.
+  const LOADING_MAX = 10;
   const maxQty = hasColors
-    ? Math.max(1, selectedColor?.stock ?? 0)
+    ? stockLoaded
+      ? Math.max(1, selectedStock ?? 0)
+      : LOADING_MAX
     : NO_VARIANT_MAX_QTY;
   const savings = sku.mrpINR - sku.retailINR;
   const pct = calcDiscountPct(sku.mrpINR, sku.retailINR);
@@ -188,12 +228,13 @@ export default function PDPClient({ sku }: { sku: Sku }) {
               {selectedColor && (
                 <span className="text-sm font-semibold text-brand-ink">
                   {selectedColor.name}
-                  {selectedColor.stock <= 0 ? (
+                  {stockLoaded && (selectedStock ?? 0) <= 0 ? (
                     <span className="text-brand-red font-normal"> · Sold out</span>
-                  ) : selectedColor.stock <= LOW_STOCK_THRESHOLD ? (
+                  ) : stockLoaded &&
+                    (selectedStock ?? 0) <= LOW_STOCK_THRESHOLD ? (
                     <span className="text-brand-red font-normal">
                       {" "}
-                      · Only {selectedColor.stock} left
+                      · Only {selectedStock} left
                     </span>
                   ) : null}
                 </span>
@@ -202,7 +243,8 @@ export default function PDPClient({ sku }: { sku: Sku }) {
             <div className="mt-2.5 flex flex-wrap gap-2">
               {sku.colors.map((c) => {
                 const active = c.slug === selectedColorSlug;
-                const soldOut = c.stock <= 0;
+                const cStock = stockOf(c.slug);
+                const soldOut = stockLoaded && (cStock ?? 0) <= 0;
                 return (
                   <button
                     key={c.slug}
@@ -211,8 +253,10 @@ export default function PDPClient({ sku }: { sku: Sku }) {
                     onClick={() => {
                       setSelectedColorSlug(c.slug);
                       setActiveImage(0);
-                      // Clamp the chosen qty to the new colour's stock.
-                      setQty((q) => Math.min(q, Math.max(1, c.stock)));
+                      // Clamp the chosen qty to the new colour's live stock.
+                      setQty((q) =>
+                        cStock != null ? Math.min(q, Math.max(1, cStock)) : q,
+                      );
                     }}
                     aria-label={soldOut ? `${c.name} — sold out` : c.name}
                     aria-pressed={active}

@@ -15,16 +15,17 @@
  * stays admin-gated).
  */
 
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { orders, events } from "@/db/schema";
 import { verifyRazorpaySignature } from "@/lib/razorpay";
-import { triggerShipmentBackground } from "@/lib/fulfillment/create-shipment";
-import { enqueueNotification } from "@/lib/notifications/enqueue";
-import { sendOutboxRow } from "@/lib/notifications/drain";
-import { logError } from "@/lib/logger";
+import {
+  enqueueShipmentJob,
+  runShipmentJobOnce,
+} from "@/lib/fulfillment/shipment-queue";
+import { notifyOrderEvent } from "@/lib/notifications/notify";
 
 const Body = z.object({
   razorpayPaymentId: z.string().min(1),
@@ -115,45 +116,17 @@ export async function POST(
     source: "user",
   });
 
-  // Confirmation email — best-effort inline + outbox backstop.
-  const addr = order.shippingAddress as {
-    fullName: string;
-    email?: string;
-  };
-  const items = order.items as Array<{
-    name: string;
-    qty: number;
-    lineTotalInr: number;
-  }>;
-  if (addr.email) {
-    try {
-      const notificationId = await enqueueNotification({
-        siteId: order.siteId,
-        orderId: id,
-        customerId: order.customerId,
-        channel: "email",
-        template: "PAYMENT_CAPTURED",
-        payload: {
-          to: addr.email,
-          customerName: addr.fullName,
-          orderId: id,
-          totalInr: order.totalInr,
-          paymentMethod: order.paymentMethod,
-          items: items.map((i) => ({
-            name: i.name,
-            qty: i.qty,
-            lineTotalInr: i.lineTotalInr,
-          })),
-        },
-      });
-      sendOutboxRow(notificationId).catch(() => {});
-    } catch (err) {
-      logError("verify:enqueue-email", err, { orderId: id });
-    }
-  }
+  // Payment-received confirmation — email + WhatsApp (when enabled). The
+  // order row now carries razorpayPaymentId, so the receipt/txn ref renders.
+  await notifyOrderEvent(id, "PAYMENT_CAPTURED");
 
-  // In-process shipment creation. No HTTP self-call → admin-gated route stays gated.
-  triggerShipmentBackground(id);
+  // Durable, exactly-once shipment creation. Enqueue synchronously (so the job
+  // is committed before we respond), then run it in `after()` — which keeps the
+  // serverless instance alive past the response, unlike a bare fire-and-forget.
+  // The Razorpay webhook enqueues the same job; the PK + atomic claim guarantee
+  // only one of them ever creates the shipment.
+  await enqueueShipmentJob(id);
+  after(() => runShipmentJobOnce(id).catch(() => {}));
 
   return NextResponse.json({ ok: true, orderId: id });
 }

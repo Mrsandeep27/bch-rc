@@ -19,15 +19,17 @@
  *  - refund.processed     → idempotent confirm of refund state
  */
 
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { orders, events, webhooksInbound } from "@/db/schema";
 import { verifyWebhookSignature } from "@/lib/razorpay";
-import { enqueueNotification } from "@/lib/notifications/enqueue";
-import { sendOutboxRow } from "@/lib/notifications/drain";
-import { triggerShipmentBackground } from "@/lib/fulfillment/create-shipment";
-import { logError } from "@/lib/logger";
+import { notifyOrderEvent } from "@/lib/notifications/notify";
+import {
+  enqueueShipmentJob,
+  runShipmentJobOnce,
+} from "@/lib/fulfillment/shipment-queue";
+import { releaseOrderHoldsBestEffort } from "@/lib/inventory/release";
 
 export async function POST(req: Request) {
   const rawBody = await req.text();
@@ -107,37 +109,14 @@ export async function POST(req: Request) {
             source: "webhook",
           });
 
-          // Confirmation email + shipment trigger — webhook is the safety net
-          // for customers who closed the tab before /verify fired.
-          const addr = order.shippingAddress as { fullName: string; email?: string };
-          const itemsArr = order.items as Array<{ name: string; qty: number; lineTotalInr: number }>;
-          if (addr.email) {
-            try {
-              const notificationId = await enqueueNotification({
-                siteId: order.siteId,
-                orderId: order.id,
-                customerId: order.customerId,
-                channel: "email",
-                template: "PAYMENT_CAPTURED",
-                payload: {
-                  to: addr.email,
-                  customerName: addr.fullName,
-                  orderId: order.id,
-                  totalInr: order.totalInr,
-                  paymentMethod: order.paymentMethod,
-                  items: itemsArr.map((i) => ({
-                    name: i.name,
-                    qty: i.qty,
-                    lineTotalInr: i.lineTotalInr,
-                  })),
-                },
-              });
-              sendOutboxRow(notificationId).catch(() => {});
-            } catch (err) {
-              logError("webhook:enqueue-email", err, { orderId: order.id });
-            }
-          }
-          triggerShipmentBackground(order.id);
+          // Confirmation + shipment trigger — webhook is the safety net for
+          // customers who closed the tab before /verify fired. notifyOrderEvent
+          // reads the just-updated row so the txn ref renders on the receipt.
+          await notifyOrderEvent(order.id, "PAYMENT_CAPTURED");
+          // Durable + exactly-once: enqueue the job, run it past the response.
+          // Dedups against /verify via the job PK + atomic claim.
+          await enqueueShipmentJob(order.id);
+          after(() => runShipmentJobOnce(order.id).catch(() => {}));
         }
         break;
       }
@@ -168,6 +147,8 @@ export async function POST(req: Request) {
             },
             source: "webhook",
           });
+          // Return the reserved stock + coupon usage to the pool.
+          await releaseOrderHoldsBestEffort(order.id, "PAYMENT_FAILED");
         }
         break;
       }
@@ -196,6 +177,8 @@ export async function POST(req: Request) {
             payload: { refundId: refund.id, amount: refund.amount },
             source: "webhook",
           });
+          // Refunded goods go back to sellable stock; coupon usage is released.
+          await releaseOrderHoldsBestEffort(order.id, "REFUNDED");
         }
         break;
       }

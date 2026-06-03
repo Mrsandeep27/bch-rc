@@ -14,6 +14,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -321,6 +322,13 @@ export const orders = pgTable(
     courierName: text("courier_name"),
     trackingUrl: text("tracking_url"),
     notes: text("notes"),
+    /**
+     * Exactly-once guard for releasing reserved inventory + coupon usage back.
+     * Flipped true atomically the first (and only) time an order's holds are
+     * released on a terminal-unfulfilled transition (FAILED / ABANDONED /
+     * CANCELLED / REFUNDED). The conditional UPDATE that flips it IS the claim.
+     */
+    holdsReleased: boolean("holds_released").notNull().default(false),
     placedAt: timestamp("placed_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -344,6 +352,10 @@ export const orders = pgTable(
     index("orders_awb_idx").on(t.awbCode),
     index("orders_shiprocket_shipment_idx").on(t.shiprocketShipmentId),
     unique("orders_idempotency_key_unique").on(t.idempotencyKey),
+    // Reconciliation sweeps query (status, placed_at) for stale PENDING and
+    // (status, paid_at) for PAID-without-shipment.
+    index("orders_status_placed_idx").on(t.status, t.placedAt),
+    index("orders_status_paid_idx").on(t.status, t.paidAt),
   ],
 );
 
@@ -371,7 +383,59 @@ export const inventory = pgTable(
       .defaultNow(),
   },
   (t) => [
+    // Composite PK is the single source of truth per (site, sku, variant) and
+    // makes the seed UPSERT + atomic decrement safe. Declared here so Drizzle
+    // never diffs it away (the constraint shipped in migration 0002).
+    primaryKey({ columns: [t.siteId, t.skuId, t.variantSlug] }),
+    // Hard floor: the gated UPDATE prevents oversell, this CHECK is the
+    // last-line backstop so stock can never physically go negative.
+    check("inventory_stock_nonneg", sql`${t.stock} >= 0`),
     index("inventory_site_sku_idx").on(t.siteId, t.skuId),
+  ],
+);
+
+// ============================================================
+// 8c. SHIPMENT JOBS — durable fulfillment queue (one job per order)
+// ============================================================
+// Exactly-once shipment creation. The PK on order_id means verify + webhook +
+// COD-create + admin-retry all INSERT ... ON CONFLICT DO NOTHING → a single
+// job ever exists per order. Workers claim a job by the atomic transition
+// PENDING → PROCESSING (a conditional UPDATE), so only one worker runs it.
+// Failed jobs back off and retry; a reconciliation cron drains the queue and
+// re-enqueues any PAID order missing a job.
+
+export const shipmentJobStatusEnum = pgEnum("shipment_job_status", [
+  "PENDING",
+  "PROCESSING",
+  "DONE",
+  "FAILED",
+]);
+
+export const shipmentJobs = pgTable(
+  "shipment_jobs",
+  {
+    orderId: text("order_id")
+      .primaryKey()
+      .references(() => orders.id),
+    status: shipmentJobStatusEnum("status").notNull().default("PENDING"),
+    attempts: integer("attempts").notNull().default(0),
+    maxAttempts: integer("max_attempts").notNull().default(8),
+    /** When the worker may next claim this job. Backoff pushes this forward. */
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    /** Set when a worker transitions to PROCESSING. Lease for stuck-job reaping. */
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("shipment_jobs_claim_idx").on(t.status, t.nextAttemptAt),
   ],
 );
 
@@ -388,6 +452,13 @@ export const notificationsOutbox = pgTable(
     customerId: uuid("customer_id").references(() => customers.id),
     channel: text("channel").notNull(), // "email" | "whatsapp"
     template: text("template").notNull(), // ORDER_CONFIRMED | PAYMENT_CAPTURED | SHIPMENT_CREATED | DELIVERED
+    /**
+     * Idempotency key, typically `${orderId}:${template}`. UNIQUE — enqueue is
+     * ON CONFLICT DO NOTHING so verify + webhook firing the same notification
+     * can only ever create one outbox row. Also forwarded to Resend as its
+     * Idempotency-Key so a double inline/cron send is deduped provider-side.
+     */
+    dedupKey: text("dedup_key"),
     /** Snapshot of recipient + variables at enqueue time. */
     payload: jsonb("payload").notNull(),
     attempts: integer("attempts").notNull().default(0),
@@ -404,6 +475,7 @@ export const notificationsOutbox = pgTable(
   (t) => [
     index("notifications_pending_idx").on(t.sentAt, t.nextAttemptAt),
     index("notifications_order_idx").on(t.orderId),
+    unique("notifications_dedup_key_unique").on(t.dedupKey),
   ],
 );
 
@@ -562,5 +634,7 @@ export type NotificationRow = typeof notificationsOutbox.$inferSelect;
 export type NewNotification = typeof notificationsOutbox.$inferInsert;
 export type InventoryRow = typeof inventory.$inferSelect;
 export type NewInventory = typeof inventory.$inferInsert;
+export type ShipmentJob = typeof shipmentJobs.$inferSelect;
+export type NewShipmentJob = typeof shipmentJobs.$inferInsert;
 export type CustomerCouponRedemption = typeof customerCouponRedemptions.$inferSelect;
 export type NewCustomerCouponRedemption = typeof customerCouponRedemptions.$inferInsert;

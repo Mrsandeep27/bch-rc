@@ -28,6 +28,17 @@ export const OFFERS = {
   ledSmokeUpgradeINR: THEME.ledSmokeUpgradeINR,
 } as const;
 
+/**
+ * The first-order coupon we surface and auto-apply at checkout. Kept here (not
+ * hard-coded in the UI) so it's the single place to change/disable the headline
+ * offer. The server still validates + redeems it transactionally — auto-apply
+ * is a convenience, never a source of truth.
+ */
+export const AUTO_COUPON = {
+  code: "CODEPRC100",
+  label: "₹100 OFF your first order",
+} as const;
+
 export const TRUST = {
   ordersShipped: THEME.ordersShipped,
   rating: THEME.rating,

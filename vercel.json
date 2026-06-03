@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/cron/reconcile",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/sync-shipments",
       "schedule": "0 3 * * *"
     }

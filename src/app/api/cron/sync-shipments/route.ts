@@ -19,7 +19,14 @@ import { db } from "@/db";
 import { orders, events } from "@/db/schema";
 import { getShipmentStatus, mapShiprocketStatus } from "@/lib/shiprocket";
 import { drainNotificationsOutbox } from "@/lib/notifications/drain";
+import { notifyOrderEvent } from "@/lib/notifications/notify";
 import { logError } from "@/lib/logger";
+
+// DB status → customer notification on transition into that status.
+const STATUS_NOTIFICATION = {
+  SHIPPED: "OUT_FOR_DELIVERY",
+  DELIVERED: "DELIVERED",
+} as const;
 
 // Statuses where polling is still useful — terminal statuses (DELIVERED,
 // CANCELLED, RETURNED, REFUNDED) get skipped.
@@ -98,6 +105,11 @@ export async function GET(req: Request) {
           },
           source: "cron",
         });
+
+        // Fire the matching customer notification on this transition. Guarded
+        // by `changed` so a steady-state poll never re-notifies.
+        const tpl = STATUS_NOTIFICATION[mapped as keyof typeof STATUS_NOTIFICATION];
+        if (tpl) await notifyOrderEvent(o.id, tpl);
       }
 
       results.push({

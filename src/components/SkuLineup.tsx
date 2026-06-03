@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ShoppingBag, Star, ShieldCheck } from "lucide-react";
@@ -55,12 +56,25 @@ const PICK_REASONS = [
 type SkuCardProps = {
   sku: Sku;
   index: number;
+  stockMap: Record<string, number> | null;
 };
 
-function SkuCard({ sku, index }: SkuCardProps) {
+function SkuCard({ sku, index, stockMap }: SkuCardProps) {
   const isHero = sku.badge === "MOST GIFTED";
   const pct = calcDiscountPct(sku.mrpINR, sku.retailINR);
   const pickReason = PICK_REASONS[index] ?? "Editor's pick";
+
+  // DB inventory is the source of truth. Keys: `${sku.id}:${variantSlug}`
+  // ("" for colourless SKUs). Optimistic (available) until the map loads.
+  const variantKeys = sku.colors?.length
+    ? sku.colors.map((c) => `${sku.id}:${c.slug}`)
+    : [`${sku.id}:`];
+  const skuSoldOut =
+    stockMap !== null && variantKeys.every((k) => (stockMap[k] ?? 0) <= 0);
+  const firstInStockSlug =
+    sku.colors?.find((c) => (stockMap?.[`${sku.id}:${c.slug}`] ?? 1) > 0)?.slug ??
+    sku.colors?.[0]?.slug ??
+    null;
 
   return (
     <motion.div
@@ -155,17 +169,17 @@ function SkuCard({ sku, index }: SkuCardProps) {
             and never propagates to the card-wide PDP link. */}
         <button
           type="button"
+          disabled={skuSoldOut}
           onClick={(e) => {
             e.stopPropagation();
-            // Default to the first in-stock colour. PDP picker can override.
-            const firstInStock =
-              sku.colors?.find((c) => c.stock > 0)?.slug ?? sku.colors?.[0]?.slug ?? null;
-            useCart.getState().add(sku.id, firstInStock);
+            if (skuSoldOut) return;
+            // Default to the first DB-in-stock colour. PDP picker can override.
+            useCart.getState().add(sku.id, firstInStockSlug);
           }}
-          className="pointer-events-auto bg-brand-red hover:bg-brand-red-hover text-white rounded-full py-2.5 px-4 transition-colors inline-flex items-center justify-center gap-2 font-semibold text-sm"
+          className="pointer-events-auto bg-brand-red hover:bg-brand-red-hover text-white rounded-full py-2.5 px-4 transition-colors inline-flex items-center justify-center gap-2 font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand-red"
         >
           <ShoppingBag size={16} aria-hidden />
-          Add to cart
+          {skuSoldOut ? "Sold out" : "Add to cart"}
         </button>
 
         <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-brand-ink-soft -mt-1">
@@ -178,6 +192,23 @@ function SkuCard({ sku, index }: SkuCardProps) {
 }
 
 export default function SkuLineup() {
+  // Live DB stock for the whole grid — single source of truth, fetched once.
+  const [stockMap, setStockMap] = useState<Record<string, number> | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/stock")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancelled && d && typeof d.stock === "object") setStockMap(d.stock);
+      })
+      .catch(() => {
+        /* leave optimistic on failure */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <section id="sku" className="py-8 sm:py-14 bg-white">
       <div className="max-w-6xl mx-auto px-4">
@@ -193,7 +224,7 @@ export default function SkuLineup() {
       <div className="max-w-7xl mx-auto px-4 mt-6 sm:mt-10">
         <div className="flex overflow-x-auto snap-x snap-mandatory gap-4 no-scrollbar -mx-4 px-4 pb-4 sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 sm:gap-5 lg:gap-6 sm:overflow-visible sm:min-w-0 sm:mx-0 sm:px-0 sm:pb-0">
           {getVisibleProducts().map((sku, i) => (
-            <SkuCard key={sku.id} sku={sku} index={i} />
+            <SkuCard key={sku.id} sku={sku} index={i} stockMap={stockMap} />
           ))}
         </div>
 
