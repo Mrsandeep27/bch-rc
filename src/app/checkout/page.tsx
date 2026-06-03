@@ -148,6 +148,31 @@ export default function CheckoutPage() {
   const [geoStatus, setGeoStatus] = useState<string | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
 
+  // Touch-device detection. Desktop browsers' navigator.geolocation falls back
+  // to IP-based location (often 5-50 km off in India), so the GPS button is
+  // useless and misleading there. We surface a hint instead. Mobile + tablets
+  // (pointer: coarse) still get the button.
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    setIsTouchDevice(window.matchMedia("(pointer: coarse)").matches);
+  }, []);
+
+  // Provenance tracking: which address fields did the buyer type vs. which
+  // did we autofill? Critical for the "user corrects a wrong GPS pincode"
+  // flow — when the buyer manually fixes the pincode, our pincode-lookup
+  // must be allowed to overwrite the city/state/area we previously
+  // auto-populated from the wrong location. But it must NOT overwrite a
+  // field the buyer typed in themselves.
+  const userTypedRef = useRef({
+    pincode: false,
+    line1: false,
+    line2: false,
+    city: false,
+    state: false,
+  });
+  const pincodeInputRef = useRef<HTMLInputElement>(null);
+
   // Live pincode serviceability (delivery ETA + COD availability). Previewed
   // here; the server re-checks authoritatively at order create.
   const [svc, setSvc] = useState<Serviceability | null>(null);
@@ -228,14 +253,28 @@ export default function CheckoutPage() {
     // shown discount + total always match what the server will compute.
   }, [couponApplied, subtotal, payment]);
 
+  // Threshold (metres) below which we trust the browser's geolocation result
+  // enough to autofill an address. Real mobile GPS hardware delivers <30 m;
+  // desktop Wi-Fi / IP geolocation typically reports 2000-50000 m. Anything
+  // above this gate would just put a wrong address into the form.
+  const GEO_ACCURACY_THRESHOLD_M = 500;
+
+  /** Auto-focus the pincode field. Used as the fallback path whenever GPS
+   *  fails or returns a low-quality result — gives the buyer an obvious next
+   *  step instead of a vague error. */
+  function focusPincode() {
+    setTimeout(() => pincodeInputRef.current?.focus(), 0);
+  }
+
   async function useMyLocation() {
     setGeoError(null);
     setGeoStatus(null);
 
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       setGeoError(
-        "Your browser doesn't support location detection. Type your address below.",
+        "Your browser doesn't support location detection. Type your pincode below — we'll fill the rest.",
       );
+      focusPincode();
       return;
     }
 
@@ -251,12 +290,24 @@ export default function CheckoutPage() {
         });
       });
 
+      // Accuracy gate. The browser reports the radius (metres) within which
+      // it thinks the buyer is — on desktop without GPS hardware this is
+      // typically 2-50 km via Wi-Fi / IP. Refusing to autofill at this
+      // accuracy is strictly better than putting the wrong pincode in.
+      const accuracy = pos.coords.accuracy ?? Infinity;
+      if (accuracy > GEO_ACCURACY_THRESHOLD_M) {
+        const km = Math.round(accuracy / 1000);
+        throw new Error(
+          km >= 1
+            ? `Your device's location signal is ~${km} km off — too imprecise to autofill. Type your 6-digit pincode below; we'll fill city, state & area.`
+            : `Your location signal isn't precise enough. Type your 6-digit pincode below; we'll fill the rest.`,
+        );
+      }
+
       setGeoStatus("Looking up your address…");
       const { latitude: lat, longitude: lon } = pos.coords;
 
-      const r = await fetch(
-        `/api/geocode/reverse?lat=${lat}&lon=${lon}`,
-      );
+      const r = await fetch(`/api/geocode/reverse?lat=${lat}&lon=${lon}`);
       const data = (await r.json()) as {
         ok?: boolean;
         pincode?: string;
@@ -278,29 +329,33 @@ export default function CheckoutPage() {
         );
       }
 
-      // Only overwrite fields the buyer hasn't typed themselves yet.
-      if (data.line1 && !line1.trim()) setLine1(data.line1);
-      if (data.line2 && !line2.trim()) setLine2(data.line2);
-      if (data.city && !city.trim()) setCity(data.city);
-      if (data.state && !stateName.trim()) setStateName(data.state);
-      if (data.pincode && !pincode.trim()) setPincode(data.pincode);
+      // Autofill only into fields the buyer hasn't typed themselves. Anything
+      // we write here is marked as system-set (userTyped = false) so that a
+      // later pincode correction is allowed to refresh dependent fields.
+      const typed = userTypedRef.current;
+      if (data.pincode && !typed.pincode) setPincode(data.pincode);
+      if (data.line1 && !typed.line1) setLine1(data.line1);
+      if (data.line2 && !typed.line2) setLine2(data.line2);
+      if (data.city && !typed.city) setCity(data.city);
+      if (data.state && !typed.state) setStateName(data.state);
 
       setGeoStatus(
-        "Area auto-filled. Please add your flat / house / building no. above.",
+        "Address auto-filled. Add your flat / house / building no. on the first line.",
       );
     } catch (err: unknown) {
       const msg =
         err instanceof GeolocationPositionError
           ? err.code === 1
-            ? "Location permission denied. Type your address below."
+            ? "Location permission denied. Type your 6-digit pincode below."
             : err.code === 2
-              ? "Couldn't get your location signal. Try again or type your address."
-              : "Location timed out. Try again."
+              ? "Couldn't get your location signal. Type your pincode below — we'll fill city, state & area."
+              : "Location timed out. Type your pincode below — we'll fill city, state & area."
           : err instanceof Error
             ? err.message
             : String(err);
       setGeoError(msg);
       setGeoStatus(null);
+      focusPincode();
     } finally {
       setGeoBusy(false);
     }
@@ -461,10 +516,12 @@ export default function CheckoutPage() {
     };
   }, [pincode]);
 
-  // Pincode → city/state autofill (India Post API). Fires whenever the
-  // pincode hits 6 digits and only overwrites empty fields. This is the
-  // desktop-safe replacement for GPS, which on desktop falls back to wildly
-  // inaccurate IP geolocation. Buyers still see the GPS button on mobile.
+  // Pincode → city/state/area autofill (India Post API). The authoritative
+  // path on desktop where GPS is unreliable. Critically, this REPLACES values
+  // that we previously autofilled but PRESERVES anything the buyer has typed
+  // themselves — driven by userTypedRef. That makes the "buyer corrects a
+  // wrong GPS pincode" flow Just Work: the new pincode refreshes city/state/
+  // area, never clobbering hand-typed fields.
   useEffect(() => {
     if (pincode.length !== 6) return;
     let cancelled = false;
@@ -479,12 +536,10 @@ export default function CheckoutPage() {
           areas?: string[];
         };
         if (cancelled || !data.ok) return;
-        if (data.city && !city.trim()) setCity(data.city);
-        if (data.state && !stateName.trim()) setStateName(data.state);
-        // Only seed line2 with the first known area for this pincode if the
-        // buyer hasn't typed anything there yet — gives a courier-readable
-        // locality without overwriting a real address.
-        if (data.areas?.length && !line2.trim()) setLine2(data.areas[0]);
+        const typed = userTypedRef.current;
+        if (data.city && !typed.city) setCity(data.city);
+        if (data.state && !typed.state) setStateName(data.state);
+        if (data.areas?.length && !typed.line2) setLine2(data.areas[0]);
       } catch {
         /* silent — buyer can still type city/state manually */
       }
@@ -492,8 +547,6 @@ export default function CheckoutPage() {
     return () => {
       cancelled = true;
     };
-    // city/stateName/line2 intentionally excluded — we only react to pincode.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pincode]);
 
   function clearCoupon() {
@@ -785,25 +838,41 @@ export default function CheckoutPage() {
               Where should we ship?
             </h2>
 
-            {/* One-tap address autofill via Geolocation + reverse-geocode.
-                Same pattern as Swiggy / Zomato / Blinkit — buyer taps once,
-                we prefill pincode / city / state / line 1 and they just edit
-                the house number. Fields the buyer has already typed are
-                preserved. */}
-            <button
-              type="button"
-              onClick={useMyLocation}
-              disabled={geoBusy}
-              className="mt-4 w-full inline-flex items-center justify-center gap-2 rounded-lg border border-brand-line bg-brand-cream hover:border-brand-red hover:text-brand-red disabled:opacity-60 disabled:cursor-progress px-4 py-3 text-sm font-semibold text-brand-ink transition-colors"
-            >
-              <MapPin size={16} className="text-brand-red" aria-hidden />
-              {geoBusy ? "Detecting…" : "Use my current location"}
-            </button>
-            {geoStatus && !geoError && (
-              <p className="mt-2 text-xs text-success">{geoStatus}</p>
-            )}
-            {geoError && (
-              <p className="mt-2 text-xs text-brand-red">{geoError}</p>
+            {/* Address autofill paths:
+                  • Mobile / tablet — GPS button (accuracy-gated, refuses
+                    low-quality fixes).
+                  • Desktop — pincode field is the authoritative input. GPS on
+                    desktop falls back to IP geolocation which is 2-50 km off
+                    in India; showing the button there just produces wrong
+                    addresses and angry buyers.
+                Both paths converge on the same pincode → city/state/area
+                lookup via /api/geocode/pincode. */}
+            {isTouchDevice ? (
+              <>
+                <button
+                  type="button"
+                  onClick={useMyLocation}
+                  disabled={geoBusy}
+                  className="mt-4 w-full inline-flex items-center justify-center gap-2 rounded-lg border border-brand-line bg-brand-cream hover:border-brand-red hover:text-brand-red disabled:opacity-60 disabled:cursor-progress px-4 py-3 text-sm font-semibold text-brand-ink transition-colors"
+                >
+                  <MapPin size={16} className="text-brand-red" aria-hidden />
+                  {geoBusy ? "Detecting…" : "Use my current location"}
+                </button>
+                {geoStatus && !geoError && (
+                  <p className="mt-2 text-xs text-success">{geoStatus}</p>
+                )}
+                {geoError && (
+                  <p className="mt-2 text-xs text-brand-red">{geoError}</p>
+                )}
+              </>
+            ) : (
+              <p className="mt-4 text-xs text-brand-ink-soft inline-flex items-start gap-1.5">
+                <MapPin size={14} className="text-brand-red shrink-0 mt-0.5" aria-hidden />
+                <span>
+                  Tip: just type your 6-digit pincode below — city, state and
+                  area auto-fill. Location detection works on phones only.
+                </span>
+              </p>
             )}
 
             <div className="mt-4 space-y-3">
@@ -861,13 +930,15 @@ export default function CheckoutPage() {
               </div>
               <div>
                 <input
+                  ref={pincodeInputRef}
                   type="text"
                   inputMode="numeric"
                   placeholder="Pincode (6 digit)"
                   value={pincode}
-                  onChange={(e) =>
-                    setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))
-                  }
+                  onChange={(e) => {
+                    userTypedRef.current.pincode = true;
+                    setPincode(e.target.value.replace(/\D/g, "").slice(0, 6));
+                  }}
                   onBlur={() => markTouched("pincode")}
                   className={inputCls("pincode")}
                 />
@@ -903,7 +974,10 @@ export default function CheckoutPage() {
                   type="text"
                   placeholder="House / flat no, building, street"
                   value={line1}
-                  onChange={(e) => setLine1(e.target.value)}
+                  onChange={(e) => {
+                    userTypedRef.current.line1 = true;
+                    setLine1(e.target.value);
+                  }}
                   onBlur={() => markTouched("line1")}
                   className={inputCls("line1")}
                 />
@@ -915,7 +989,10 @@ export default function CheckoutPage() {
                 type="text"
                 placeholder="Area / landmark (optional)"
                 value={line2}
-                onChange={(e) => setLine2(e.target.value)}
+                onChange={(e) => {
+                  userTypedRef.current.line2 = true;
+                  setLine2(e.target.value);
+                }}
                 className="w-full px-4 py-3 rounded-lg border border-brand-line focus:outline-none focus:border-brand-red text-brand-ink"
               />
               <div className="grid grid-cols-2 gap-3">
@@ -924,7 +1001,10 @@ export default function CheckoutPage() {
                     type="text"
                     placeholder="City"
                     value={city}
-                    onChange={(e) => setCity(e.target.value)}
+                    onChange={(e) => {
+                      userTypedRef.current.city = true;
+                      setCity(e.target.value);
+                    }}
                     onBlur={() => markTouched("city")}
                     className={inputCls("city")}
                   />
@@ -937,7 +1017,10 @@ export default function CheckoutPage() {
                     type="text"
                     placeholder="State"
                     value={stateName}
-                    onChange={(e) => setStateName(e.target.value)}
+                    onChange={(e) => {
+                      userTypedRef.current.state = true;
+                      setStateName(e.target.value);
+                    }}
                     onBlur={() => markTouched("stateName")}
                     className={inputCls("stateName")}
                   />
