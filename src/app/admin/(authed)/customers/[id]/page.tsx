@@ -6,7 +6,6 @@ import { db } from "@/db";
 import { customers, orders } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
 import { formatINR } from "@/lib/utils";
-import { waLink } from "@/lib/config";
 
 type ShippingAddr = {
   fullName?: string;
@@ -126,7 +125,7 @@ export default async function AdminCustomerDetail({
           )}
           {customer.phone && (
             <a
-              href={waLink(customer.phone, "")}
+              href={`https://wa.me/91${customer.phone}`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 text-success hover:underline"

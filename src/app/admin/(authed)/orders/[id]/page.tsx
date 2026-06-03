@@ -9,6 +9,7 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { formatINR } from "@/lib/utils";
 import { waLink } from "@/lib/config";
 import { ShipButton } from "./ShipButton";
+import OrderActions from "./OrderActions";
 
 type OrderItem = {
   skuId: string;
@@ -270,6 +271,17 @@ export default async function AdminOrderDetail({
               />
             </dl>
           </div>
+
+          <OrderActions
+            orderId={order.id}
+            initialNotes={order.notes}
+            canRefund={
+              !!order.razorpayPaymentId &&
+              order.paymentStatus !== "REFUNDED" &&
+              order.status !== "REFUNDED"
+            }
+            refundAmountLabel={formatINR(order.totalInr)}
+          />
         </div>
       </div>
     </div>

@@ -60,7 +60,7 @@ export default async function AdminAnalytics() {
           and(
             gte(orders.placedAt, last30),
             inArray(orders.siteId, ctx.siteIds),
-            inArray(orders.status, PAID_STATUSES as unknown as string[]),
+            inArray(orders.status, [...PAID_STATUSES]),
           ),
         )
         .groupBy(sql`date_trunc('day', ${orders.placedAt})`)
@@ -82,7 +82,7 @@ export default async function AdminAnalytics() {
           and(
             gte(orders.placedAt, last30),
             inArray(orders.siteId, ctx.siteIds),
-            inArray(orders.status, PAID_STATUSES as unknown as string[]),
+            inArray(orders.status, [...PAID_STATUSES]),
           ),
         ),
       db
@@ -104,7 +104,7 @@ export default async function AdminAnalytics() {
           and(
             gte(orders.placedAt, last30),
             inArray(orders.siteId, ctx.siteIds),
-            inArray(orders.status, PAID_STATUSES as unknown as string[]),
+            inArray(orders.status, [...PAID_STATUSES]),
           ),
         )
         .then((rows) => rows[0]),

@@ -24,13 +24,6 @@ const FAILED_STATUSES = [
 
 type View = "live" | "pending" | "failed" | "all";
 
-function statusesForView(view: View): readonly string[] | null {
-  if (view === "live") return LIVE_STATUSES;
-  if (view === "pending") return PENDING_STATUSES;
-  if (view === "failed") return FAILED_STATUSES;
-  return null; // "all" → no filter
-}
-
 export default async function AdminOrdersList({
   searchParams,
 }: {
@@ -57,8 +50,6 @@ export default async function AdminOrdersList({
   const visibleSiteIds = params.site
     ? ctx.siteIds.filter((s) => s === params.site)
     : ctx.siteIds;
-
-  const viewStatuses = statusesForView(view);
 
   // Bucket counts come from a single grouped query, NOT three separate
   // SELECTs — same wall-clock, all four buttons accurate regardless of
@@ -90,9 +81,13 @@ export default async function AdminOrdersList({
   //           Drizzle has no first-class JSONB helper, so we use raw SQL via
   //           `sql` template — parameterised, no string interpolation.
   const conditions = [inArray(orders.siteId, visibleSiteIds)];
-  if (viewStatuses) {
-    conditions.push(inArray(orders.status, viewStatuses as unknown as string[]));
-  }
+  if (view === "live")
+    conditions.push(inArray(orders.status, [...LIVE_STATUSES]));
+  else if (view === "pending")
+    conditions.push(inArray(orders.status, [...PENDING_STATUSES]));
+  else if (view === "failed")
+    conditions.push(inArray(orders.status, [...FAILED_STATUSES]));
+  // view === "all" → no status filter
   if (q) {
     const like = `%${q}%`;
     conditions.push(

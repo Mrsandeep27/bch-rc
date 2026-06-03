@@ -93,7 +93,7 @@ export default async function AdminOverview() {
         and(
           gte(orders.placedAt, last7),
           inArray(orders.siteId, ctx.siteIds),
-          inArray(orders.status, PAID_STATUSES as unknown as string[]),
+          inArray(orders.status, [...PAID_STATUSES]),
         ),
       )
       .then((rows) => rows[0]),
@@ -127,7 +127,7 @@ export default async function AdminOverview() {
         and(
           gte(orders.placedAt, last30),
           inArray(orders.siteId, ctx.siteIds),
-          inArray(orders.status, PAID_STATUSES as unknown as string[]),
+          inArray(orders.status, [...PAID_STATUSES]),
         ),
       ),
     db
