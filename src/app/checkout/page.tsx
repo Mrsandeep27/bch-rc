@@ -54,6 +54,33 @@ function estimateDeliveryDate(pincode: string): string {
   });
 }
 
+/**
+ * Poll the public order endpoint until payment shows CAPTURED. The webhook
+ * captures the payment server-side even when our inline /verify call fails, so
+ * this lets us confirm success out-of-band. Resolves true once captured, or
+ * false after the timeout — either way the caller redirects the customer to
+ * their order so they are never left stranded after a successful payment.
+ */
+async function waitForCapture(
+  orderId: string,
+  attempts = 6,
+  delayMs = 2000,
+): Promise<boolean> {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const r = await fetch(`/api/orders/${orderId}`);
+      if (r.ok) {
+        const d = (await r.json()) as { paymentStatus?: string; status?: string };
+        if (d.paymentStatus === "CAPTURED" || d.status === "PAID") return true;
+      }
+    } catch {
+      /* keep polling — transient network error */
+    }
+    await new Promise((res) => setTimeout(res, delayMs));
+  }
+  return false;
+}
+
 type RazorpayOptions = {
   key: string;
   amount: number;
@@ -81,6 +108,7 @@ declare global {
 export default function CheckoutPage() {
   const router = useRouter();
   const items = useCart((s) => s.items);
+  const hasHydrated = useCart((s) => s.hasHydrated);
 
   const lines = getCartLines(items);
   const subtotal = getCartSubtotal(items);
@@ -97,6 +125,9 @@ export default function CheckoutPage() {
   const [payment, setPayment] = useState<PaymentMethod>("upi");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // True once Razorpay reports a successful payment and we're verifying /
+  // waiting for capture. Keeps the customer informed and blocks re-submits.
+  const [confirming, setConfirming] = useState(false);
 
   // Coupon UI state.
   const [couponCode, setCouponCode] = useState("");
@@ -115,12 +146,59 @@ export default function CheckoutPage() {
   // successful order so a fresh "Buy again" cycle starts a new key.
   const idempotencyKey = useMemo(() => nanoid(24), []);
   const submittingRef = useRef(false);
+  // Set the instant Razorpay confirms payment — stops the modal's ondismiss
+  // (which fires right after success) from re-enabling the button and allowing
+  // a duplicate submit / double charge.
+  const paidRef = useRef(false);
 
   useEffect(() => {
-    if (count === 0) {
+    // Wait for the persisted cart to rehydrate before treating it as empty —
+    // otherwise a returning customer with a saved cart gets bounced home.
+    if (hasHydrated && count === 0) {
       router.push("/");
     }
-  }, [count, router]);
+  }, [hasHydrated, count, router]);
+
+  // If an applied coupon's discount would now be invalid (e.g. user removed
+  // items and the new subtotal drops below the minimum), revalidate against
+  // the server. If still valid, refresh the discount amount; if not, clear
+  // the apply state so the customer doesn't see a misleading total.
+  useEffect(() => {
+    if (!couponApplied) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(
+          `/api/coupons/validate?code=${encodeURIComponent(couponApplied)}&siteId=prc&subtotalInr=${subtotal}&shippingInr=${subtotal >= OFFERS.freeShippingMinINR ? 0 : 85}`,
+        );
+        const data = (await r.json()) as {
+          ok: boolean;
+          code?: string;
+          discountInr?: number;
+          error?: string;
+        };
+        if (cancelled) return;
+        if (!data.ok) {
+          setCouponDiscountInr(0);
+          setCouponApplied(null);
+          setCouponMessage({
+            kind: "error",
+            text: `Coupon ${couponApplied} no longer valid: ${data.error ?? "rejected"}`,
+          });
+          return;
+        }
+        setCouponDiscountInr(data.discountInr ?? 0);
+      } catch {
+        // Network failure during revalidate — leave the existing discount in
+        // place; server-side validation at order create will be authoritative.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Re-runs when the cart subtotal OR the payment method changes, so the
+    // shown discount + total always match what the server will compute.
+  }, [couponApplied, subtotal, payment]);
 
   async function useMyLocation() {
     setGeoError(null);
@@ -327,6 +405,11 @@ export default function CheckoutPage() {
         },
         theme: { color: "#0A0A0A" },
         handler: async (response) => {
+          // Payment SUCCEEDED at Razorpay. From here the customer must never be
+          // stranded — if our verify call fails, the webhook still captures it.
+          paidRef.current = true;
+          setError(null);
+          setConfirming(true);
           try {
             const v = await fetch(`/api/orders/${data.orderId}/verify`, {
               method: "POST",
@@ -336,17 +419,27 @@ export default function CheckoutPage() {
                 razorpaySignature: response.razorpay_signature,
               }),
             });
-            const vData = await v.json();
+            const vData = await v.json().catch(() => ({}));
             if (!v.ok) throw new Error(vData.error || "Verification failed");
             useCart.getState().clear();
             router.push(`/orders/${data.orderId}`);
-          } catch (err) {
-            setError(String(err));
-            setLoading(false);
+          } catch {
+            // Verify failed (network/timeout) but the money was taken. Wait for
+            // the webhook to mark it captured, then take them to their order —
+            // never show a "failed" state for a payment that actually went through.
+            await waitForCapture(data.orderId);
+            useCart.getState().clear();
+            router.push(`/orders/${data.orderId}`);
+          } finally {
+            submittingRef.current = false;
           }
         },
         modal: {
           ondismiss: () => {
+            // Razorpay also fires ondismiss right after a successful payment —
+            // don't reset state in that case, or the customer could re-submit
+            // and get charged twice.
+            if (paidRef.current) return;
             submittingRef.current = false;
             setLoading(false);
           },
@@ -725,16 +818,27 @@ export default function CheckoutPage() {
           </div>
 
           <div className="sticky bottom-0 mt-6 -mx-4 px-4 py-3 bg-brand-cream/95 backdrop-blur lg:static lg:bg-transparent lg:mx-0 lg:px-0 lg:py-0">
-            {error && (
+            {confirming ? (
+              <div className="mb-3 rounded-lg border border-success bg-success/10 px-4 py-3 text-sm text-success">
+                Payment received — confirming your order… please don&apos;t close
+                this page.
+              </div>
+            ) : error ? (
               <div className="mb-3 rounded-lg border border-brand-red bg-brand-red-soft px-4 py-3 text-sm text-brand-red">
                 {error}
               </div>
-            )}
+            ) : null}
             <PayButton
-              label={loading ? "Placing order..." : ctaLabel}
+              label={
+                confirming
+                  ? "Payment received — confirming…"
+                  : loading
+                    ? "Placing order..."
+                    : ctaLabel
+              }
               onClick={handlePlaceOrder}
-              disabled={loading}
-              loading={loading}
+              disabled={loading || confirming}
+              loading={loading || confirming}
               className="w-full text-lg"
             />
             <p className="text-xs text-brand-ink-soft text-center mt-3">

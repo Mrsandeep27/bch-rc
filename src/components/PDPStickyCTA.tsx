@@ -19,10 +19,14 @@ export default function PDPStickyCTA({
   sku,
   selectedColorSlug,
   selectedColorName,
+  disabled = false,
 }: {
   sku: Sku;
   selectedColorSlug?: string | null;
   selectedColorName?: string;
+  /** Selected colour is sold out — block add/buy so we can't create an
+   *  impossible order from the sticky bar. */
+  disabled?: boolean;
 }) {
   const router = useRouter();
   const [visible, setVisible] = useState(false);
@@ -37,11 +41,13 @@ export default function PDPStickyCTA({
   const variantSlug = selectedColorSlug ?? defaultVariantSlug(sku);
 
   function buyNow() {
+    if (disabled) return;
     useCart.getState().add(sku.id, variantSlug, 1);
     router.push("/checkout");
   }
 
   function addToCart() {
+    if (disabled) return;
     useCart.getState().add(sku.id, variantSlug, 1);
     useCart.getState().open();
   }
@@ -94,7 +100,8 @@ export default function PDPStickyCTA({
           <button
             type="button"
             onClick={addToCart}
-            className="px-5 py-3 rounded-xl border-2 border-brand-ink text-brand-ink hover:bg-brand-ink hover:text-white font-semibold text-sm transition-colors inline-flex items-center gap-2"
+            disabled={disabled}
+            className="px-5 py-3 rounded-xl border-2 border-brand-ink text-brand-ink hover:bg-brand-ink hover:text-white font-semibold text-sm transition-colors inline-flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-brand-ink"
           >
             <ShoppingBag size={16} />
             Add to Cart
@@ -104,9 +111,10 @@ export default function PDPStickyCTA({
           <button
             type="button"
             onClick={buyNow}
-            className="px-6 py-3 rounded-xl bg-brand-red hover:bg-brand-red-hover text-white font-bold text-sm transition-colors"
+            disabled={disabled}
+            className="px-6 py-3 rounded-xl bg-brand-red hover:bg-brand-red-hover text-white font-bold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand-red"
           >
-            Buy Now · {formatINR(sku.retailINR)}
+            {disabled ? "Sold out" : `Buy Now · ${formatINR(sku.retailINR)}`}
           </button>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { ChevronLeft, ExternalLink, MessageCircle } from "lucide-react";
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -11,6 +12,7 @@ import { ShipButton } from "./ShipButton";
 
 type OrderItem = {
   skuId: string;
+  variantSlug: string | null;
   name: string;
   image: string | null;
   unitPriceInr: number;
@@ -83,25 +85,30 @@ export default async function AdminOrderDetail({
           <div className="bg-white rounded-2xl border border-brand-line p-5">
             <h2 className="font-semibold text-brand-ink mb-4">Items</h2>
             <ul className="space-y-3">
-              {items.map((item) => (
+              {items.map((item, idx) => (
                 <li
-                  key={item.skuId}
+                  key={`${item.skuId}-${item.variantSlug ?? "default"}-${idx}`}
                   className="flex items-center gap-3"
                 >
                   {item.image && (
-                    <img
-                      src={item.image}
-                      alt={item.name}
-                      className="w-14 h-14 rounded-lg object-cover border border-brand-line"
-                    />
+                    <div className="relative w-14 h-14 shrink-0 rounded-lg overflow-hidden border border-brand-line bg-brand-cream">
+                      <Image
+                        src={item.image}
+                        alt={item.name}
+                        fill
+                        sizes="56px"
+                        className="object-cover"
+                      />
+                    </div>
                   )}
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-brand-ink">
                       {item.name}
                     </div>
                     <div className="text-xs text-brand-ink-soft mt-0.5">
-                      SKU: {item.skuId} · Qty {item.qty} ·{" "}
-                      {formatINR(item.unitPriceInr)}
+                      SKU: {item.skuId}
+                      {item.variantSlug ? ` · Variant: ${item.variantSlug}` : ""}
+                      {" · Qty "}{item.qty} · {formatINR(item.unitPriceInr)}
                     </div>
                   </div>
                   <div className="font-semibold text-brand-ink tabular-nums">

@@ -103,9 +103,10 @@ export async function createShipmentForOrder(orderId: string): Promise<ShipmentR
       pincode: addr.pincode,
     },
     items: items.map((i) => ({
-      // Include the variant slug in the visible line name so the picker
-      // grabs the right colour off the shelf.
-      name: i.variantSlug ? `${i.name} (${i.variantSlug})` : i.name,
+      // The snapshot `name` already reads "Pocket BMW · Blue" — the order
+      // create handler resolves variant name into the line name. The
+      // picker-facing label is unambiguous without the slug suffix.
+      name: i.name,
       sku: i.variantSlug ? `${i.skuId}-${i.variantSlug}` : i.skuId,
       units: i.qty,
       selling_price: i.unitPriceInr,

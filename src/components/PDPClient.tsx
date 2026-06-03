@@ -5,7 +5,14 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Minus, Plus, ShoppingBag, Zap, Truck, Shield, RotateCw } from "lucide-react";
 import type { Sku } from "@/lib/products";
+import { defaultVariantSlug } from "@/lib/products";
 import { formatINR, calcDiscountPct, cn } from "@/lib/utils";
+
+// SKUs without color variants don't track per-unit stock — cap them at a sane
+// per-order quantity so the stepper still has an upper bound.
+const NO_VARIANT_MAX_QTY = 10;
+// Threshold under which we surface a "Only N left" scarcity nudge.
+const LOW_STOCK_THRESHOLD = 5;
 import { useCart } from "@/lib/cart-store";
 import { ProductPlaceholder } from "@/components/ProductPlaceholder";
 import PDPStickyCTA from "@/components/PDPStickyCTA";
@@ -55,11 +62,22 @@ export default function PDPClient({ sku }: { sku: Sku }) {
   const router = useRouter();
   const [qty, setQty] = useState(1);
   const [activeImage, setActiveImage] = useState(0);
+  // Default to the first IN-STOCK colour (not just the first colour) so the
+  // buyer doesn't land on a sold-out variant.
   const [selectedColorSlug, setSelectedColorSlug] = useState<string | null>(
-    sku.colors?.[0]?.slug ?? null
+    () => defaultVariantSlug(sku)
   );
   const selectedColor =
     sku.colors?.find((c) => c.slug === selectedColorSlug) ?? null;
+  const hasColors = !!sku.colors?.length;
+  // Out of stock = a colour SKU whose selected colour has no units (or, defensively,
+  // no colour resolved). Colour-less SKUs are always considered purchasable.
+  const outOfStock = hasColors ? (selectedColor?.stock ?? 0) <= 0 : false;
+  // Upper bound for the qty stepper: the selected colour's stock, or the
+  // per-order cap for colour-less SKUs.
+  const maxQty = hasColors
+    ? Math.max(1, selectedColor?.stock ?? 0)
+    : NO_VARIANT_MAX_QTY;
   const savings = sku.mrpINR - sku.retailINR;
   const pct = calcDiscountPct(sku.mrpINR, sku.retailINR);
   // Color-specific hero overrides the base hero; alt angles are shared across colors.
@@ -73,11 +91,14 @@ export default function PDPClient({ sku }: { sku: Sku }) {
   const activeSrc = gallery[activeImage] ?? heroSrc;
 
   function addToCart() {
-    useCart.getState().add(sku.id, selectedColorSlug, qty);
+    if (outOfStock) return;
+    // `add` opens the drawer itself.
+    useCart.getState().add(sku.id, selectedColorSlug, Math.min(qty, maxQty));
   }
 
   function buyNow() {
-    useCart.getState().add(sku.id, selectedColorSlug, qty);
+    if (outOfStock) return;
+    useCart.getState().add(sku.id, selectedColorSlug, Math.min(qty, maxQty));
     router.push("/checkout");
   }
 
@@ -167,30 +188,58 @@ export default function PDPClient({ sku }: { sku: Sku }) {
               {selectedColor && (
                 <span className="text-sm font-semibold text-brand-ink">
                   {selectedColor.name}
+                  {selectedColor.stock <= 0 ? (
+                    <span className="text-brand-red font-normal"> · Sold out</span>
+                  ) : selectedColor.stock <= LOW_STOCK_THRESHOLD ? (
+                    <span className="text-brand-red font-normal">
+                      {" "}
+                      · Only {selectedColor.stock} left
+                    </span>
+                  ) : null}
                 </span>
               )}
             </div>
             <div className="mt-2.5 flex flex-wrap gap-2">
               {sku.colors.map((c) => {
                 const active = c.slug === selectedColorSlug;
+                const soldOut = c.stock <= 0;
                 return (
                   <button
                     key={c.slug}
                     type="button"
+                    disabled={soldOut}
                     onClick={() => {
                       setSelectedColorSlug(c.slug);
                       setActiveImage(0);
+                      // Clamp the chosen qty to the new colour's stock.
+                      setQty((q) => Math.min(q, Math.max(1, c.stock)));
                     }}
-                    aria-label={c.name}
+                    aria-label={soldOut ? `${c.name} — sold out` : c.name}
                     aria-pressed={active}
+                    aria-disabled={soldOut}
+                    title={soldOut ? `${c.name} — sold out` : c.name}
                     className={cn(
-                      "w-11 h-11 sm:w-10 sm:h-10 rounded-full border-2 transition-all relative shrink-0",
+                      "w-11 h-11 sm:w-10 sm:h-10 rounded-full border-2 transition-all relative shrink-0 overflow-hidden",
                       active
                         ? "border-brand-ink ring-2 ring-offset-2 ring-brand-red"
-                        : "border-brand-line hover:border-brand-ink-soft active:scale-95"
+                        : "border-brand-line hover:border-brand-ink-soft active:scale-95",
+                      soldOut && "opacity-40 cursor-not-allowed hover:border-brand-line active:scale-100"
                     )}
                     style={{ background: swatchBg(c.swatch) }}
-                  />
+                  >
+                    {soldOut && (
+                      // Diagonal strike-through so a sold-out swatch reads as
+                      // unavailable even on similar colours.
+                      <span
+                        aria-hidden
+                        className="absolute inset-0 block"
+                        style={{
+                          background:
+                            "linear-gradient(to top right, transparent calc(50% - 1px), rgba(120,120,120,0.9) calc(50% - 1px), rgba(120,120,120,0.9) calc(50% + 1px), transparent calc(50% + 1px))",
+                        }}
+                      />
+                    )}
+                  </button>
                 );
               })}
             </div>
@@ -223,8 +272,9 @@ export default function PDPClient({ sku }: { sku: Sku }) {
             </span>
             <button
               type="button"
-              onClick={() => setQty(qty + 1)}
-              className="w-11 h-11 flex items-center justify-center text-brand-ink-soft hover:text-brand-ink"
+              onClick={() => setQty((q) => Math.min(maxQty, q + 1))}
+              disabled={qty >= maxQty}
+              className="w-11 h-11 flex items-center justify-center text-brand-ink-soft hover:text-brand-ink disabled:opacity-40 disabled:cursor-not-allowed"
               aria-label="Increase quantity"
             >
               <Plus size={16} />
@@ -233,7 +283,8 @@ export default function PDPClient({ sku }: { sku: Sku }) {
           <button
             type="button"
             onClick={addToCart}
-            className="flex-1 bg-white border-2 border-brand-ink text-brand-ink hover:bg-brand-ink hover:text-white px-5 py-3 rounded-xl font-semibold text-sm transition-colors inline-flex items-center justify-center gap-2"
+            disabled={outOfStock}
+            className="flex-1 bg-white border-2 border-brand-ink text-brand-ink hover:bg-brand-ink hover:text-white px-5 py-3 rounded-xl font-semibold text-sm transition-colors inline-flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-brand-ink"
           >
             <ShoppingBag size={16} />
             Add to Cart
@@ -242,9 +293,10 @@ export default function PDPClient({ sku }: { sku: Sku }) {
         <button
           type="button"
           onClick={buyNow}
-          className="mt-3 w-full bg-brand-red hover:bg-brand-red-hover text-white py-4 rounded-xl font-bold text-base transition-colors"
+          disabled={outOfStock}
+          className="mt-3 w-full bg-brand-red hover:bg-brand-red-hover text-white py-4 rounded-xl font-bold text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand-red"
         >
-          Buy Now · {formatINR(sku.retailINR * qty)}
+          {outOfStock ? "Sold out" : `Buy Now · ${formatINR(sku.retailINR * qty)}`}
         </button>
 
         {/* Bundle upsell at the decision moment — directly below Buy Now */}
@@ -322,6 +374,7 @@ export default function PDPClient({ sku }: { sku: Sku }) {
       sku={sku}
       selectedColorSlug={selectedColorSlug}
       selectedColorName={selectedColor?.name}
+      disabled={outOfStock}
     />
     </>
   );

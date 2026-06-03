@@ -15,6 +15,11 @@ export type CartItem = {
 type CartState = {
   items: CartItem[];
   isOpen: boolean;
+  /** True once zustand has rehydrated from localStorage on the client. Stays
+   *  false during SSR + first client render so cart-derived UI (badge, count,
+   *  empty-cart redirect) doesn't flash or mismatch before the saved cart loads. */
+  hasHydrated: boolean;
+  setHasHydrated: (v: boolean) => void;
   add: (skuId: string, variantSlug: string | null, qty?: number) => void;
   remove: (skuId: string, variantSlug: string | null) => void;
   setQty: (skuId: string, variantSlug: string | null, qty: number) => void;
@@ -33,6 +38,8 @@ export const useCart = create<CartState>()(
     (set) => ({
       items: [],
       isOpen: false,
+      hasHydrated: false,
+      setHasHydrated: (v) => set({ hasHydrated: v }),
       add: (skuId, variantSlug, qty = 1) =>
         set((s) => {
           const existing = s.items.find((i) => sameLine(i, skuId, variantSlug));
@@ -78,6 +85,11 @@ export const useCart = create<CartState>()(
           return { items: [], isOpen: false } as Partial<CartState>;
         }
         return _state as Partial<CartState>;
+      },
+      // Fires after rehydration (even when there's nothing stored) — flip the
+      // flag so the UI knows the real cart is now loaded.
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
       },
     },
   ),

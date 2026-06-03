@@ -15,6 +15,13 @@
       "when": 1780503600000,
       "tag": "0001_launch_blockers",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780507200000,
+      "tag": "0002_atomic_stock",
+      "breakpoints": true
     }
   ]
 }

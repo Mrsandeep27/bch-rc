@@ -19,6 +19,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -347,6 +348,34 @@ export const orders = pgTable(
 );
 
 // ============================================================
+// 8a. INVENTORY — atomic stock per (site_id, sku_id, variant_slug)
+// ============================================================
+// Order create runs:
+//   UPDATE inventory SET stock = stock - $qty
+//   WHERE site_id = $s AND sku_id = $k AND variant_slug = $v AND stock >= $qty
+//   RETURNING stock;
+// Zero rows back → reject (cannot oversell). Empty variantSlug = "" for SKUs
+// without colour variants. Concurrency safe under Postgres' default isolation.
+
+export const inventory = pgTable(
+  "inventory",
+  {
+    siteId: text("site_id")
+      .notNull()
+      .references(() => sites.id),
+    skuId: text("sku_id").notNull(),
+    variantSlug: text("variant_slug").notNull().default(""),
+    stock: integer("stock").notNull().default(0),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("inventory_site_sku_idx").on(t.siteId, t.skuId),
+  ],
+);
+
+// ============================================================
 // 8b. NOTIFICATIONS OUTBOX — order/payment/shipment emails
 // ============================================================
 
@@ -407,6 +436,34 @@ export const coupons = pgTable(
       .defaultNow(),
   },
   (t) => [unique("coupons_site_code_unique").on(t.siteId, t.code)],
+);
+
+// ============================================================
+// 9a. CUSTOMER COUPON REDEMPTIONS — per-customer-limit enforcement
+// ============================================================
+// Append-only ledger. Row inserted inside the order transaction so the
+// per-customer count is consistent with the order it grants discount on.
+
+export const customerCouponRedemptions = pgTable(
+  "customer_coupon_redemptions",
+  {
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id),
+    couponId: uuid("coupon_id")
+      .notNull()
+      .references(() => coupons.id),
+    orderId: text("order_id")
+      .notNull()
+      .references(() => orders.id),
+    discountInr: integer("discount_inr").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("customer_coupon_lookup_idx").on(t.customerId, t.couponId),
+  ],
 );
 
 // ============================================================
@@ -503,3 +560,7 @@ export type WebhookInbound = typeof webhooksInbound.$inferSelect;
 export type AdminRow = typeof admins.$inferSelect;
 export type NotificationRow = typeof notificationsOutbox.$inferSelect;
 export type NewNotification = typeof notificationsOutbox.$inferInsert;
+export type InventoryRow = typeof inventory.$inferSelect;
+export type NewInventory = typeof inventory.$inferInsert;
+export type CustomerCouponRedemption = typeof customerCouponRedemptions.$inferSelect;
+export type NewCustomerCouponRedemption = typeof customerCouponRedemptions.$inferInsert;

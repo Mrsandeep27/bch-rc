@@ -20,7 +20,10 @@ const NAV_LINKS = [
 export default function Header() {
   const items = useCart((s) => s.items);
   const openCart = useCart((s) => s.open);
-  const cartCount = getCartCount(items);
+  const hasHydrated = useCart((s) => s.hasHydrated);
+  // Only trust the count once the persisted cart has rehydrated — keeps the
+  // server-rendered markup (no badge) identical to the first client render.
+  const cartCount = hasHydrated ? getCartCount(items) : 0;
   const pathname = usePathname();
   // Only the home page has a dark full-bleed hero behind the header.
   // Everywhere else (PDP, checkout, policy pages), keep the solid-bg style

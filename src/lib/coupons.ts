@@ -2,18 +2,25 @@
  * Server-only coupon validator. Single source of truth for both the preview
  * route (/api/coupons/validate) and the order-create transactional redemption.
  *
- * `validateCoupon` is a read-only check used at the preview/cart step.
- * `redeemCoupon` is an atomic UPDATE that increments used_count only if all
- * gates pass; pass `tx` to participate in the order creation transaction so
- * a coupon and its order are committed together.
+ * `validateCoupon` — read-only preview (no perCustomerLimit check; caller
+ * passes customerId if known to gate this).
+ *
+ * `redeemCoupon` — atomic redemption inside a Drizzle transaction:
+ *   1. UPDATE coupons SET used_count = used_count + 1 WHERE <every gate>
+ *      RETURNING — zero rows means another concurrent redemption won.
+ *   2. Lock the customer row, count existing redemptions of this coupon
+ *      by this customer, reject if perCustomerLimit exceeded.
+ *   3. INSERT into customer_coupon_redemptions ledger.
+ * Any failure throws CouponError and rolls back the whole order transaction.
  */
 
 import { and, eq, gt, isNull, or, sql } from "drizzle-orm";
 import type { PgTransaction } from "drizzle-orm/pg-core";
 import { db } from "@/db";
-import { coupons } from "@/db/schema";
+import { coupons, customerCouponRedemptions, customers } from "@/db/schema";
 
 export type CouponDiscount = {
+  couponId: string;
   code: string;
   type: "FLAT_INR" | "PERCENT" | "FREE_SHIPPING";
   discountInr: number;
@@ -50,6 +57,9 @@ export async function validateCoupon(input: {
   siteId: string;
   subtotalInr: number;
   shippingInr: number;
+  /** If present, also reject when this customer has already redeemed the
+   *  coupon as many times as perCustomerLimit allows. */
+  customerId?: string | null;
 }): Promise<CouponDiscount> {
   const code = input.code.trim().toUpperCase();
   if (!code) throw new CouponError("Enter a coupon code");
@@ -77,6 +87,22 @@ export async function validateCoupon(input: {
     throw new CouponError("Coupon fully redeemed");
   }
 
+  // Per-customer limit — only enforce when we know the customer.
+  if (input.customerId && c.perCustomerLimit != null) {
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(customerCouponRedemptions)
+      .where(
+        and(
+          eq(customerCouponRedemptions.customerId, input.customerId),
+          eq(customerCouponRedemptions.couponId, c.id),
+        ),
+      );
+    if (count >= c.perCustomerLimit) {
+      throw new CouponError("You've already used this coupon");
+    }
+  }
+
   const discountInr = applyValue(
     c.type,
     c.value,
@@ -89,22 +115,24 @@ export async function validateCoupon(input: {
     throw new CouponError("Coupon yields no discount on this order");
   }
 
-  return { code: c.code, type: c.type, discountInr };
+  return { couponId: c.id, code: c.code, type: c.type, discountInr };
 }
 
 /**
- * Atomic redemption. Increments used_count ONLY if the coupon still passes
- * every gate (race-safe against parallel redemptions of a capped coupon).
+ * Atomic redemption. Bumps used_count + writes the per-customer ledger row,
+ * race-safe under concurrent redemptions of the same coupon by the same
+ * customer (the customer row is SELECT … FOR UPDATE locked, serialising
+ * concurrent transactions over the same customer).
  *
- * Returns the discount applied. Throws CouponError on any gate failure.
- *
- * Designed to be called inside a Drizzle transaction so a failed redemption
- * rolls back the order insert too.
+ * Throws CouponError on every rejection path. Designed to be called inside
+ * the order-create transaction so a failed redemption rolls back the order.
  */
 export async function redeemCoupon(input: {
   tx: PgTransaction<any, any, any> | typeof db;
   code: string;
   siteId: string;
+  customerId: string;
+  orderId: string;
   subtotalInr: number;
   shippingInr: number;
 }): Promise<CouponDiscount> {
@@ -112,9 +140,7 @@ export async function redeemCoupon(input: {
   const code = input.code.trim().toUpperCase();
   if (!code) throw new CouponError("Enter a coupon code");
 
-  // Atomic UPDATE: bumps used_count only if every gate holds. We use the
-  // RETURNING clause to read the row that just incremented; zero rows back
-  // means the coupon was rejected (and we know why via a follow-up read).
+  // 1. Atomic used_count++ under every aggregate gate.
   const updated = await tx
     .update(coupons)
     .set({ usedCount: sql`${coupons.usedCount} + 1` })
@@ -135,18 +161,44 @@ export async function redeemCoupon(input: {
     .returning();
 
   if (updated.length === 0) {
-    // Fallback read to produce a precise error.
-    await validateCoupon({
-      code,
-      siteId: input.siteId,
-      subtotalInr: input.subtotalInr,
-      shippingInr: input.shippingInr,
-    });
-    // If validateCoupon DIDN'T throw, the row was redeemed by a concurrent request.
-    throw new CouponError("Coupon fully redeemed");
+    // Re-read for a precise error message. If the row genuinely passes today
+    // but our UPDATE lost the count race, surface a generic retry message.
+    try {
+      await validateCoupon({
+        code,
+        siteId: input.siteId,
+        subtotalInr: input.subtotalInr,
+        shippingInr: input.shippingInr,
+      });
+    } catch (err) {
+      if (err instanceof CouponError) throw err;
+      throw err;
+    }
+    throw new CouponError("Coupon redemption failed — try again");
   }
 
   const c = updated[0];
+
+  // 2. Per-customer limit — lock the customer row so concurrent transactions
+  //    can't both pass the count check.
+  if (c.perCustomerLimit != null) {
+    await tx.execute(
+      sql`SELECT id FROM customers WHERE id = ${input.customerId} FOR UPDATE`,
+    );
+    const [{ count }] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(customerCouponRedemptions)
+      .where(
+        and(
+          eq(customerCouponRedemptions.customerId, input.customerId),
+          eq(customerCouponRedemptions.couponId, c.id),
+        ),
+      );
+    if (count >= c.perCustomerLimit) {
+      throw new CouponError("You've already used this coupon");
+    }
+  }
+
   const discountInr = applyValue(
     c.type,
     c.value,
@@ -155,5 +207,17 @@ export async function redeemCoupon(input: {
     c.maxDiscountInr,
   );
 
-  return { code: c.code, type: c.type, discountInr };
+  // 3. Append-only ledger row — links discount to a specific order.
+  await tx.insert(customerCouponRedemptions).values({
+    customerId: input.customerId,
+    couponId: c.id,
+    orderId: input.orderId,
+    discountInr,
+  });
+
+  return { couponId: c.id, code: c.code, type: c.type, discountInr };
 }
+
+// `customers` import is used inside the SQL FOR UPDATE — re-export it as a
+// no-op to make TypeScript treat the import as used.
+export type _CustomersRef = typeof customers;

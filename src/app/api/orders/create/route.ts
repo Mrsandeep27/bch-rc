@@ -19,15 +19,21 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
-import { customers, addresses, orders, events } from "@/db/schema";
-import { sql, eq } from "drizzle-orm";
+import {
+  customers,
+  addresses,
+  orders,
+  events,
+  inventory,
+  notificationsOutbox,
+} from "@/db/schema";
+import { sql, eq, and } from "drizzle-orm";
 import { PRODUCTS } from "@/lib/products";
 import { OFFERS } from "@/lib/config";
 import { razorpay } from "@/lib/razorpay";
 import { generateOrderId } from "@/lib/order-id";
 import { redeemCoupon, CouponError } from "@/lib/coupons";
 import { triggerShipmentBackground } from "@/lib/fulfillment/create-shipment";
-import { enqueueNotification } from "@/lib/notifications/enqueue";
 import { sendOutboxRow } from "@/lib/notifications/drain";
 import { logError } from "@/lib/logger";
 
@@ -101,11 +107,42 @@ export async function POST(req: Request) {
         replayed: true,
       });
     }
+    // Idempotency recovery: prior attempt persisted the order row but the
+    // Razorpay API call failed (or hadn't run yet). Create the Razorpay
+    // order now, persist, and return a usable payload. Without this, the
+    // client opens Razorpay with order_id=null and the customer is stuck.
+    let razorpayOrderId = o.razorpayOrderId;
+    if (!razorpayOrderId) {
+      try {
+        const rzpOrder = await razorpay.orders.create({
+          amount: o.totalInr * 100,
+          currency: "INR",
+          receipt: o.id,
+          notes: {
+            site: o.siteId,
+            customerId: o.customerId,
+            phone: (o.shippingAddress as { phone: string }).phone,
+            recoveredFor: "idempotency-replay",
+          },
+        });
+        razorpayOrderId = rzpOrder.id;
+        await db
+          .update(orders)
+          .set({ razorpayOrderId, updatedAt: new Date() })
+          .where(eq(orders.id, o.id));
+      } catch (err) {
+        logError("order:create:replay-razorpay", err, { orderId: o.id });
+        return NextResponse.json(
+          { error: "Payment provider unavailable — try COD or retry in a minute." },
+          { status: 503 },
+        );
+      }
+    }
     return NextResponse.json({
       ok: true,
       orderId: o.id,
       paymentMethod: o.paymentMethod,
-      razorpayOrderId: o.razorpayOrderId,
+      razorpayOrderId,
       razorpayKeyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
       amountInr: o.totalInr,
       customerName: (o.shippingAddress as { fullName: string }).fullName,
@@ -186,8 +223,11 @@ export async function POST(req: Request) {
   const prepaidDiscount =
     body.paymentMethod !== "COD" ? OFFERS.prepaidDiscountINR : 0;
 
-  // ── 3. Open transaction: coupon redemption, customer upsert, address
-  //       insert, order insert. All-or-nothing.
+  // ── 3. Open transaction: atomic stock decrement, customer upsert, coupon
+  //       redemption (with customerId for per-customer limit), address insert,
+  //       order insert, event insert, notification outbox insert.
+  //       All-or-nothing. Stock decrement is the FIRST mutation so an
+  //       overselling attempt fails fast without touching customer data.
   let orderId = generateOrderId("PRC");
   let attempts = 0;
   type TxnResult = {
@@ -199,6 +239,7 @@ export async function POST(req: Request) {
     couponDiscountInr: number;
     appliedCouponCode: string | null;
     total: number;
+    notificationId: string | null;
   };
 
   let txnResult: TxnResult | null = null;
@@ -206,33 +247,58 @@ export async function POST(req: Request) {
   while (attempts < 3 && !txnResult) {
     try {
       txnResult = await db.transaction(async (tx) => {
-        let couponDiscountInr = 0;
-        let appliedCouponCode: string | null = null;
-        if (body.couponCode && body.couponCode.trim()) {
-          try {
-            const result = await redeemCoupon({
-              tx,
-              code: body.couponCode,
-              siteId: body.siteId,
-              subtotalInr: subtotal,
-              shippingInr: shipping,
-            });
-            couponDiscountInr = result.discountInr;
-            appliedCouponCode = result.code;
-          } catch (err) {
-            if (err instanceof CouponError) {
-              throw new Error(`COUPON:${err.reason}`);
+        // 3a. Atomic stock decrement. UPDATE returns the new stock row only
+        //     when the gate (`stock >= $qty`) holds. Zero rows back → reject.
+        //     Empty variantSlug ("") is the row for colourless SKUs.
+        for (const item of body.items) {
+          const variantKey = item.variantSlug ?? "";
+          const sku = PRODUCTS.find((p) => p.id === item.skuId);
+          if (!sku) continue; // already validated above
+          const decremented = await tx
+            .update(inventory)
+            .set({ stock: sql`${inventory.stock} - ${item.qty}`, updatedAt: new Date() })
+            .where(
+              and(
+                eq(inventory.siteId, body.siteId),
+                eq(inventory.skuId, item.skuId),
+                eq(inventory.variantSlug, variantKey),
+                sql`${inventory.stock} >= ${item.qty}`,
+              ),
+            )
+            .returning({ stock: inventory.stock });
+
+          if (decremented.length === 0) {
+            // Inventory row doesn't exist OR stock was insufficient. Look up
+            // current stock to disambiguate in the error message.
+            const current = await tx
+              .select({ stock: inventory.stock })
+              .from(inventory)
+              .where(
+                and(
+                  eq(inventory.siteId, body.siteId),
+                  eq(inventory.skuId, item.skuId),
+                  eq(inventory.variantSlug, variantKey),
+                ),
+              );
+            if (current.length === 0) {
+              throw new Error(
+                `STOCK:Inventory not configured for ${sku.name}${variantKey ? ` (${variantKey})` : ""}`,
+              );
             }
-            throw err;
+            const available = current[0].stock;
+            if (available <= 0) {
+              throw new Error(
+                `STOCK:${sku.name}${variantKey ? ` (${variantKey})` : ""} is sold out`,
+              );
+            }
+            throw new Error(
+              `STOCK:Only ${available} ${sku.name}${variantKey ? ` (${variantKey})` : ""} left — reduce qty`,
+            );
           }
         }
 
-        const totalBeforeCoupon = subtotal + shipping + codFee - prepaidDiscount;
-        const total = Math.max(0, totalBeforeCoupon - couponDiscountInr);
-        if (total <= 0) {
-          throw new Error("BODY:Invalid total");
-        }
-
+        // 3b. UPSERT customer by phone. Needed before coupon redemption so
+        //     the per-customer limit check has a customer id to count against.
         const [customer] = await tx
           .insert(customers)
           .values({
@@ -251,16 +317,14 @@ export async function POST(req: Request) {
           })
           .returning();
 
-        await tx.insert(addresses).values({
-          customerId: customer.id,
-          fullName: body.address.fullName,
-          phone: body.address.phone,
-          line1: body.address.line1,
-          line2: body.address.line2 || null,
-          city: body.address.city,
-          state: body.address.state,
-          pincode: body.address.pincode,
-        });
+        // 3c. INSERT the order row early with PENDING totals. We need the
+        //     order id present in the DB before redeemCoupon (the ledger row
+        //     FK-references orders.id) — but we don't know the final total
+        //     yet. We'll UPDATE it after coupon redemption resolves.
+        const totalBeforeCoupon = subtotal + shipping + codFee - prepaidDiscount;
+        if (totalBeforeCoupon <= 0) {
+          throw new Error("BODY:Invalid total");
+        }
 
         await tx.insert(orders).values({
           id: orderId,
@@ -273,11 +337,64 @@ export async function POST(req: Request) {
           subtotalInr: subtotal,
           shippingInr: shipping,
           codFeeInr: codFee,
-          discountInr: prepaidDiscount + couponDiscountInr,
-          totalInr: total,
-          couponCode: appliedCouponCode,
+          discountInr: prepaidDiscount,
+          totalInr: totalBeforeCoupon,
+          couponCode: null,
           paymentMethod: body.paymentMethod,
           paymentStatus: "PENDING",
+        });
+
+        // 3d. Coupon — atomic redeem + per-customer-limit guard + ledger.
+        let couponDiscountInr = 0;
+        let appliedCouponCode: string | null = null;
+        if (body.couponCode && body.couponCode.trim()) {
+          try {
+            const result = await redeemCoupon({
+              tx,
+              code: body.couponCode,
+              siteId: body.siteId,
+              customerId: customer.id,
+              orderId,
+              subtotalInr: subtotal,
+              shippingInr: shipping,
+            });
+            couponDiscountInr = result.discountInr;
+            appliedCouponCode = result.code;
+          } catch (err) {
+            if (err instanceof CouponError) {
+              throw new Error(`COUPON:${err.reason}`);
+            }
+            throw err;
+          }
+        }
+
+        const total = Math.max(0, totalBeforeCoupon - couponDiscountInr);
+        if (total <= 0) {
+          throw new Error("BODY:Invalid total");
+        }
+
+        // 3e. Apply the coupon discount onto the order row.
+        if (couponDiscountInr > 0) {
+          await tx
+            .update(orders)
+            .set({
+              discountInr: prepaidDiscount + couponDiscountInr,
+              totalInr: total,
+              couponCode: appliedCouponCode,
+              updatedAt: new Date(),
+            })
+            .where(eq(orders.id, orderId));
+        }
+
+        await tx.insert(addresses).values({
+          customerId: customer.id,
+          fullName: body.address.fullName,
+          phone: body.address.phone,
+          line1: body.address.line1,
+          line2: body.address.line2 || null,
+          city: body.address.city,
+          state: body.address.state,
+          pincode: body.address.pincode,
         });
 
         await tx.insert(events).values({
@@ -295,6 +412,38 @@ export async function POST(req: Request) {
           source: "user",
         });
 
+        // 3f. Enqueue ORDER_CONFIRMED notification ONLY for COD inside the
+        //     transaction. Prepaid email fires from the verify route on
+        //     successful capture. Outbox row is committed with the order so
+        //     a crash after this point can never leave a confirmed order
+        //     without a queued notification.
+        let notificationId: string | null = null;
+        if (body.paymentMethod === "COD") {
+          const [n] = await tx
+            .insert(notificationsOutbox)
+            .values({
+              siteId: body.siteId,
+              orderId,
+              customerId: customer.id,
+              channel: "email",
+              template: "ORDER_CONFIRMED",
+              payload: {
+                to: body.address.email,
+                customerName: body.address.fullName,
+                orderId,
+                totalInr: total,
+                paymentMethod: "COD",
+                items: lineItems.map((i) => ({
+                  name: i.name,
+                  qty: i.qty,
+                  lineTotalInr: i.lineTotalInr,
+                })),
+              },
+            })
+            .returning({ id: notificationsOutbox.id });
+          notificationId = n.id;
+        }
+
         return {
           orderId,
           customerId: customer.id,
@@ -304,6 +453,7 @@ export async function POST(req: Request) {
           couponDiscountInr,
           appliedCouponCode,
           total,
+          notificationId,
         };
       });
     } catch (err) {
@@ -349,6 +499,12 @@ export async function POST(req: Request) {
         return NextResponse.json(
           { error: message.slice(7) },
           { status: 400 },
+        );
+      }
+      if (message.startsWith("STOCK:")) {
+        return NextResponse.json(
+          { error: message.slice(6) },
+          { status: 409 },
         );
       }
       if (message.startsWith("BODY:")) {
@@ -439,30 +595,13 @@ export async function POST(req: Request) {
     source: "user",
   });
 
-  try {
-    const notificationId = await enqueueNotification({
-      siteId: body.siteId,
-      orderId,
-      customerId,
-      channel: "email",
-      template: "ORDER_CONFIRMED",
-      payload: {
-        to: customerEmail,
-        customerName,
-        orderId,
-        totalInr: total,
-        paymentMethod: "COD",
-        items: lineItems.map((i) => ({
-          name: i.name,
-          qty: i.qty,
-          lineTotalInr: i.lineTotalInr,
-        })),
-      },
-    });
-    // Best-effort inline send — instant happy path, no cron lag.
-    sendOutboxRow(notificationId).catch(() => {});
-  } catch (err) {
-    logError("order:create:enqueue-email", err, { orderId });
+  // Outbox row was inserted INSIDE the order transaction (durable). Best-
+  // effort inline send for instant delivery on the happy path; the daily
+  // sync-shipments cron drains anything that didn't send.
+  if (txnResult.notificationId) {
+    sendOutboxRow(txnResult.notificationId).catch((err) =>
+      logError("order:create:inline-send", err, { orderId }),
+    );
   }
 
   // Fire-and-forget in-process shipment creation. NOT an HTTP round-trip.

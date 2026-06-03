@@ -1,3 +1,5 @@
+import { logError } from "@/lib/logger";
+
 /**
  * Shiprocket helper — token cache + order/shipment creation + AWB assignment.
  *
@@ -202,9 +204,13 @@ export async function createShipment(input: CreateShipmentInput): Promise<{
       awbCode = awbResp.response?.data?.awb_code ?? null;
       courierName = awbResp.response?.data?.courier_name ?? null;
     } catch (err) {
-      // Surfacing the error so the caller can log it. Order is still
-      // created on Shiprocket's side; admin can retry AWB assignment manually.
-      console.error("AWB assignment failed", err);
+      // Order is still created on Shiprocket's side; admin can retry AWB
+      // assignment manually. Use the typed logger so the raw err object
+      // (which may echo back our auth token in its response body) never
+      // reaches Vercel logs.
+      logError("shiprocket:awb-assign", err, {
+        shipmentId: String(order.shipment_id ?? ""),
+      });
     }
   }
 
