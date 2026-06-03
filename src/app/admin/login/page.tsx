@@ -18,6 +18,17 @@ export default function AdminLogin() {
     e.preventDefault();
     setError(null);
     setLoading(true);
+
+    // Hard ceiling on the request. Without this the UI can sit on
+    // "Signing in…" forever if Vercel cold-starts past the function timeout,
+    // Supabase Auth stalls, or any intermediate hop drops the connection.
+    // 15 s is comfortably above worst-case cold-start (~3-5 s) + a single
+    // Supabase round-trip from Mumbai (<100 ms), so a normal sign-in will
+    // never trip it, but a true hang now surfaces an actionable error
+    // instead of a stuck button.
+    const ac = new AbortController();
+    const timeoutId = setTimeout(() => ac.abort(), 15_000);
+
     try {
       const res = await fetch("/api/admin/signin", {
         method: "POST",
@@ -26,6 +37,7 @@ export default function AdminLogin() {
           email: email.trim().toLowerCase(),
           password,
         }),
+        signal: ac.signal,
       });
       const data = await res.json();
       if (!res.ok) {
@@ -42,8 +54,18 @@ export default function AdminLogin() {
       router.push("/admin");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      // AbortError fires from our own timeout — translate it to a friendly
+      // retryable message instead of "The user aborted a request."
+      const msg =
+        err instanceof DOMException && err.name === "AbortError"
+          ? "Sign-in is taking longer than expected. Tap Sign in to retry."
+          : err instanceof Error
+            ? err.message
+            : String(err);
+      setError(msg);
       setLoading(false);
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
