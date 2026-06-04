@@ -44,6 +44,17 @@ export default async function AdminOverview() {
   const last30 = new Date(today);
   last30.setDate(last30.getDate() - 30);
 
+  // IMPORTANT: interpolate ISO strings, NOT Date objects, into the sql``
+  // templates below. Drizzle's postgres-js driver cannot bind a raw Date inside
+  // a sql`` fragment — it throws "The string argument must be of type string …
+  // Received an instance of Date". That throw was being swallowed by the
+  // per-query .catch(() => null) fallbacks, silently zeroing every order/revenue
+  // card on the dashboard while the (Date-free) customer + low-stock queries
+  // kept working. Postgres casts these ISO strings to timestamptz correctly.
+  const todayIso = today.toISOString();
+  const last7Iso = last7.toISOString();
+  const last30Iso = last30.toISOString();
+
   // Five fully type-safe queries via db.select() with sql column expressions.
   // FILTER aggregates fold what used to be separate queries into single
   // column expressions, so we issue 5 queries (orderAgg, customerAgg,
@@ -57,12 +68,12 @@ export default async function AdminOverview() {
   // matches postgres-js's actual return shape.
   const orderAggP = db
     .select({
-      todayCount: sql<number>`count(*) filter (where ${orders.placedAt} >= ${today})::int`,
-      todayRevenue: sql<number>`coalesce(sum(${orders.totalInr}) filter (where ${orders.placedAt} >= ${today}), 0)::int`,
-      weekCount: sql<number>`count(*) filter (where ${orders.placedAt} >= ${last7})::int`,
-      weekRevenue: sql<number>`coalesce(sum(${orders.totalInr}) filter (where ${orders.placedAt} >= ${last7}), 0)::int`,
-      weekPaidCount: sql<number>`count(*) filter (where ${orders.placedAt} >= ${last7} and ${orders.status} in ('PAID','PACKED','SHIPPED','DELIVERED'))::int`,
-      weekPaidRevenue: sql<number>`coalesce(sum(${orders.totalInr}) filter (where ${orders.placedAt} >= ${last7} and ${orders.status} in ('PAID','PACKED','SHIPPED','DELIVERED')), 0)::int`,
+      todayCount: sql<number>`count(*) filter (where ${orders.placedAt} >= ${todayIso})::int`,
+      todayRevenue: sql<number>`coalesce(sum(${orders.totalInr}) filter (where ${orders.placedAt} >= ${todayIso}), 0)::int`,
+      weekCount: sql<number>`count(*) filter (where ${orders.placedAt} >= ${last7Iso})::int`,
+      weekRevenue: sql<number>`coalesce(sum(${orders.totalInr}) filter (where ${orders.placedAt} >= ${last7Iso}), 0)::int`,
+      weekPaidCount: sql<number>`count(*) filter (where ${orders.placedAt} >= ${last7Iso} and ${orders.status} in ('PAID','PACKED','SHIPPED','DELIVERED'))::int`,
+      weekPaidRevenue: sql<number>`coalesce(sum(${orders.totalInr}) filter (where ${orders.placedAt} >= ${last7Iso} and ${orders.status} in ('PAID','PACKED','SHIPPED','DELIVERED')), 0)::int`,
     })
     .from(orders)
     .where(inArray(orders.siteId, ctx.siteIds));
@@ -89,7 +100,7 @@ export default async function AdminOverview() {
     .from(orders)
     .where(
       and(
-        sql`${orders.placedAt} >= ${last30}`,
+        sql`${orders.placedAt} >= ${last30Iso}`,
         inArray(orders.siteId, ctx.siteIds),
         inArray(orders.status, [...PAID_STATUSES]),
       ),
