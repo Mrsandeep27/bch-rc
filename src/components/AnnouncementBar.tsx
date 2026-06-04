@@ -1,67 +1,55 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { ANNOUNCEMENTS } from "@/lib/copy";
 import { AUTO_COUPON } from "@/lib/config";
 
-const CYCLE_MS = 7000; // was 4500 — too fast to finish reading long messages
+// Coupon stays as the first (and emphasized) chip in the marquee. Everything
+// else trails behind it so the buyer always sees the code first as the track
+// loops past.
+const REST = ANNOUNCEMENTS.filter((a) => a.tag !== "CODE");
 
-// The coupon offer is PINNED (always visible), never part of the rotation, so
-// no buyer can miss the code. Everything else rotates beside it.
-const ROTATING = ANNOUNCEMENTS.filter((a) => a.tag !== "CODE");
+function Track() {
+  // aria-hidden on every duplicate so screen readers only hear the messages
+  // once (the first set of items in the live region below).
+  return (
+    <>
+      <span className="inline-flex items-center gap-1.5 shrink-0 font-semibold">
+        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-white/20 text-[10px] font-bold tracking-wider uppercase">
+          {AUTO_COUPON.code}
+        </span>
+        <span>{AUTO_COUPON.label}</span>
+      </span>
+      {REST.map((a, i) => (
+        <span
+          key={i}
+          className="inline-flex items-center gap-1.5 shrink-0 text-white/90"
+        >
+          <span aria-hidden className="text-white/40">·</span>
+          {a.emoji && <span aria-hidden>{a.emoji}</span>}
+          <span>{a.text}</span>
+        </span>
+      ))}
+    </>
+  );
+}
 
 export function AnnouncementBar() {
-  const [index, setIndex] = useState(0);
-  const [paused, setPaused] = useState(false);
-
-  useEffect(() => {
-    if (paused || ROTATING.length <= 1) return;
-
-    // Honour OS-level "reduce motion" preference — don't rotate at all (the
-    // pinned coupon is always visible regardless). Users who set this typically
-    // can't process fast text-change cycles.
-    const mq =
-      typeof window !== "undefined"
-        ? window.matchMedia("(prefers-reduced-motion: reduce)")
-        : null;
-    if (mq?.matches) return;
-
-    const id = setInterval(
-      () => setIndex((i) => (i + 1) % ROTATING.length),
-      CYCLE_MS,
-    );
-    return () => clearInterval(id);
-  }, [paused]);
-
-  const current = ROTATING[index];
-
   return (
     <div
       role="status"
       aria-live="polite"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-      onFocus={() => setPaused(true)}
-      onBlur={() => setPaused(false)}
-      className="sticky top-0 z-50 bg-brand-red text-white text-[12px] sm:text-[13px] font-medium tracking-wide"
+      aria-label="Site announcements"
+      className="sticky top-0 z-50 bg-brand-red text-white text-[12px] sm:text-[13px] font-medium tracking-wide overflow-hidden"
     >
-      <div className="mx-auto max-w-7xl px-4 h-8 flex items-center justify-center gap-2 text-center">
-        {/* Pinned coupon — permanently visible, copy-on-tap. */}
-        <span className="inline-flex items-center gap-1.5 shrink-0 font-semibold">
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-white/20 text-[10px] font-bold tracking-wider uppercase">
-            {AUTO_COUPON.code}
-          </span>
-          <span className="truncate">{AUTO_COUPON.label}</span>
-        </span>
-
-        {/* Rotating secondary messages — hidden on the smallest screens so the
-            coupon never gets crowded out. */}
-        {current && (
-          <span className="hidden sm:inline-flex items-center gap-1.5 text-white/90 border-l border-white/30 pl-2">
-            {current.emoji && <span aria-hidden>{current.emoji}</span>}
-            <span className="truncate">{current.text}</span>
-          </span>
-        )}
+      {/* The marquee track holds two identical copies of the message list.
+          `animate-marquee` translates it by -50% so the second copy lands
+          exactly where the first started — seamless loop, no visible jump.
+          motion-reduce: stop the animation for users who opt out of motion. */}
+      <div className="h-8 flex items-center">
+        <div className="flex shrink-0 gap-4 whitespace-nowrap pr-4 animate-marquee motion-reduce:animate-none">
+          <Track />
+          <span aria-hidden className="inline-flex"><Track /></span>
+        </div>
       </div>
     </div>
   );

@@ -37,12 +37,13 @@ export default function Hero({
       />
 
       {/* Readability gradient.
-          Mobile: heavy top-down dark fade — the hero image has bright zones
-          (red car, smoke highlights) that compete with the H1 if the overlay
-          is too light. Keeps text readable on every device. The bottom 30%
-          stays semi-transparent so the car body still peeks through under
-          the proof strip. */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/95 via-black/80 to-black/55 sm:bg-gradient-to-r sm:from-black sm:via-black/70 sm:to-transparent" />
+          Mobile: dark only at the very top (so H1 + body copy stay readable)
+          then opens up sharply so the BMW headlights + body show through the
+          middle and lower half. Previous values (95/80/55) were so heavy the
+          car was effectively invisible. The bottom-vignette div below still
+          handles the trust-strip backdrop separately, so we don't need extra
+          darkness near the bottom here. Desktop side-gradient unchanged. */}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/35 to-black/15 sm:bg-gradient-to-r sm:from-black sm:via-black/70 sm:to-transparent" />
 
       {/* Bottom vignette — taller on mobile so the trust strip pinned at the
           bottom always has a fully-dark backdrop. */}
