@@ -23,7 +23,7 @@ import { NextResponse, after } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { orders, events, webhooksInbound } from "@/db/schema";
-import { verifyWebhookSignature } from "@/lib/razorpay";
+import { verifyWebhookSignature, fetchAndConfirmCapture } from "@/lib/razorpay";
 import { notifyOrderEvent } from "@/lib/notifications/notify";
 import {
   enqueueShipmentJob,
@@ -90,6 +90,27 @@ export async function POST(req: Request) {
           .from(orders)
           .where(eq(orders.razorpayOrderId, payment.order_id));
         if (order && order.paymentStatus !== "CAPTURED" && order.paymentStatus !== "FAILED" && order.paymentStatus !== "REFUNDED") {
+          // Even though the webhook payload is signed, an attacker who
+          // captures a real webhook body + signature could replay it against
+          // a different order with the same total. Belt-and-suspenders: hit
+          // Razorpay's API and require status==="captured" + matching
+          // order_id + matching amount before committing PAID.
+          const confirm = await fetchAndConfirmCapture({
+            paymentId: payment.id,
+            expectedRazorpayOrderId: order.razorpayOrderId!,
+            expectedAmountPaise: order.totalInr * 100,
+          });
+          if (!confirm.ok) {
+            await db.insert(events).values({
+              siteId: order.siteId,
+              orderId: order.id,
+              customerId: order.customerId,
+              type: "WEBHOOK_PAYMENT_CAPTURE_UNCONFIRMED",
+              payload: { paymentId: payment.id, reason: confirm.reason },
+              source: "webhook",
+            });
+            break;
+          }
           await db
             .update(orders)
             .set({

@@ -86,6 +86,17 @@ export async function createShipmentForOrder(orderId: string): Promise<ShipmentR
   ) {
     throw new NotShippableError(`Order in ${order.status} state`);
   }
+  // Defense in depth — prepaid orders MUST have a captured payment before
+  // Shiprocket is invoked. status==="PAID" is normally sufficient, but this
+  // guards against any future code path that transitions status without
+  // setting paymentStatus (e.g. an admin override, a bad migration). COD is
+  // exempt: the order is "paid" at create time and the money arrives at
+  // delivery, so paymentStatus stays "PENDING" until the COD remittance.
+  if (order.paymentMethod !== "COD" && order.paymentStatus !== "CAPTURED") {
+    throw new NotShippableError(
+      `Prepaid order has paymentStatus=${order.paymentStatus}, expected CAPTURED`,
+    );
+  }
 
   const items = order.items as OrderItem[];
   const addr = order.shippingAddress as ShippingAddress;

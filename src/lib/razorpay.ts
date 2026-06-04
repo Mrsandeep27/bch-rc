@@ -59,3 +59,75 @@ export function verifyWebhookSignature(
     return false;
   }
 }
+
+export type ConfirmCaptureResult =
+  | { ok: true; payment: { id: string; amount: number; status: string; order_id: string; method: string | null } }
+  | { ok: false; reason: string };
+
+/**
+ * Authoritative payment confirmation. After signature verification, call this
+ * to hit Razorpay's API and confirm the payment is actually CAPTURED, belongs
+ * to the expected order, and matches the expected amount.
+ *
+ * Why this is required even with a valid signature: the HMAC only proves
+ * Razorpay generated a payment_id for an order_id. It does NOT prove the
+ * money was captured — an authorized-only payment, a payment that was
+ * subsequently voided/reversed by the bank, or a payment that timed out in
+ * Razorpay's capture window would all still carry a valid signature but
+ * deliver zero funds to the merchant.
+ *
+ * Returns ok:false with a reason for any mismatch — callers should reject
+ * and leave the order PENDING (or transition to FAILED).
+ */
+export async function fetchAndConfirmCapture(params: {
+  paymentId: string;
+  expectedRazorpayOrderId: string;
+  expectedAmountPaise: number;
+}): Promise<ConfirmCaptureResult> {
+  const { paymentId, expectedRazorpayOrderId, expectedAmountPaise } = params;
+  let payment: { id: string; amount: number; status: string; order_id: string; method?: string | null };
+  try {
+    const fetched = (await razorpay.payments.fetch(paymentId)) as unknown as {
+      id: string;
+      amount: number;
+      status: string;
+      order_id: string;
+      method?: string | null;
+    };
+    payment = fetched;
+  } catch (err) {
+    return {
+      ok: false,
+      reason: `Razorpay fetch failed: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+
+  if (payment.order_id !== expectedRazorpayOrderId) {
+    return {
+      ok: false,
+      reason: `Payment order_id mismatch: ${payment.order_id} ≠ ${expectedRazorpayOrderId}`,
+    };
+  }
+  if (payment.status !== "captured") {
+    return {
+      ok: false,
+      reason: `Payment status is "${payment.status}", expected "captured"`,
+    };
+  }
+  if (payment.amount !== expectedAmountPaise) {
+    return {
+      ok: false,
+      reason: `Payment amount mismatch: ${payment.amount} ≠ ${expectedAmountPaise}`,
+    };
+  }
+  return {
+    ok: true,
+    payment: {
+      id: payment.id,
+      amount: payment.amount,
+      status: payment.status,
+      order_id: payment.order_id,
+      method: payment.method ?? null,
+    },
+  };
+}

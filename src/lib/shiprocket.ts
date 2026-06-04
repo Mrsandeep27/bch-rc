@@ -226,6 +226,34 @@ export async function createShipment(input: CreateShipmentInput): Promise<{
 }
 
 /**
+ * Cancel an order on Shiprocket's side. Used when our DB rolls a "phantom
+ * paid" order back to FAILED — leaving the Shiprocket order alive would risk
+ * an actual pickup against goods we were never paid for.
+ *
+ * The cancel API takes the Shiprocket numeric order id (NOT our PRC-XXX),
+ * because Shiprocket only indexes their own id post-creation.
+ */
+export async function cancelShiprocketOrder(
+  shiprocketOrderId: string,
+): Promise<{ ok: boolean; message: string }> {
+  try {
+    const data = await srFetch<{ message?: string; status_code?: number }>(
+      "/orders/cancel",
+      {
+        method: "POST",
+        body: JSON.stringify({ ids: [Number(shiprocketOrderId)] }),
+      },
+    );
+    return { ok: true, message: data.message ?? "cancelled" };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+/**
  * Status pings (used by manual refresh or admin override).
  */
 export async function getShipmentStatus(shipmentId: string): Promise<{

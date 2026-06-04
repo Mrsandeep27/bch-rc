@@ -20,7 +20,7 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { orders, events } from "@/db/schema";
-import { verifyRazorpaySignature } from "@/lib/razorpay";
+import { verifyRazorpaySignature, fetchAndConfirmCapture } from "@/lib/razorpay";
 import {
   enqueueShipmentJob,
   runShipmentJobOnce,
@@ -89,6 +89,38 @@ export async function POST(
     return NextResponse.json(
       { error: "Signature mismatch — payment not verified" },
       { status: 400 },
+    );
+  }
+
+  // Authoritative capture check: signature only proves Razorpay generated this
+  // payment_id for this order_id — NOT that the money was captured. A payment
+  // that was authorized-then-reversed (bank declined post-auth), or one stuck
+  // in "authorized" state, would still carry a valid signature but never
+  // reach our merchant balance. We hit Razorpay's API and require
+  // status==="captured" + matching order_id + matching amount before
+  // committing PAID. Otherwise the customer thinks they paid but we never
+  // received the money — and the auto-fulfilment trigger would ship goods
+  // for free.
+  const confirm = await fetchAndConfirmCapture({
+    paymentId: body.razorpayPaymentId,
+    expectedRazorpayOrderId: order.razorpayOrderId,
+    expectedAmountPaise: order.totalInr * 100,
+  });
+  if (!confirm.ok) {
+    await db.insert(events).values({
+      siteId: order.siteId,
+      orderId: id,
+      customerId: order.customerId,
+      type: "PAYMENT_CAPTURE_UNCONFIRMED",
+      payload: {
+        razorpayPaymentId: body.razorpayPaymentId,
+        reason: confirm.reason,
+      },
+      source: "system",
+    });
+    return NextResponse.json(
+      { error: `Payment not yet confirmed: ${confirm.reason}` },
+      { status: 402 },
     );
   }
 
