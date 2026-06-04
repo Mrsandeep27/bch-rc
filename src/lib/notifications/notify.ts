@@ -39,12 +39,17 @@ function buildPayload(order: OrderRow): EmailPayload {
     fullName?: string;
     email?: string | null;
     phone?: string | null;
+    line1?: string;
+    line2?: string | null;
+    city?: string;
+    state?: string;
     pincode?: string | null;
   };
   const items = (order.items as Array<{
     name: string;
     qty: number;
     lineTotalInr: number;
+    image?: string | null;
   }>) ?? [];
   const eta = addr.pincode
     ? resolveServiceability(addr.pincode).etaText || null
@@ -61,12 +66,29 @@ function buildPayload(order: OrderRow): EmailPayload {
       name: i.name,
       qty: i.qty,
       lineTotalInr: i.lineTotalInr,
+      image: i.image ?? null,
     })),
     awbCode: order.awbCode,
     courierName: order.courierName,
     trackingUrl: order.trackingUrl,
     paymentReference: order.razorpayPaymentId,
     etaText: eta,
+    subtotalInr: order.subtotalInr,
+    shippingInr: order.shippingInr,
+    codFeeInr: order.codFeeInr,
+    discountInr: order.discountInr,
+    couponCode: order.couponCode,
+    shippingAddress: addr.fullName && addr.line1 && addr.city && addr.state && addr.pincode
+      ? {
+          fullName: addr.fullName,
+          phone: addr.phone ?? "",
+          line1: addr.line1,
+          line2: addr.line2 ?? null,
+          city: addr.city,
+          state: addr.state,
+          pincode: addr.pincode,
+        }
+      : null,
   };
 }
 

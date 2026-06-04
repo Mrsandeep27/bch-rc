@@ -469,7 +469,22 @@ export async function POST(req: Request) {
                   name: i.name,
                   qty: i.qty,
                   lineTotalInr: i.lineTotalInr,
+                  image: i.image,
                 })),
+                subtotalInr: subtotal,
+                shippingInr: shipping,
+                codFeeInr: codFee,
+                discountInr: prepaidDiscount + couponDiscountInr,
+                couponCode: appliedCouponCode,
+                shippingAddress: {
+                  fullName: body.address.fullName,
+                  phone: body.address.phone,
+                  line1: body.address.line1,
+                  line2: body.address.line2 || null,
+                  city: body.address.city,
+                  state: body.address.state,
+                  pincode: body.address.pincode,
+                },
               },
             })
             .returning({ id: notificationsOutbox.id });
