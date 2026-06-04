@@ -19,6 +19,10 @@ export type ColorVariant = {
   stock: number;
   /** Optional variant image. Falls back to sku.heroImage if absent. */
   image?: string;
+  /** Per-color additional angle thumbnails. When present, the PDP gallery
+   *  shows [color hero, ...altImages] for this swatch. Avoids the AI-mismatch
+   *  problem of using shared sku.altImages across colored SKUs. */
+  altImages?: string[];
 };
 
 export type Sku = {
@@ -89,9 +93,12 @@ export const PRODUCTS: Sku[] = [
       "/products/PRC-bmw-4.jpg",
     ],
     colors: [
-      { name: "White",  slug: "white",  swatch: "#f1f1ef", stock: 35, image: "/products/colors/PRC-bmw-white.jpg" },
-      { name: "Blue",   slug: "blue",   swatch: "#1d4ed8", stock: 18, image: "/products/colors/PRC-bmw-blue.jpg" },
-      { name: "Black",  slug: "black",  swatch: "#111827", stock: 16, image: "/products/colors/PRC-bmw-black.jpg" },
+      { name: "White",  slug: "white",  swatch: "#f1f1ef", stock: 35, image: "/products/colors/PRC-bmw-white.jpg",
+        altImages: ["/products/colors/PRC-bmw-white-2.jpg","/products/colors/PRC-bmw-white-3.jpg","/products/colors/PRC-bmw-white-4.jpg"] },
+      { name: "Blue",   slug: "blue",   swatch: "#1d4ed8", stock: 18, image: "/products/colors/PRC-bmw-blue.jpg",
+        altImages: ["/products/colors/PRC-bmw-blue-2.jpg","/products/colors/PRC-bmw-blue-3.jpg","/products/colors/PRC-bmw-blue-4.jpg"] },
+      { name: "Black",  slug: "black",  swatch: "#111827", stock: 16, image: "/products/colors/PRC-bmw-black.jpg",
+        altImages: ["/products/colors/PRC-bmw-black-2.jpg","/products/colors/PRC-bmw-black-3.jpg","/products/colors/PRC-bmw-black-4.jpg"] },
     ],
     specs: {
       lengthMM: 72,
@@ -130,10 +137,14 @@ export const PRODUCTS: Sku[] = [
       "/products/PRC-porsche-4.jpg",
     ],
     colors: [
-      { name: "Dark Blue",    slug: "dark-blue",    swatch: "#1e3a8a",                              stock: 18, image: "/products/colors/PRC-porsche-dark-blue.jpg" },
-      { name: "Green",        slug: "green",        swatch: "#16a34a",                              stock: 18, image: "/products/colors/PRC-porsche-green.jpg" },
-      { name: "Yellow",       slug: "yellow",       swatch: "#facc15",                              stock: 18, image: "/products/colors/PRC-porsche-yellow.jpg" },
-      { name: "Multi Colour", slug: "multi",        swatch: "gradient:#f97316,#facc15,#16a34a,#2563eb", stock: 18, image: "/products/colors/PRC-porsche-multi.jpg" },
+      { name: "Dark Blue",    slug: "dark-blue",    swatch: "#1e3a8a", stock: 18, image: "/products/colors/PRC-porsche-dark-blue.jpg",
+        altImages: ["/products/colors/PRC-porsche-dark-blue-2.jpg","/products/colors/PRC-porsche-dark-blue-3.jpg","/products/colors/PRC-porsche-dark-blue-4.jpg"] },
+      { name: "Green",        slug: "green",        swatch: "#16a34a", stock: 18, image: "/products/colors/PRC-porsche-green.jpg",
+        altImages: ["/products/colors/PRC-porsche-green-2.jpg","/products/colors/PRC-porsche-green-3.jpg","/products/colors/PRC-porsche-green-4.jpg"] },
+      { name: "Yellow",       slug: "yellow",       swatch: "#facc15", stock: 18, image: "/products/colors/PRC-porsche-yellow.jpg",
+        altImages: ["/products/colors/PRC-porsche-yellow-2.jpg","/products/colors/PRC-porsche-yellow-3.jpg","/products/colors/PRC-porsche-yellow-4.jpg"] },
+      { name: "Multi Colour", slug: "multi",        swatch: "gradient:#f97316,#facc15,#16a34a,#2563eb", stock: 18, image: "/products/colors/PRC-porsche-multi.jpg",
+        altImages: ["/products/colors/PRC-porsche-multi-2.jpg","/products/colors/PRC-porsche-multi-3.jpg","/products/colors/PRC-porsche-multi-4.jpg"] },
     ],
     specs: {
       lengthMM: 70,
@@ -171,10 +182,14 @@ export const PRODUCTS: Sku[] = [
       "/products/PRC-thar-4.jpg",
     ],
     colors: [
-      { name: "Blue",   slug: "blue",   swatch: "#2563eb", stock: 11, image: "/products/colors/PRC-thar-blue.jpg" },
-      { name: "Yellow", slug: "yellow", swatch: "#facc15", stock:  8, image: "/products/colors/PRC-thar-yellow.jpg" },
-      { name: "White",  slug: "white",  swatch: "#f1f1ef", stock:  5, image: "/products/colors/PRC-thar-white.jpg" },
-      { name: "Black",  slug: "black",  swatch: "#111827", stock:  1, image: "/products/colors/PRC-thar-black.jpg" },
+      { name: "Blue",   slug: "blue",   swatch: "#2563eb", stock: 11, image: "/products/colors/PRC-thar-blue.jpg",
+        altImages: ["/products/colors/PRC-thar-blue-2.jpg","/products/colors/PRC-thar-blue-3.jpg","/products/colors/PRC-thar-blue-4.jpg"] },
+      { name: "Yellow", slug: "yellow", swatch: "#facc15", stock:  8, image: "/products/colors/PRC-thar-yellow.jpg",
+        altImages: ["/products/colors/PRC-thar-yellow-2.jpg","/products/colors/PRC-thar-yellow-3.jpg","/products/colors/PRC-thar-yellow-4.jpg"] },
+      { name: "White",  slug: "white",  swatch: "#f1f1ef", stock:  5, image: "/products/colors/PRC-thar-white.jpg",
+        altImages: ["/products/colors/PRC-thar-white-2.jpg","/products/colors/PRC-thar-white-3.jpg","/products/colors/PRC-thar-white-4.jpg"] },
+      { name: "Black",  slug: "black",  swatch: "#111827", stock:  1, image: "/products/colors/PRC-thar-black.jpg",
+        altImages: ["/products/colors/PRC-thar-black-2.jpg","/products/colors/PRC-thar-black-3.jpg","/products/colors/PRC-thar-black-4.jpg"] },
     ],
     specs: {
       lengthMM: 75,
@@ -213,11 +228,16 @@ export const PRODUCTS: Sku[] = [
       "/products/PRC-monster-4.jpg",
     ],
     colors: [
-      { name: "Blue",           slug: "blue",        swatch: "#2563eb",                              stock: 11, image: "/products/colors/PRC-monster-blue.jpg" },
-      { name: "Yellow",         slug: "yellow",      swatch: "#facc15",                              stock: 11, image: "/products/colors/PRC-monster-yellow.jpg" },
-      { name: "White & Red",    slug: "white-red",   swatch: "gradient:#f8fafc,#dc2626",             stock: 11, image: "/products/colors/PRC-monster-white-red.jpg" },
-      { name: "Multi Colour",   slug: "multi",       swatch: "gradient:#f97316,#facc15,#16a34a,#2563eb", stock: 11, image: "/products/colors/PRC-monster-multi.jpg" },
-      { name: "Red & Orange",   slug: "red-orange",  swatch: "gradient:#dc2626,#f97316",             stock: 12, image: "/products/colors/PRC-monster-red-orange.jpg" },
+      { name: "Blue",           slug: "blue",        swatch: "#2563eb", stock: 11, image: "/products/colors/PRC-monster-blue.jpg",
+        altImages: ["/products/colors/PRC-monster-blue-2.jpg","/products/colors/PRC-monster-blue-3.jpg","/products/colors/PRC-monster-blue-4.jpg"] },
+      { name: "Yellow",         slug: "yellow",      swatch: "#facc15", stock: 11, image: "/products/colors/PRC-monster-yellow.jpg",
+        altImages: ["/products/colors/PRC-monster-yellow-2.jpg","/products/colors/PRC-monster-yellow-3.jpg","/products/colors/PRC-monster-yellow-4.jpg"] },
+      { name: "White & Red",    slug: "white-red",   swatch: "gradient:#f8fafc,#dc2626", stock: 11, image: "/products/colors/PRC-monster-white-red.jpg",
+        altImages: ["/products/colors/PRC-monster-white-red-2.jpg","/products/colors/PRC-monster-white-red-3.jpg","/products/colors/PRC-monster-white-red-4.jpg"] },
+      { name: "Multi Colour",   slug: "multi",       swatch: "gradient:#f97316,#facc15,#16a34a,#2563eb", stock: 11, image: "/products/colors/PRC-monster-multi.jpg",
+        altImages: ["/products/colors/PRC-monster-multi-2.jpg","/products/colors/PRC-monster-multi-3.jpg","/products/colors/PRC-monster-multi-4.jpg"] },
+      { name: "Red & Orange",   slug: "red-orange",  swatch: "gradient:#dc2626,#f97316", stock: 12, image: "/products/colors/PRC-monster-red-orange.jpg",
+        altImages: ["/products/colors/PRC-monster-red-orange-2.jpg","/products/colors/PRC-monster-red-orange-3.jpg","/products/colors/PRC-monster-red-orange-4.jpg"] },
     ],
     specs: {
       lengthMM: 85,
@@ -259,8 +279,10 @@ export const PRODUCTS: Sku[] = [
       "/products/PRC-f1-classic-4.jpg",
     ],
     colors: [
-      { name: "White", slug: "white", swatch: "#f1f1ef", stock: 36, image: "/products/colors/PRC-f1-classic-white.jpg" },
-      { name: "Red",   slug: "red",   swatch: "#dc2626", stock: 36, image: "/products/colors/PRC-f1-classic-red.jpg" },
+      { name: "White", slug: "white", swatch: "#f1f1ef", stock: 36, image: "/products/colors/PRC-f1-classic-white.jpg",
+        altImages: ["/products/colors/PRC-f1-classic-white-2.jpg","/products/colors/PRC-f1-classic-white-3.jpg","/products/colors/PRC-f1-classic-white-4.jpg"] },
+      { name: "Red",   slug: "red",   swatch: "#dc2626", stock: 36, image: "/products/colors/PRC-f1-classic-red.jpg",
+        altImages: ["/products/colors/PRC-f1-classic-red-2.jpg","/products/colors/PRC-f1-classic-red-3.jpg","/products/colors/PRC-f1-classic-red-4.jpg"] },
     ],
     specs: {
       lengthMM: 70,

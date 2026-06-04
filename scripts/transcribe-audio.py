@@ -63,7 +63,7 @@ ext = audio_path.suffix.lower()
 mime = mime_map.get(ext, "audio/ogg")
 
 client = genai.Client(api_key=API_KEY)
-MODEL = "gemini-2.5-pro"
+MODEL = "gemini-2.5-flash"
 
 print(f"Transcribing {audio_path.name} ({mime}, {audio_path.stat().st_size // 1024} KB)")
 print(f"Model: {MODEL}")

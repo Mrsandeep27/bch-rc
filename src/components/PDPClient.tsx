@@ -134,14 +134,16 @@ export default function PDPClient({ sku }: { sku: Sku }) {
     : NO_VARIANT_MAX_QTY;
   const savings = sku.mrpINR - sku.retailINR;
   const pct = calcDiscountPct(sku.mrpINR, sku.retailINR);
-  // Color-specific hero overrides the base hero; alt angles are shared across colors.
+  // Gallery: color-specific hero plus per-color alt angles when the
+  // selected swatch defines them. Falls back to sku.altImages (shared
+  // across colors) only for color-less SKUs — the legacy shared alts
+  // were AI-generated and don't match the cleaned real-photo color
+  // heros, so colored SKUs MUST use per-color alts.
   const heroSrc = selectedColor?.image ?? sku.heroImage;
-  // Per-color alt angles don't exist yet — when colors are defined for this
-  // SKU, show ONLY the single color hero (no thumbnails) so the gallery
-  // stays consistent with the swatch the user picked.
+  const colorAlts = selectedColor?.altImages ?? [];
   const gallery = sku.colors?.length
-    ? [heroSrc]
-    : [heroSrc, ...sku.altImages].filter(Boolean);
+    ? [heroSrc, ...colorAlts].filter(Boolean)
+    : [heroSrc, ...(sku.altImages ?? [])].filter(Boolean);
   const activeSrc = gallery[activeImage] ?? heroSrc;
 
   function addToCart() {
@@ -164,10 +166,13 @@ export default function PDPClient({ sku }: { sku: Sku }) {
 
   return (
     <>
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-6 lg:gap-12 max-w-6xl mx-auto px-3 sm:px-4 py-2 sm:py-8">
-      {/* Image gallery */}
-      <div className="lg:sticky lg:top-20 lg:self-start space-y-2 sm:space-y-3 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto no-scrollbar">
-        <div className="aspect-[4/3] sm:aspect-square max-h-[42vh] sm:max-h-none rounded-2xl overflow-hidden border border-brand-line bg-brand-cream relative">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-12 max-w-6xl mx-auto px-4 py-4 sm:py-8">
+      {/* Image gallery. On mobile this is just a normal block — no sticky,
+          no overflow scroll, no aspect-ratio mismatch. The card is always
+          square so the 1:1 source images fill it edge-to-edge with no
+          "floating" white margin. */}
+      <div className="space-y-3 lg:sticky lg:top-20 lg:self-start lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto no-scrollbar">
+        <div className="aspect-square rounded-2xl overflow-hidden border border-brand-line bg-brand-cream relative">
           <GalleryImage src={activeSrc} sku={sku} alt={sku.name} priority />
         </div>
         {gallery.length > 1 && (

@@ -150,7 +150,7 @@ export default async function ProductPage({
       <AnnouncementBar />
       <Header />
       <nav className="border-b border-brand-line bg-white">
-        <div className="max-w-6xl mx-auto px-3 sm:px-4 py-1.5 sm:py-3">
+        <div className="max-w-6xl mx-auto px-4 py-2 sm:py-3">
           <Link
             href="/"
             className="inline-flex items-center gap-1 text-xs sm:text-sm text-brand-ink-soft hover:text-brand-ink"
