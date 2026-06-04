@@ -78,12 +78,30 @@ function buildPayload(order: OrderRow): EmailPayload {
  *        for this event is already enqueued elsewhere). Defaults to
  *        defaultChannels().
  */
+/**
+ * Templates we ACTUALLY send to customers. Product decision: customers receive
+ * exactly two emails per order — the confirmation (ORDER_CONFIRMED for COD,
+ * PAYMENT_CAPTURED for prepaid) and the DELIVERED summary. Mid-flight
+ * notifications (SHIPMENT_CREATED when the AWB is assigned, OUT_FOR_DELIVERY
+ * from the courier sync) are intentionally suppressed at this single
+ * chokepoint so no caller can leak them — every order-event call funnels
+ * through notifyOrderEvent. The customer can still track from the order page
+ * (link is in the confirmation email), and the events table records every
+ * lifecycle transition for admin visibility.
+ */
+const CUSTOMER_FACING_TEMPLATES = new Set<NotificationTemplate>([
+  "ORDER_CONFIRMED",
+  "PAYMENT_CAPTURED",
+  "DELIVERED",
+]);
+
 export async function notifyOrderEvent(
   orderId: string,
   template: NotificationTemplate,
   channels: NotificationChannel[] = defaultChannels(),
 ): Promise<void> {
   if (channels.length === 0) return;
+  if (!CUSTOMER_FACING_TEMPLATES.has(template)) return;
   try {
     const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
     if (!order) return;

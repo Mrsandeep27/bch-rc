@@ -109,20 +109,35 @@ Questions? WhatsApp ${SUPPORT_PHONE}.
       return { subject, html: shell(subject, body), text };
     }
     case "PAYMENT_CAPTURED": {
-      const subject = `Payment received for order ${p.orderId}`;
+      // This is the ONLY email a prepaid customer receives at order time
+      // (mid-flight shipment/OFD emails are suppressed by design). It must
+      // therefore double as the full order confirmation — items with the
+      // variant/colour, totals, ETA, track-link, and the txn reference.
+      const trackUrl = `${BASE_URL}/orders/${p.orderId}`;
+      const subject = `Order ${p.orderId} confirmed — ${BRAND}`;
       const refLine = p.paymentReference
-        ? `<p style="color:#444">Transaction reference <b style="font-family:monospace">${escapeHtml(p.paymentReference)}</b> — keep this for your records.</p>`
-        : "";
-      const itemsBlock = p.items.length
-        ? `<table style="width:100%;border-collapse:collapse;margin:12px 0;font-size:14px">${lineItems(p.items)}</table>`
+        ? `<p style="color:#444;font-size:12px">Transaction reference <b style="font-family:monospace">${escapeHtml(p.paymentReference)}</b> — keep this for your records.</p>`
         : "";
       const body = `
-<h1 style="font-size:24px;margin:14px 0 4px">Payment received</h1>
-<p>${formatINR(p.totalInr)} captured for order <b style="font-family:monospace">${escapeHtml(p.orderId)}</b>. We'll dispatch within 24 hrs.${p.etaText ? ` Estimated delivery <b>${escapeHtml(p.etaText)}</b>.` : ""}</p>
-${itemsBlock}
+<h1 style="font-size:24px;margin:14px 0 4px">Hi ${escapeHtml(p.customerName)}, payment received.</h1>
+<p style="color:#444">Order ID <b style="font-family:monospace">${escapeHtml(p.orderId)}</b></p>
+<p>${formatINR(p.totalInr)} captured. We'll dispatch within 24 hrs.${p.etaText ? ` Estimated delivery <b>${escapeHtml(p.etaText)}</b>.` : ""}</p>
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px">${lineItems(p.items)}
+<tr><td style="padding-top:10px;border-top:1px solid #eee;font-weight:700">Total</td><td style="padding-top:10px;border-top:1px solid #eee;text-align:right;font-weight:700">${formatINR(p.totalInr)}</td></tr>
+</table>
+<p><a href="${trackUrl}" style="display:inline-block;background:#e11d2a;color:#fff;text-decoration:none;padding:12px 22px;border-radius:999px;font-weight:600">Track your order</a></p>
+<p style="color:#444">Ships in 24 hrs from our Yelahanka, Bangalore warehouse via Shiprocket.</p>
 ${refLine}`;
-      const text = `Payment of ${formatINR(p.totalInr)} received for order ${p.orderId}. Dispatching within 24 hrs.
-${lineItemsText(p.items)}${p.paymentReference ? `\nTransaction ref: ${p.paymentReference}` : ""}${p.etaText ? `\nEstimated delivery: ${p.etaText}` : ""}`;
+      const text = `Hi ${p.customerName}, your ${BRAND} order ${p.orderId} is confirmed.
+Payment of ${formatINR(p.totalInr)} received. Dispatching within 24 hrs.
+
+${lineItemsText(p.items)}
+Total: ${formatINR(p.totalInr)}
+${p.etaText ? `Estimated delivery: ${p.etaText}\n` : ""}
+Track: ${trackUrl}
+${p.paymentReference ? `\nTransaction ref: ${p.paymentReference}\n` : ""}
+Questions? WhatsApp ${SUPPORT_PHONE}.
+— ${BRAND}`;
       return { subject, html: shell(subject, body), text };
     }
     case "SHIPMENT_CREATED": {
@@ -162,11 +177,17 @@ ${lineItemsText(p.items)}${p.paymentMethod === "COD" ? `\nCash on delivery: ${fo
     }
     case "DELIVERED": {
       const subject = `Order ${p.orderId} delivered — drift it`;
+      const itemsBlock = p.items.length
+        ? `<p style="color:#444;margin-bottom:4px">Delivered:</p>
+<table style="width:100%;border-collapse:collapse;margin:0 0 12px;font-size:14px">${lineItems(p.items)}</table>`
+        : "";
       const body = `
 <h1 style="font-size:24px;margin:14px 0 4px">Delivered</h1>
 <p>Your ${BRAND} arrived. Tag <a href="https://instagram.com/164prccars">@164prccars</a> on Instagram for a reshare.</p>
-<p>7-day replacement on any manufacturing defect — WhatsApp ${SUPPORT_PHONE} with your order ID.</p>`;
-      const text = `Your ${BRAND} order ${p.orderId} was delivered. Tag @164prccars on IG for a reshare. 7-day defect replacement — WhatsApp ${SUPPORT_PHONE}.`;
+${itemsBlock}<p>7-day replacement on any manufacturing defect — WhatsApp ${SUPPORT_PHONE} with your order ID.</p>`;
+      const text = `Your ${BRAND} order ${p.orderId} was delivered.
+${lineItemsText(p.items)}
+Tag @164prccars on IG for a reshare. 7-day defect replacement — WhatsApp ${SUPPORT_PHONE}.`;
       return { subject, html: shell(subject, body), text };
     }
   }
