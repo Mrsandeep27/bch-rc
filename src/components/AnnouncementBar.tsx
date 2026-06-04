@@ -39,7 +39,7 @@ export function AnnouncementBar() {
       role="status"
       aria-live="polite"
       aria-label="Site announcements"
-      className="sticky top-0 z-50 bg-brand-red text-white text-[12px] sm:text-[13px] font-medium tracking-wide overflow-hidden"
+      className="relative z-40 bg-brand-red text-white text-[12px] sm:text-[13px] font-medium tracking-wide overflow-hidden"
     >
       {/* The marquee track holds two identical copies of the message list.
           `animate-marquee` translates it by -50% so the second copy lands
