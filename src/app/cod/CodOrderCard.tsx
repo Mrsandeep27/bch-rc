@@ -1,7 +1,16 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Phone, MapPin, Clock, Check, X, AlertCircle } from "lucide-react";
+import {
+  Phone,
+  MapPin,
+  Clock,
+  Check,
+  X,
+  AlertCircle,
+  Truck,
+  ShieldOff,
+} from "lucide-react";
 import { confirmCodOrder, rejectCodOrder } from "./actions";
 
 type Order = {
@@ -13,6 +22,11 @@ type Order = {
   discountInr: number;
   couponCode: string | null;
   placedAt: Date;
+  paidAt: Date | null;
+  cancelledAt: Date | null;
+  awbCode: string | null;
+  courierName: string | null;
+  trackingUrl: string | null;
   shippingAddress: unknown;
   items: unknown;
 };
@@ -35,7 +49,10 @@ type Item = {
   image?: string | null;
 };
 
-function relativeTime(d: Date): string {
+type Mode = "pending" | "approved" | "rejected";
+
+function relativeTime(d: Date | string | null): string {
+  if (!d) return "—";
   const ms = Date.now() - new Date(d).getTime();
   const m = Math.floor(ms / 60000);
   if (m < 1) return "just now";
@@ -50,7 +67,15 @@ function inr(n: number): string {
   return `₹${n.toLocaleString("en-IN")}`;
 }
 
-export function CodOrderCard({ order }: { order: Order }) {
+export function CodOrderCard({
+  order,
+  mode = "pending",
+  rejectKind = null,
+}: {
+  order: Order;
+  mode?: Mode;
+  rejectKind?: "operator" | "auto" | null;
+}) {
   const addr = order.shippingAddress as Address;
   const items = (order.items as Item[]) ?? [];
   const [pending, startTransition] = useTransition();
@@ -87,6 +112,9 @@ export function CodOrderCard({ order }: { order: Order }) {
     });
   }
 
+  // Inline post-action confirmation. The page revalidates on the next nav,
+  // but this gives an immediate visual ack so the operator doesn't
+  // double-click while waiting for the re-render.
   if (done) {
     return (
       <div
@@ -110,8 +138,42 @@ export function CodOrderCard({ order }: { order: Order }) {
     );
   }
 
+  const isApproved = mode === "approved";
+  const isRejected = mode === "rejected";
+  const readonly = isApproved || isRejected;
+
+  const borderClass = isApproved
+    ? "border-green-200"
+    : isRejected
+      ? "border-red-100"
+      : "border-brand-line";
+
   return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm border border-brand-line">
+    <div className={`bg-white rounded-2xl p-5 shadow-sm border ${borderClass}`}>
+      {/* Outcome banner for non-pending modes */}
+      {isApproved && (
+        <div className="flex items-center gap-2 text-sm text-green-800 bg-green-50 rounded-lg px-3 py-2 mb-3">
+          <Check size={14} />
+          <span>
+            Confirmed {relativeTime(order.paidAt)}
+            {order.awbCode ? ` · shipped via ${order.courierName ?? "courier"}` : ""}
+          </span>
+        </div>
+      )}
+      {isRejected && (
+        <div className="flex items-center gap-2 text-sm text-red-800 bg-red-50 rounded-lg px-3 py-2 mb-3">
+          {rejectKind === "auto" ? <ShieldOff size={14} /> : <X size={14} />}
+          <span>
+            Rejected {relativeTime(order.cancelledAt)}
+            {rejectKind === "auto"
+              ? " · auto-expired after 48h"
+              : rejectKind === "operator"
+                ? " · by operator"
+                : ""}
+          </span>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
         <div>
           <div className="font-mono font-bold text-base">{order.id}</div>
@@ -200,6 +262,18 @@ export function CodOrderCard({ order }: { order: Order }) {
         )}
       </div>
 
+      {isApproved && order.trackingUrl && (
+        <a
+          href={order.trackingUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-sm text-brand-ink font-semibold border border-brand-line hover:bg-brand-cream px-3 py-2 rounded-lg"
+        >
+          <Truck size={14} />
+          Track shipment {order.awbCode ? `· ${order.awbCode}` : ""}
+        </a>
+      )}
+
       {error && (
         <div className="mb-3 flex items-center gap-1.5 text-sm text-brand-red font-medium">
           <AlertCircle size={14} />
@@ -207,24 +281,26 @@ export function CodOrderCard({ order }: { order: Order }) {
         </div>
       )}
 
-      <div className="flex gap-2">
-        <button
-          onClick={onConfirm}
-          disabled={pending}
-          className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
-        >
-          <Check size={16} />
-          Confirm
-        </button>
-        <button
-          onClick={onReject}
-          disabled={pending}
-          className="flex-1 bg-white hover:bg-red-50 border-2 border-red-300 text-red-700 font-bold py-3 rounded-lg disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
-        >
-          <X size={16} />
-          Reject
-        </button>
-      </div>
+      {!readonly && (
+        <div className="flex gap-2">
+          <button
+            onClick={onConfirm}
+            disabled={pending}
+            className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
+          >
+            <Check size={16} />
+            Confirm
+          </button>
+          <button
+            onClick={onReject}
+            disabled={pending}
+            className="flex-1 bg-white hover:bg-red-50 border-2 border-red-300 text-red-700 font-bold py-3 rounded-lg disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
+          >
+            <X size={16} />
+            Reject
+          </button>
+        </div>
+      )}
     </div>
   );
 }
