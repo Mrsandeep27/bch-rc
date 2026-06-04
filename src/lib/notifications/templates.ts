@@ -113,11 +113,16 @@ Questions? WhatsApp ${SUPPORT_PHONE}.
       const refLine = p.paymentReference
         ? `<p style="color:#444">Transaction reference <b style="font-family:monospace">${escapeHtml(p.paymentReference)}</b> — keep this for your records.</p>`
         : "";
+      const itemsBlock = p.items.length
+        ? `<table style="width:100%;border-collapse:collapse;margin:12px 0;font-size:14px">${lineItems(p.items)}</table>`
+        : "";
       const body = `
 <h1 style="font-size:24px;margin:14px 0 4px">Payment received</h1>
 <p>${formatINR(p.totalInr)} captured for order <b style="font-family:monospace">${escapeHtml(p.orderId)}</b>. We'll dispatch within 24 hrs.${p.etaText ? ` Estimated delivery <b>${escapeHtml(p.etaText)}</b>.` : ""}</p>
+${itemsBlock}
 ${refLine}`;
-      const text = `Payment of ${formatINR(p.totalInr)} received for order ${p.orderId}. Dispatching within 24 hrs.${p.paymentReference ? `\nTransaction ref: ${p.paymentReference}` : ""}${p.etaText ? `\nEstimated delivery: ${p.etaText}` : ""}`;
+      const text = `Payment of ${formatINR(p.totalInr)} received for order ${p.orderId}. Dispatching within 24 hrs.
+${lineItemsText(p.items)}${p.paymentReference ? `\nTransaction ref: ${p.paymentReference}` : ""}${p.etaText ? `\nEstimated delivery: ${p.etaText}` : ""}`;
       return { subject, html: shell(subject, body), text };
     }
     case "SHIPMENT_CREATED": {
@@ -128,21 +133,31 @@ ${refLine}`;
       const trackBtn = p.trackingUrl
         ? `<p><a href="${escapeHtml(p.trackingUrl)}" style="display:inline-block;background:#0b0b0c;color:#fff;text-decoration:none;padding:12px 22px;border-radius:999px;font-weight:600">Track shipment</a></p>`
         : "";
+      const itemsBlock = p.items.length
+        ? `<p style="color:#444;margin-bottom:4px">What's in this shipment:</p>
+<table style="width:100%;border-collapse:collapse;margin:0 0 12px;font-size:14px">${lineItems(p.items)}</table>`
+        : "";
       const body = `
 <h1 style="font-size:24px;margin:14px 0 4px">Your order is on the way</h1>
 <p>Order <b style="font-family:monospace">${escapeHtml(p.orderId)}</b> has shipped.</p>
-${trackLine}${trackBtn}`;
+${itemsBlock}${trackLine}${trackBtn}`;
       const text = `Your ${BRAND} order ${p.orderId} has shipped.
+${lineItemsText(p.items)}
 ${p.awbCode ? `AWB: ${p.awbCode}${p.courierName ? ` via ${p.courierName}` : ""}\n` : ""}${p.trackingUrl ? `Track: ${p.trackingUrl}\n` : ""}`;
       return { subject, html: shell(subject, body), text };
     }
     case "OUT_FOR_DELIVERY": {
       const subject = `Order ${p.orderId} out for delivery`;
+      const itemsBlock = p.items.length
+        ? `<table style="width:100%;border-collapse:collapse;margin:8px 0 0;font-size:14px">${lineItems(p.items)}</table>`
+        : "";
       const body = `
 <h1 style="font-size:24px;margin:14px 0 4px">Out for delivery today</h1>
 <p>${p.courierName ? `${escapeHtml(p.courierName)} is delivering` : "Your courier is delivering"} order <b style="font-family:monospace">${escapeHtml(p.orderId)}</b> today.</p>
+${itemsBlock}
 ${p.paymentMethod === "COD" ? `<p>Have <b>${formatINR(p.totalInr)}</b> ready for cash on delivery.</p>` : ""}`;
-      const text = `Your ${BRAND} order ${p.orderId} is out for delivery today.${p.paymentMethod === "COD" ? ` Cash on delivery: ${formatINR(p.totalInr)}.` : ""}`;
+      const text = `Your ${BRAND} order ${p.orderId} is out for delivery today.
+${lineItemsText(p.items)}${p.paymentMethod === "COD" ? `\nCash on delivery: ${formatINR(p.totalInr)}.` : ""}`;
       return { subject, html: shell(subject, body), text };
     }
     case "DELIVERED": {
@@ -177,24 +192,36 @@ export function renderWhatsApp(
             : `Payment of ${formatINR(p.totalInr)} received.`
         }${p.etaText ? `\nEstimated delivery: ${p.etaText}` : ""}\nTrack: ${track}`,
       };
-    case "PAYMENT_CAPTURED":
+    case "PAYMENT_CAPTURED": {
+      const itemsLine = p.items.length
+        ? `\nItems:\n${p.items.map((i) => `• ${i.name} × ${i.qty}`).join("\n")}`
+        : "";
       return {
-        text: `✅ *${BRAND}* — payment of ${formatINR(p.totalInr)} received for order *${p.orderId}*.${
+        text: `✅ *${BRAND}* — payment of ${formatINR(p.totalInr)} received for order *${p.orderId}*.${itemsLine}${
           p.paymentReference ? `\nTxn ref: ${p.paymentReference}` : ""
         }\nDispatching within 24 hrs. Track: ${track}`,
       };
-    case "SHIPMENT_CREATED":
+    }
+    case "SHIPMENT_CREATED": {
+      const itemsLine = p.items.length
+        ? `\nIn this shipment:\n${p.items.map((i) => `• ${i.name} × ${i.qty}`).join("\n")}`
+        : "";
       return {
-        text: `📦 *${BRAND}* — order *${p.orderId}* shipped!${
+        text: `📦 *${BRAND}* — order *${p.orderId}* shipped!${itemsLine}${
           p.awbCode ? `\nAWB: ${p.awbCode}${p.courierName ? ` (${p.courierName})` : ""}` : ""
         }${p.trackingUrl ? `\nTrack: ${p.trackingUrl}` : `\nTrack: ${track}`}`,
       };
-    case "OUT_FOR_DELIVERY":
+    }
+    case "OUT_FOR_DELIVERY": {
+      const itemsLine = p.items.length
+        ? `\nDelivering: ${p.items.map((i) => `${i.name} × ${i.qty}`).join(", ")}`
+        : "";
       return {
-        text: `🚚 *${BRAND}* — order *${p.orderId}* is out for delivery today!${
+        text: `🚚 *${BRAND}* — order *${p.orderId}* is out for delivery today!${itemsLine}${
           p.paymentMethod === "COD" ? `\nKeep ${formatINR(p.totalInr)} cash ready.` : ""
         }`,
       };
+    }
     case "DELIVERED":
       return {
         text: `🎉 *${BRAND}* — order *${p.orderId}* delivered. Enjoy the drift! 7-day defect replacement — reply here with your order ID.`,
