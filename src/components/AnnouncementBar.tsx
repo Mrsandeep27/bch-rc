@@ -1,32 +1,24 @@
 "use client";
 
 import { ANNOUNCEMENTS } from "@/lib/copy";
-import { AUTO_COUPON } from "@/lib/config";
 
-// Coupon stays as the first (and emphasized) chip in the marquee. Everything
-// else trails behind it so the buyer always sees the code first as the track
-// loops past.
+// Auto-coupon pinned chip removed 2026-06-05 — no live promo code. Only the
+// rotating offers (prepaid, free shipping, COD) ride the marquee now.
 const REST = ANNOUNCEMENTS.filter((a) => a.tag !== "CODE");
 
 function Track() {
-  // aria-hidden on every duplicate so screen readers only hear the messages
-  // once (the first set of items in the live region below).
   return (
     <>
-      <span className="inline-flex items-center gap-1.5 shrink-0 font-semibold">
-        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-white/20 text-[10px] font-bold tracking-wider uppercase">
-          {AUTO_COUPON.code}
-        </span>
-        <span>{AUTO_COUPON.label}</span>
-      </span>
       {REST.map((a, i) => (
         <span
           key={i}
-          className="inline-flex items-center gap-1.5 shrink-0 text-white/90"
+          className="inline-flex items-center gap-1.5 shrink-0 text-white"
         >
-          <span aria-hidden className="text-white/40">·</span>
           {a.emoji && <span aria-hidden>{a.emoji}</span>}
           <span>{a.text}</span>
+          {i < REST.length - 1 && (
+            <span aria-hidden className="text-white/40 ml-4">·</span>
+          )}
         </span>
       ))}
     </>

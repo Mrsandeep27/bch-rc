@@ -54,11 +54,7 @@ export type Announcement = {
 
 export const ANNOUNCEMENTS: Announcement[] = [
   {
-    tag: "CODE",
-    text: "CODEPRC100 — ₹100 OFF YOUR FIRST DRIFT",
-  },
-  {
-    text: "Pay prepaid → ₹1,199 (save ₹100)",
+    text: "Pay prepaid → save ₹100 automatically",
   },
   {
     text: "Ships in 24 hrs from Bangalore · Free shipping over ₹1,099",

@@ -19,7 +19,7 @@ export const HOME_FAQS: QA[] = [
   },
   {
     q: "How do I save ₹100? (Prepaid vs COD)",
-    a: "Pay prepaid (UPI / card / netbanking) and you pay ₹1,199 instead of ₹1,299 — ₹100 off automatically. COD is fine too; use code CODEPRC100 on your first order for the same ₹100 off.",
+    a: "Pay prepaid (UPI / card / netbanking) and ₹100 comes off automatically at checkout. COD pays the full sticker price — the ₹100 saving is a thank-you for skipping the cash-handling overhead.",
   },
   {
     q: "What if it arrives broken or stops working?",

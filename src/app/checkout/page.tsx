@@ -462,11 +462,12 @@ export default function CheckoutPage() {
     }
   }
 
-  // Auto-apply the headline first-order coupon once the cart has hydrated, so
-  // the discount is never buried behind a code the buyer has to discover/type.
-  // Fires once; if the buyer removes it we don't re-add it. State is only set
-  // after the await (no synchronous setState in the effect body).
+  // Auto-apply was retired (2026-06-05): the prepaid -₹100 line is the only
+  // headline discount now, so a coupon code would double-discount. Manual
+  // coupon UI is also hidden in the JSX below; leaving the state + apply
+  // handler alive in case we re-introduce a separate promo flow later.
   useEffect(() => {
+    return;
     if (autoCouponTried.current) return;
     if (!hasHydrated || subtotal <= 0 || couponApplied) return;
     autoCouponTried.current = true;
@@ -1133,32 +1134,35 @@ export default function CheckoutPage() {
               Coupon code
             </h2>
 
-            {/* Persistent, always-visible offer. Auto-applied on load; if the
-                buyer removes it, a one-tap chip re-applies it. No rotating
-                announcement to miss, no code to hunt for. */}
-            {couponApplied?.toUpperCase() === AUTO_COUPON.code ? (
-              <div className="mt-3 flex items-center gap-2 rounded-lg border border-success/30 bg-success/10 px-3 py-2.5">
-                <CheckCircle2 size={16} className="text-success shrink-0" aria-hidden />
-                <span className="text-sm font-semibold text-success">
-                  {AUTO_COUPON.code} applied — {AUTO_COUPON.label}
-                </span>
-              </div>
-            ) : !couponApplied ? (
-              <button
-                type="button"
-                onClick={() => applyCoupon(AUTO_COUPON.code)}
-                disabled={couponBusy || subtotal <= 0}
-                className="mt-3 w-full flex items-center justify-between gap-2 rounded-lg border border-dashed border-brand-red bg-brand-red-soft px-3 py-2.5 text-left disabled:opacity-50"
-              >
-                <span className="text-sm font-semibold text-brand-ink">
-                  🎁 {AUTO_COUPON.label} ·{" "}
-                  <span className="font-mono">{AUTO_COUPON.code}</span>
-                </span>
-                <span className="text-xs font-bold uppercase tracking-wide text-brand-red">
-                  {couponBusy ? "Applying…" : "Apply"}
-                </span>
-              </button>
-            ) : null}
+            {/* AUTO_COUPON suggestion chip hidden 2026-06-05 — the prepaid
+                -₹100 line is now the only ₹100-off mechanism. Manual entry
+                below is still live for any future promo codes the team hands
+                out. Re-enable the chip by flipping the false gate to true. */}
+            {false && (
+              couponApplied?.toUpperCase() === AUTO_COUPON.code ? (
+                <div className="mt-3 flex items-center gap-2 rounded-lg border border-success/30 bg-success/10 px-3 py-2.5">
+                  <CheckCircle2 size={16} className="text-success shrink-0" aria-hidden />
+                  <span className="text-sm font-semibold text-success">
+                    {AUTO_COUPON.code} applied — {AUTO_COUPON.label}
+                  </span>
+                </div>
+              ) : !couponApplied ? (
+                <button
+                  type="button"
+                  onClick={() => applyCoupon(AUTO_COUPON.code)}
+                  disabled={couponBusy || subtotal <= 0}
+                  className="mt-3 w-full flex items-center justify-between gap-2 rounded-lg border border-dashed border-brand-red bg-brand-red-soft px-3 py-2.5 text-left disabled:opacity-50"
+                >
+                  <span className="text-sm font-semibold text-brand-ink">
+                    🎁 {AUTO_COUPON.label} ·{" "}
+                    <span className="font-mono">{AUTO_COUPON.code}</span>
+                  </span>
+                  <span className="text-xs font-bold uppercase tracking-wide text-brand-red">
+                    {couponBusy ? "Applying…" : "Apply"}
+                  </span>
+                </button>
+              ) : null
+            )}
 
             <div className="mt-3 flex items-stretch gap-2">
               <input
