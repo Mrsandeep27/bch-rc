@@ -34,6 +34,7 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
+import { logError, logWarn } from "@/lib/logger";
 
 const connectionString =
   process.env.DATABASE_URL_POOLED ?? process.env.DATABASE_URL;
@@ -42,6 +43,75 @@ if (!connectionString) {
   throw new Error(
     "DATABASE_URL_POOLED or DATABASE_URL must be set (see .env.local).",
   );
+}
+
+/**
+ * PHASE 6 — startup validation of the runtime connection string.
+ *
+ * Runtime queries MUST go through the Supabase Supavisor pooler in
+ * *transaction* mode, otherwise the serverless fan-out produces the
+ * "Connection closed" storms documented above. The transaction pooler is
+ * identified by:
+ *   - host containing "pooler.supabase.com"  (Supavisor, not the direct db host)
+ *   - port 6543                              (transaction mode; 5432 is session/direct)
+ *
+ * We fail loudly at runtime on an unambiguous misconfiguration (e.g. the
+ * direct :5432 DSN pasted into the pooled slot). During `next build` we only
+ * warn — the build must not be coupled to a specific deployment's DSN.
+ */
+function validateRuntimeDsn(dsn: string): string[] {
+  const problems: string[] = [];
+  let url: URL;
+  try {
+    url = new URL(dsn);
+  } catch {
+    return ["DATABASE_URL is not a parseable connection URL."];
+  }
+  const usingPooledVar = Boolean(process.env.DATABASE_URL_POOLED);
+  const isPoolerHost = url.hostname.includes("pooler.supabase.com");
+  const port = url.port || "5432";
+
+  // Only enforce pooler/transaction-mode rules when the explicit pooled var is
+  // the one in use. If only DATABASE_URL is set, the operator has opted out of
+  // pooling knowingly (e.g. local dev / migrations) — warn, don't fail.
+  if (usingPooledVar) {
+    if (!isPoolerHost) {
+      problems.push(
+        `DATABASE_URL_POOLED host "${url.hostname}" is not a Supavisor pooler ` +
+          `host (expected *.pooler.supabase.com). This looks like a direct ` +
+          `connection and will cause "Connection closed" storms under serverless fan-out.`,
+      );
+    }
+    if (port !== "6543") {
+      problems.push(
+        `DATABASE_URL_POOLED port is ${port}, expected 6543 (Supavisor ` +
+          `transaction mode). Port 5432 is the session/direct endpoint.`,
+      );
+    }
+  } else {
+    logWarn(
+      "db:config",
+      "DATABASE_URL_POOLED is not set; runtime queries are using the direct " +
+        "DATABASE_URL. Set the Supavisor transaction pooler (port 6543) for serverless.",
+      { host: url.hostname, port },
+    );
+  }
+  return problems;
+}
+
+{
+  const problems = validateRuntimeDsn(connectionString);
+  if (problems.length > 0) {
+    const isBuildPhase = process.env.NEXT_PHASE === "phase-production-build";
+    const summary = `Invalid database connection configuration:\n - ${problems.join("\n - ")}`;
+    if (isBuildPhase) {
+      // Don't break the build on a deployment-specific DSN; surface loudly in logs.
+      logWarn("db:config", summary);
+    } else {
+      logError("db:config", new Error(summary));
+      throw new Error(summary);
+    }
+  }
 }
 
 // Cache the postgres-js client on globalThis. Without this, Next.js dev
@@ -85,3 +155,86 @@ if (process.env.NODE_ENV !== "production") {
 
 export const db = drizzle(queryClient, { schema });
 export { schema };
+
+/**
+ * Thrown when a query fails with a transient connection error AND the single
+ * retry also fails — i.e. the database is genuinely unreachable, not just a
+ * stale socket. Callers can catch this to distinguish "DB outage" (show a
+ * try-again message, keep the user where they are) from "not authorized"
+ * (a clean null result). Never thrown for query/validation errors.
+ */
+export class DatabaseUnavailableError extends Error {
+  readonly operation: string;
+  constructor(operation: string, options?: { cause?: unknown }) {
+    super(`Database unavailable during "${operation}"`, options);
+    this.name = "DatabaseUnavailableError";
+    this.operation = operation;
+  }
+}
+
+/**
+ * postgres-js throws these when it hands back a socket whose Supabase
+ * Supavisor upstream was already reaped (see the connection-strategy notes
+ * above), or when the pooler is unreachable. These are retryable.
+ */
+function isTransientConnectionError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message.toLowerCase() : "";
+  return (
+    msg.includes("connection closed") ||
+    msg.includes("connection_ended") ||
+    msg.includes("connection terminated") ||
+    msg.includes("econnreset") ||
+    msg.includes("connect_timeout") ||
+    msg.includes("connection timeout")
+  );
+}
+
+/**
+ * PHASE 4 — Retry a query exactly once on a transient pooled-connection drop,
+ * with structured logging and a clear transient/permanent distinction.
+ *
+ * - Permanent errors (constraint violations, bad SQL, anything not a
+ *   connection drop) are logged and rethrown immediately — never retried,
+ *   never swallowed.
+ * - Transient connection errors are retried exactly once on a fresh pool
+ *   connection. The retry attempt is logged (warn).
+ * - If the retry also fails transiently, we throw DatabaseUnavailableError so
+ *   the caller can render a graceful "temporarily unavailable" UX instead of
+ *   the generic crash boundary.
+ *
+ * Nothing is ever silently swallowed: every failure path emits a log line
+ * tagged with the operation name, attempt number, and classification.
+ *
+ * @param operation short label for logs, e.g. "admins.select".
+ */
+export async function withDbRetry<T>(
+  fn: () => Promise<T>,
+  operation = "db-query",
+): Promise<T> {
+  const MAX_ATTEMPTS = 2; // initial try + exactly one retry
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (!isTransientConnectionError(err)) {
+        logError("db:query", err, { operation, attempt, classification: "permanent" });
+        throw err;
+      }
+      if (attempt >= MAX_ATTEMPTS) {
+        logError("db:query", err, {
+          operation,
+          attempt,
+          classification: "transient-exhausted",
+        });
+        throw new DatabaseUnavailableError(operation, { cause: err });
+      }
+      logWarn("db:query", "transient connection error — retrying once", {
+        operation,
+        attempt,
+        next_attempt: attempt + 1,
+      });
+    }
+  }
+  // Unreachable (loop either returns or throws) — satisfies the type checker.
+  throw new DatabaseUnavailableError(operation);
+}

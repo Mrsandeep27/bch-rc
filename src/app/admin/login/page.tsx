@@ -47,12 +47,20 @@ export default function AdminLogin() {
       }
       if (data.created) {
         setCreated(true);
-        // Brief pause for the user to see "Account created" then redirect.
+        // `created` now drives the button (disabled + "redirecting…" label),
+        // so the loading flag can be released here. Brief pause for the user
+        // to see "Account created" then redirect.
+        setLoading(false);
         setTimeout(() => router.push("/admin"), 600);
         return;
       }
       router.push("/admin");
       router.refresh();
+      // Defensive: navigation is async and the login route is outside the
+      // (authed) group, so a successful sign-in genuinely leaves this page.
+      // But if navigation is ever interrupted (an unexpected bounce, a slow
+      // RSC render), never leave the button frozen on "Signing in…".
+      setLoading(false);
     } catch (err) {
       // AbortError fires from our own timeout — translate it to a friendly
       // retryable message instead of "The user aborted a request."
