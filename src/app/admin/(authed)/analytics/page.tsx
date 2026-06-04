@@ -237,7 +237,7 @@ export default async function AdminAnalytics() {
             return (
               <div
                 key={ymd(b.date)}
-                className="grid grid-cols-[80px_1fr_120px] items-center gap-3 text-xs"
+                className="grid grid-cols-[52px_1fr_auto] sm:grid-cols-[80px_1fr_120px] items-center gap-2 sm:gap-3 text-xs"
               >
                 <span
                   className={`tabular-nums ${

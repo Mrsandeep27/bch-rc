@@ -76,17 +76,22 @@ function VariantRow({
         : "bg-success/10 text-success";
 
   return (
-    <div className="flex flex-wrap items-center gap-2 py-2">
-      <span className="w-28 shrink-0 text-sm text-brand-ink truncate">
-        {item.colorName ?? "default"}
-      </span>
-      <span
-        className={`font-mono text-xs font-semibold px-2 py-0.5 rounded-full ${badgeCls}`}
-      >
-        {configured ? stock : "not set"}
-      </span>
+    // Mobile: identity (colour + badge) takes its own full-width row, controls
+    // wrap onto the next line left-aligned. sm+: single row, controls pushed
+    // right with ml-auto — matches the original desktop layout.
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5">
+      <div className="flex items-center gap-2 min-w-0 basis-full sm:basis-auto">
+        <span className="flex-1 sm:flex-none sm:w-28 shrink-0 text-sm text-brand-ink truncate">
+          {item.colorName ?? "default"}
+        </span>
+        <span
+          className={`shrink-0 font-mono text-xs font-semibold px-2 py-0.5 rounded-full ${badgeCls}`}
+        >
+          {configured ? stock : "not set"}
+        </span>
+      </div>
 
-      <div className="flex items-center gap-1.5 ml-auto">
+      <div className="flex flex-wrap items-center gap-1.5 sm:ml-auto">
         <input
           type="number"
           min={0}
@@ -95,7 +100,7 @@ function VariantRow({
           onChange={(e) => setInput(e.target.value.replace(/[^\d]/g, ""))}
           disabled={busy}
           aria-label={`Set stock for ${item.skuName} ${item.colorName ?? ""}`}
-          className="w-20 px-2 py-1.5 rounded-lg border border-brand-line focus:outline-none focus:border-brand-red text-brand-ink text-sm tabular-nums disabled:opacity-50"
+          className="w-16 sm:w-20 px-2 py-1.5 rounded-lg border border-brand-line focus:outline-none focus:border-brand-red text-brand-ink text-sm tabular-nums disabled:opacity-50"
         />
         <button
           type="button"
@@ -121,7 +126,7 @@ function VariantRow({
         >
           +50
         </button>
-        <span className="w-24 text-xs">
+        <span className="min-w-[3rem] text-xs">
           {busy ? (
             <Loader2 size={14} className="animate-spin text-brand-ink-soft" />
           ) : msg ? (

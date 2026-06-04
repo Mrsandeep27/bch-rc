@@ -60,7 +60,7 @@ export default async function AdminOrderDetail({
           <p className="text-xs font-mono uppercase tracking-widest text-brand-ink-soft">
             Order
           </p>
-          <h1 className="font-display text-3xl font-bold text-brand-ink font-mono">
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-brand-ink font-mono break-all">
             {order.id}
           </h1>
           <p className="text-sm text-brand-ink-soft mt-1">
