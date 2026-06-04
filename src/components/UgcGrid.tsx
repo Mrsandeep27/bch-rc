@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { motion } from "framer-motion";
 import Image from "next/image";
@@ -25,40 +25,40 @@ const MAX_CONCURRENT_VIDEOS = 2;
 
 const STUBS: UgcCard[] = [
   {
-    src: "/products/PRC-bmw.jpg",
+    src: "/products/PRC-bmw.webp",
     handle: "164prccars",
     caption: "Pocket BMW · drift wheels on",
     likes: "1.2K",
     isVideo: true,
   },
   {
-    src: "/products/PRC-porsche.jpg",
+    src: "/products/PRC-porsche.webp",
     handle: "pocketrccar",
     caption: "GT3 silhouette in dark blue",
     likes: "847",
   },
   {
-    src: "/products/PRC-monster.jpg",
+    src: "/products/PRC-monster.webp",
     handle: "164prccars",
     caption: "Monster Truck climbs anything",
     likes: "2.4K",
     isVideo: true,
   },
   {
-    src: "/products/PRC-thar.jpg",
+    src: "/products/PRC-thar.webp",
     handle: "pocketrccar",
     caption: "Thar off-roading on marble",
     likes: "612",
   },
   {
-    src: "/products/PRC-f1-classic.jpg",
+    src: "/products/PRC-f1-classic.webp",
     handle: "164prccars",
     caption: "Pocket F1 · race day at home",
     likes: "1.9K",
     isVideo: true,
   },
   {
-    src: "/products/PRC-bmw.jpg",
+    src: "/products/PRC-bmw.webp",
     handle: "pocketrccar",
     caption: "Behind the scenes · Bangalore HQ",
     likes: "534",

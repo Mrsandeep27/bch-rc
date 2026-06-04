@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import Image from "next/image";
@@ -22,9 +22,9 @@ type BundleOption = {
 
 const SINGLE_PRICE = getHeroSku().retailINR;
 
-const CAR_BMW = { src: "/products/PRC-bmw.jpg", alt: "Pocket BMW" };
-const CAR_PORSCHE = { src: "/products/PRC-porsche.jpg", alt: "Pocket Porsche" };
-const CAR_MONSTER = { src: "/products/PRC-monster.jpg", alt: "Pocket Monster Truck" };
+const CAR_BMW = { src: "/products/PRC-bmw.webp", alt: "Pocket BMW" };
+const CAR_PORSCHE = { src: "/products/PRC-porsche.webp", alt: "Pocket Porsche" };
+const CAR_MONSTER = { src: "/products/PRC-monster.webp", alt: "Pocket Monster Truck" };
 
 const OPTIONS: BundleOption[] = [
   {
