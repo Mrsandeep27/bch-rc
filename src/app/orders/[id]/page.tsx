@@ -47,6 +47,10 @@ export default async function OrderSuccessPage({
   // Prepaid order whose capture hasn't landed yet (webhook lag). Don't claim
   // "Payment successful!" until the money is actually confirmed.
   const awaitingCapture = !isCod && order.paymentStatus !== "CAPTURED";
+  // COD orders sit unverified until our team rings the customer to confirm
+  // (kills prank orders). Don't claim "Order confirmed!" until that happens.
+  const awaitingCodVerification =
+    isCod && order.status === "PENDING_COD_VERIFICATION";
   const items = order.items as OrderItem[];
   const shippingAddr = order.shippingAddress as {
     city?: string;
@@ -80,26 +84,34 @@ export default async function OrderSuccessPage({
           <div className="bg-white rounded-2xl border border-brand-line p-6 sm:p-8 text-center">
             <div
               className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 ${
-                awaitingCapture
+                awaitingCapture || awaitingCodVerification
                   ? "bg-gold/10 text-gold"
                   : "bg-success/10 text-success"
               }`}
             >
-              {awaitingCapture ? <Clock size={32} /> : <CheckCircle2 size={32} />}
+              {awaitingCapture || awaitingCodVerification ? (
+                <Clock size={32} />
+              ) : (
+                <CheckCircle2 size={32} />
+              )}
             </div>
             <h1 className="font-display text-3xl sm:text-4xl font-bold text-brand-ink">
               {awaitingCapture
                 ? "Order received — confirming payment"
-                : isCod
-                  ? "Order confirmed!"
-                  : "Payment successful!"}
+                : awaitingCodVerification
+                  ? "Order received — we'll call to confirm"
+                  : isCod
+                    ? "Order confirmed!"
+                    : "Payment successful!"}
             </h1>
             <p className="text-brand-ink-soft mt-2">
               {awaitingCapture
                 ? "Your payment is being confirmed by the bank — this usually takes a few seconds. We've saved your order; refresh to see the latest status."
-                : isCod
-                  ? "We'll dispatch from Yelahanka in 24 hrs."
-                  : "Thanks for your order. Dispatch from Yelahanka in 24 hrs."}
+                : awaitingCodVerification
+                  ? "Our team will ring you within 24 hrs to confirm before dispatch. Please pick up when we call from a Bangalore number."
+                  : isCod
+                    ? "We'll dispatch from Yelahanka in 24 hrs."
+                    : "Thanks for your order. Dispatch from Yelahanka in 24 hrs."}
             </p>
 
             <div className="mt-6 inline-flex flex-col items-center gap-1 px-5 py-3 rounded-xl bg-brand-cream border border-brand-line">

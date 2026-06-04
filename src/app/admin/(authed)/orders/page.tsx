@@ -13,7 +13,11 @@ import { formatINR } from "@/lib/utils";
 //                       Useful for retry-emails / abandonment follow-up.
 //   - FAILED_STATUSES: terminal-unhappy. Manual follow-up bucket.
 const LIVE_STATUSES = ["PAID", "PACKED", "SHIPPED", "DELIVERED"] as const;
-const PENDING_STATUSES = ["PENDING"] as const;
+// PENDING (prepaid that opened Razorpay but hasn't captured) lives here
+// alongside PENDING_COD_VERIFICATION (COD waiting for the /cod operator to
+// call + confirm). Both are pre-fulfilment states; lumping them in the same
+// bucket keeps the admin counts honest.
+const PENDING_STATUSES = ["PENDING", "PENDING_COD_VERIFICATION"] as const;
 const FAILED_STATUSES = [
   "CANCELLED",
   "FAILED",
@@ -330,6 +334,7 @@ function ViewChip({
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
     PENDING: "bg-gold/10 text-gold",
+    PENDING_COD_VERIFICATION: "bg-amber-100 text-amber-800",
     PAID: "bg-success/10 text-success",
     PACKED: "bg-success/10 text-success",
     SHIPPED: "bg-blue-100 text-blue-700",

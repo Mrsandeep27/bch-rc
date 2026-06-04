@@ -33,10 +33,6 @@ import { OFFERS } from "@/lib/config";
 import { razorpay } from "@/lib/razorpay";
 import { generateOrderId } from "@/lib/order-id";
 import { redeemCoupon, CouponError } from "@/lib/coupons";
-import {
-  enqueueShipmentJob,
-  runShipmentJobOnce,
-} from "@/lib/fulfillment/shipment-queue";
 import { sendOutboxRow } from "@/lib/notifications/drain";
 import { notifyOrderEvent, whatsappEnabled } from "@/lib/notifications/notify";
 import { resolveServiceability } from "@/lib/serviceability";
@@ -441,11 +437,14 @@ export async function POST(req: Request) {
           source: "user",
         });
 
-        // 3f. Enqueue ORDER_CONFIRMED notification ONLY for COD inside the
-        //     transaction. Prepaid email fires from the verify route on
-        //     successful capture. Outbox row is committed with the order so
-        //     a crash after this point can never leave a confirmed order
-        //     without a queued notification.
+        // 3f. Enqueue the COD placeholder email INSIDE the transaction. COD
+        //     orders no longer auto-confirm — they sit at
+        //     PENDING_COD_VERIFICATION until the operator at /cod rings the
+        //     customer and clicks Confirm. So the email at create-time is
+        //     ORDER_RECEIVED ("we'll call to confirm within 24h"), not the
+        //     full ORDER_CONFIRMED. The full confirmation fires from the
+        //     /cod confirm action. Prepaid flow is unchanged (verify route
+        //     sends PAYMENT_CAPTURED on capture).
         let notificationId: string | null = null;
         if (body.paymentMethod === "COD") {
           const [n] = await tx
@@ -455,8 +454,8 @@ export async function POST(req: Request) {
               orderId,
               customerId: customer.id,
               channel: "email",
-              template: "ORDER_CONFIRMED",
-              dedupKey: `${orderId}:ORDER_CONFIRMED:email`,
+              template: "ORDER_RECEIVED",
+              dedupKey: `${orderId}:ORDER_RECEIVED:email`,
               payload: {
                 to: body.address.email,
                 toPhone: body.address.phone,
@@ -623,12 +622,18 @@ export async function POST(req: Request) {
     });
   }
 
-  // ── 5. COD path: mark PAID immediately, enqueue email, trigger shipment ──
+  // ── 5. COD path: mark PENDING_COD_VERIFICATION, send placeholder email ──
+  //
+  // COD orders DO NOT auto-confirm. They land in a manual-verify queue at
+  // /cod where the operator rings the customer to confirm — kills prank/kid
+  // orders before any shipment cost is incurred. No Shiprocket order is
+  // created at this point. The /cod confirm action transitions to PAID and
+  // enqueues the shipment job; the 48h auto-reject sweeper releases stock
+  // for anything left hanging.
   await db
     .update(orders)
     .set({
-      status: "PAID",
-      paidAt: new Date(),
+      status: "PENDING_COD_VERIFICATION",
       updatedAt: new Date(),
     })
     .where(eq(orders.id, orderId));
@@ -637,7 +642,7 @@ export async function POST(req: Request) {
     siteId: body.siteId,
     orderId,
     customerId,
-    type: "ORDER_CONFIRMED_COD",
+    type: "COD_VERIFICATION_PENDING",
     payload: { total },
     source: "user",
   });
@@ -654,16 +659,11 @@ export async function POST(req: Request) {
     );
   }
 
-  // COD confirmation on WhatsApp too (email above is the durable in-txn row).
-  // Only when enabled; runs past the response so it never blocks checkout.
+  // WhatsApp placeholder too (email above is the durable in-txn row). Only
+  // when enabled; runs past the response so it never blocks checkout.
   if (whatsappEnabled()) {
-    after(() => notifyOrderEvent(orderId, "ORDER_CONFIRMED", ["whatsapp"]));
+    after(() => notifyOrderEvent(orderId, "ORDER_RECEIVED", ["whatsapp"]));
   }
-
-  // Durable, exactly-once shipment creation via the job queue. Enqueue now
-  // (committed), run it in `after()` so it survives serverless teardown.
-  await enqueueShipmentJob(orderId);
-  after(() => runShipmentJobOnce(orderId).catch(() => {}));
 
   return NextResponse.json({
     ok: true,

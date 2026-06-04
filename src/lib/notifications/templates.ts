@@ -9,6 +9,7 @@ const BASE_URL = "https://pocketrccars.com";
 const SUPPORT_PHONE = "+91 63623 46498";
 
 export type NotificationTemplate =
+  | "ORDER_RECEIVED"
   | "ORDER_CONFIRMED"
   | "PAYMENT_CAPTURED"
   | "SHIPMENT_CREATED"
@@ -198,6 +199,45 @@ export function renderTemplate(
   p: EmailPayload,
 ): { subject: string; html: string; text: string } {
   switch (template) {
+    case "ORDER_RECEIVED": {
+      // Placeholder email for COD: order is placed but NOT yet confirmed.
+      // Our team has to call the customer to verify they really want it
+      // (kills prank/kid orders). Customer learns: order is received,
+      // we'll call to confirm within 24h, no dispatch yet. The full
+      // ORDER_CONFIRMED email fires after the operator clicks Confirm.
+      const subject = `Order ${p.orderId} received — we'll call to confirm`;
+      const body = `
+<h1 style="font-size:24px;margin:14px 0 4px">Hi ${escapeHtml(p.customerName)}, we got your order.</h1>
+<p style="color:#444">Order ID <b style="font-family:monospace">${escapeHtml(p.orderId)}</b></p>
+<div style="background:#fff8e1;border-radius:12px;padding:14px 16px;margin:14px 0;font-size:14px;color:#5a4a00">
+<b>Our team will call you within 24 hrs to confirm your order before dispatch.</b><br>
+This is a Cash-on-Delivery order, so we ring every customer to verify the address and delivery time. Please pick up when we call from a Bangalore number.
+</div>
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px">${lineItems(p.items)}</table>
+<table style="width:100%;border-collapse:collapse;margin:0 0 8px;font-size:14px">${priceBreakdown(p)}</table>
+${shippingBlock(p)}
+<p style="color:#444"><b>Cash on Delivery</b> — keep <b>${formatINR(p.totalInr)}</b> ready when the courier arrives (after we confirm).</p>
+${editWindowBlock()}
+<p style="color:#777;font-size:13px">If you didn't place this order or want to cancel, just reply to this email or WhatsApp ${SUPPORT_PHONE} — no questions asked.</p>
+${policyLine()}`;
+      const text = `Hi ${p.customerName}, we received your ${BRAND} order ${p.orderId}.
+
+Our team will call you within 24 hrs to confirm your order before dispatch. This is a Cash-on-Delivery order so we ring every customer to verify. Please pick up when we call from a Bangalore number.
+
+${lineItemsText(p.items)}
+${priceBreakdownText(p)}
+${shippingBlockText(p)}
+
+Cash on Delivery — keep ${formatINR(p.totalInr)} ready when the courier arrives (after we confirm).
+
+${editWindowText()}
+
+Didn't place this order or want to cancel? Reply to this email or WhatsApp ${SUPPORT_PHONE} — no questions asked.
+
+${policyLineText()}
+— ${BRAND}`;
+      return { subject, html: shell(subject, body), text };
+    }
     case "ORDER_CONFIRMED": {
       const trackUrl = `${BASE_URL}/orders/${p.orderId}`;
       const subject = `Order ${p.orderId} confirmed — ${BRAND}`;
@@ -341,6 +381,10 @@ export function renderWhatsApp(
 ): { text: string } {
   const track = `${BASE_URL}/orders/${p.orderId}`;
   switch (template) {
+    case "ORDER_RECEIVED":
+      return {
+        text: `📥 *${BRAND}* — order *${p.orderId}* received.\nOur team will call you within 24 hrs to confirm before dispatch (Cash on Delivery: ${formatINR(p.totalInr)}).\nDidn't place this? Reply STOP — no questions asked.`,
+      };
     case "ORDER_CONFIRMED":
       return {
         text: `✅ *${BRAND}* — order *${p.orderId}* confirmed.\n${

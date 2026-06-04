@@ -112,6 +112,7 @@ function buildPayload(order: OrderRow): EmailPayload {
  * lifecycle transition for admin visibility.
  */
 const CUSTOMER_FACING_TEMPLATES = new Set<NotificationTemplate>([
+  "ORDER_RECEIVED",
   "ORDER_CONFIRMED",
   "PAYMENT_CAPTURED",
   "DELIVERED",

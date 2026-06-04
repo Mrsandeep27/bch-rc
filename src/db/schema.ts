@@ -33,6 +33,7 @@ import {
 
 export const orderStatusEnum = pgEnum("order_status", [
   "PENDING",
+  "PENDING_COD_VERIFICATION",
   "PAID",
   "PACKED",
   "SHIPPED",
