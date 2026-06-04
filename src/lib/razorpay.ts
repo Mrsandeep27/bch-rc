@@ -131,3 +131,87 @@ export async function fetchAndConfirmCapture(params: {
     },
   };
 }
+
+// ============================================================
+// Payment Links — for the admin manual-order flow.
+// ============================================================
+
+export type CreatePaymentLinkInput = {
+  /** Amount in paise. ₹1,299 → 129900. */
+  amountPaise: number;
+  /** Our internal order id (PRC-XXXXXXXX) — round-trips back to us in the
+   *  webhook payload as payment_link.reference_id so we can flip the order
+   *  to PAID. UNIQUE in our orders table; reusing a value will collide. */
+  referenceId: string;
+  /** Customer-facing label on the hosted page. Keep under ~100 chars. */
+  description: string;
+  customer: {
+    name: string;
+    /** Indian phone in the form "+919xxxxxxxxx" or "9xxxxxxxxx" — Razorpay
+     *  accepts both but normalize to E.164 (+91...) for SMS to fire. */
+    contact: string;
+    email?: string;
+  };
+  /** Where the customer is sent after they pay. Use the order details page so
+   *  they land on a real "thank you" experience. */
+  callbackUrl: string;
+  /** Optional unix epoch seconds; if set, link expires unpaid after this. We
+   *  pass +48h for manual orders so unpaid links don't hang around forever. */
+  expireBySec?: number;
+  /** Arbitrary key:value notes we can read back from the webhook. */
+  notes?: Record<string, string>;
+};
+
+export type PaymentLinkRecord = {
+  id: string;
+  shortUrl: string;
+  status: string;
+  amount: number;
+};
+
+/**
+ * Create a Razorpay Payment Link. Razorpay hosts the payment page and
+ * automatically sends SMS + email to the customer on creation.
+ *
+ * Errors bubble up — caller should wrap in try/catch and roll back the
+ * order row (or leave it PENDING so reconcile cleans it up later).
+ */
+export async function createPaymentLink(
+  input: CreatePaymentLinkInput,
+): Promise<PaymentLinkRecord> {
+  // The Node SDK's `paymentLink.create` returns a loosely-typed any. We assert
+  // the response shape we depend on.
+  const resp = (await (razorpay as unknown as {
+    paymentLink: {
+      create: (body: Record<string, unknown>) => Promise<{
+        id: string;
+        short_url: string;
+        status: string;
+        amount: number;
+      }>;
+    };
+  }).paymentLink.create({
+    amount: input.amountPaise,
+    currency: "INR",
+    accept_partial: false,
+    reference_id: input.referenceId,
+    description: input.description,
+    customer: {
+      name: input.customer.name,
+      contact: input.customer.contact,
+      ...(input.customer.email ? { email: input.customer.email } : {}),
+    },
+    notify: { sms: true, email: !!input.customer.email },
+    reminder_enable: true,
+    callback_url: input.callbackUrl,
+    callback_method: "get",
+    ...(input.expireBySec ? { expire_by: input.expireBySec } : {}),
+    ...(input.notes ? { notes: input.notes } : {}),
+  }));
+  return {
+    id: resp.id,
+    shortUrl: resp.short_url,
+    status: resp.status,
+    amount: resp.amount,
+  };
+}

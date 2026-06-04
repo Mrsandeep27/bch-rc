@@ -51,8 +51,9 @@ export async function POST(req: Request) {
     id?: string;
     event: string;
     payload?: {
-      payment?: { entity?: { id: string; order_id: string; amount: number; status: string; error_description?: string } };
+      payment?: { entity?: { id: string; order_id: string; amount: number; status: string; method?: string | null; error_description?: string } };
       refund?: { entity?: { id: string; payment_id: string; amount: number; status: string } };
+      payment_link?: { entity?: { id: string; reference_id?: string; amount: number; status: string } };
     };
   };
   try {
@@ -138,6 +139,114 @@ export async function POST(req: Request) {
           // Dedups against /verify via the job PK + atomic claim.
           await enqueueShipmentJob(order.id);
           after(() => runShipmentJobOnce(order.id).catch(() => {}));
+        }
+        break;
+      }
+      case "payment_link.paid": {
+        // Manual-order Payment Links don't carry a Razorpay order_id — we
+        // match them via reference_id (our PRC-XXXXXXXX) which we set when
+        // creating the link in /api/admin/orders/create.
+        const link = event.payload?.payment_link?.entity;
+        const payment = event.payload?.payment?.entity;
+        if (!link || !payment) break;
+        const referenceId = link.reference_id;
+        if (!referenceId) break;
+        const [order] = await db
+          .select()
+          .from(orders)
+          .where(eq(orders.id, referenceId));
+        if (
+          order &&
+          order.createdVia === "ADMIN_MANUAL" &&
+          order.paymentStatus !== "CAPTURED" &&
+          order.paymentStatus !== "FAILED" &&
+          order.paymentStatus !== "REFUNDED"
+        ) {
+          // Amount must match. Payment-link.paid amount is in paise.
+          if (Number(payment.amount) !== order.totalInr * 100) {
+            await db.insert(events).values({
+              siteId: order.siteId,
+              orderId: order.id,
+              customerId: order.customerId,
+              type: "WEBHOOK_PAYMENT_LINK_AMOUNT_MISMATCH",
+              payload: {
+                paymentLinkId: link.id,
+                paid: payment.amount,
+                expected: order.totalInr * 100,
+              },
+              source: "webhook",
+            });
+            break;
+          }
+          await db
+            .update(orders)
+            .set({
+              status: "PAID",
+              paymentStatus: "CAPTURED",
+              razorpayPaymentId: payment.id,
+              paymentMethod: payment.method
+                ? (payment.method.toUpperCase() as "UPI" | "CARD" | "NETBANKING" | "WALLET")
+                : "UPI",
+              paidAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .where(eq(orders.id, order.id));
+          await db.insert(events).values({
+            siteId: order.siteId,
+            orderId: order.id,
+            customerId: order.customerId,
+            type: "WEBHOOK_PAYMENT_LINK_PAID",
+            payload: {
+              paymentLinkId: link.id,
+              paymentId: payment.id,
+              amount: payment.amount,
+              method: payment.method ?? null,
+            },
+            source: "webhook",
+          });
+          // Same downstream as customer-self-service capture: confirmation
+          // email + Shiprocket shipment.
+          await notifyOrderEvent(order.id, "PAYMENT_CAPTURED");
+          await enqueueShipmentJob(order.id);
+          after(() => runShipmentJobOnce(order.id).catch(() => {}));
+        }
+        break;
+      }
+      case "payment_link.expired":
+      case "payment_link.cancelled": {
+        // Customer let the manual-order link expire (or admin cancelled it).
+        // Release reserved stock so it's available again. Leave the row as
+        // CANCELLED with the audit trail so we can see what happened.
+        const link = event.payload?.payment_link?.entity;
+        if (!link?.reference_id) break;
+        const [order] = await db
+          .select()
+          .from(orders)
+          .where(eq(orders.id, link.reference_id));
+        if (order && order.createdVia === "ADMIN_MANUAL" && order.status === "PENDING") {
+          await db
+            .update(orders)
+            .set({
+              status: "CANCELLED",
+              cancelledAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .where(eq(orders.id, order.id));
+          await db.insert(events).values({
+            siteId: order.siteId,
+            orderId: order.id,
+            customerId: order.customerId,
+            type:
+              event.event === "payment_link.expired"
+                ? "WEBHOOK_PAYMENT_LINK_EXPIRED"
+                : "WEBHOOK_PAYMENT_LINK_CANCELLED",
+            payload: { paymentLinkId: link.id },
+            source: "webhook",
+          });
+          await releaseOrderHoldsBestEffort(
+            order.id,
+            event.event === "payment_link.expired" ? "ABANDONED" : "CANCELLED",
+          );
         }
         break;
       }

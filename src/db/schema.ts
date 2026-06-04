@@ -61,6 +61,24 @@ export const paymentStatusEnum = pgEnum("payment_status", [
   "PARTIALLY_REFUNDED",
 ]);
 
+/**
+ * Where the order originated.
+ *
+ *  CUSTOMER_WEB    — the buyer self-served on pocketrccars.com checkout.
+ *                    Default for every order, including all historical ones.
+ *  ADMIN_MANUAL    — an admin (Sandeep/Syed/Hassan) created the order from
+ *                    /admin/orders/new because the customer reached out via
+ *                    WhatsApp/phone instead of using the website. Razorpay
+ *                    payment link is auto-sent for payment.
+ *
+ * Used for per-operator sales attribution + a "Manual" filter chip on the
+ * admin orders list.
+ */
+export const orderCreatedViaEnum = pgEnum("order_created_via", [
+  "CUSTOMER_WEB",
+  "ADMIN_MANUAL",
+]);
+
 export const couponTypeEnum = pgEnum("coupon_type", [
   "FLAT_INR",
   "PERCENT",
@@ -317,6 +335,11 @@ export const orders = pgTable(
     razorpayOrderId: text("razorpay_order_id"),
     razorpayPaymentId: text("razorpay_payment_id"),
     razorpaySignature: text("razorpay_signature"),
+    /** Razorpay Payment Link ID — set when an admin creates a manual order
+     *  and Razorpay generates a hosted payment-link URL. Separate from
+     *  razorpay_order_id which is only used by the customer-self-service
+     *  checkout flow. Webhook payload's `payment_link.id` maps back here. */
+    razorpayPaymentLinkId: text("razorpay_payment_link_id"),
     shiprocketOrderId: text("shiprocket_order_id"),
     shiprocketShipmentId: text("shiprocket_shipment_id"),
     awbCode: text("awb_code"),
@@ -330,6 +353,15 @@ export const orders = pgTable(
      * CANCELLED / REFUNDED). The conditional UPDATE that flips it IS the claim.
      */
     holdsReleased: boolean("holds_released").notNull().default(false),
+    /** Origin marker (see orderCreatedViaEnum). Default CUSTOMER_WEB so all
+     *  historical rows + every customer-self-service order stays correct. */
+    createdVia: orderCreatedViaEnum("created_via")
+      .notNull()
+      .default("CUSTOMER_WEB"),
+    /** Email of the admin who created a manual order. NULL for self-service
+     *  CUSTOMER_WEB rows. Used by the admin sales report to attribute revenue
+     *  per operator. */
+    createdByEmail: text("created_by_email"),
     placedAt: timestamp("placed_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -350,6 +382,9 @@ export const orders = pgTable(
     index("orders_customer_idx").on(t.customerId),
     index("orders_status_idx").on(t.status),
     index("orders_razorpay_order_idx").on(t.razorpayOrderId),
+    unique("orders_razorpay_payment_link_id_unique").on(t.razorpayPaymentLinkId),
+    index("orders_created_via_idx").on(t.createdVia),
+    index("orders_created_by_email_idx").on(t.createdByEmail),
     index("orders_awb_idx").on(t.awbCode),
     index("orders_shiprocket_shipment_idx").on(t.shiprocketShipmentId),
     unique("orders_idempotency_key_unique").on(t.idempotencyKey),
@@ -392,6 +427,77 @@ export const inventory = pgTable(
     // last-line backstop so stock can never physically go negative.
     check("inventory_stock_nonneg", sql`${t.stock} >= 0`),
     index("inventory_site_sku_idx").on(t.siteId, t.skuId),
+  ],
+);
+
+// ============================================================
+// 8d. ANALYTICS SESSIONS — first-party, server-side visitor tracking
+// ============================================================
+// One row per visitor session, written by the edge middleware via a
+// server-to-server call to /api/track (so ad-blockers never see it). A
+// session is a 30-minute sliding window keyed by the `prc_sid` cookie; the
+// stable `prc_vid` cookie (1 year) is the unique-visitor key. Both cookies
+// are first-party and domain-scoped, so unique-visitor counts are naturally
+// PER-SITE (the same person on two of our domains = two visitors, by design).
+//
+// Why sessions-only (no per-pageview table): the four dashboard metrics
+// (visitors, conversion rate, live visitors, traffic sources) all derive from
+// sessions, and prod runs one DB connection per Lambda. We UPSERT one row per
+// pageview (incrementing pageviewCount) instead of inserting a row each time,
+// halving write volume. Add a pageviews table later if path-level analytics
+// is needed.
+//
+// Conversion rate is computed elsewhere as (paid orders ÷ sessions) over a
+// date range — orders live in this same DB and are unblockable, so the
+// numerator is exact; this table supplies an accurate denominator.
+
+export const analyticsSessions = pgTable(
+  "analytics_sessions",
+  {
+    /** The session UUID from the `prc_sid` cookie. Globally unique (crypto
+     *  UUID), never a timestamp — distinct visitors starting in the same
+     *  second must not collapse into one session. */
+    id: text("id").primaryKey(),
+    /** Stable visitor UUID from `prc_vid`. The unique-visitor key. */
+    visitorId: text("visitor_id").notNull(),
+    siteId: text("site_id")
+      .notNull()
+      .references(() => sites.id),
+    /** Classified first-touch acquisition bucket: direct | organic | social |
+     *  referral | paid | email | other. Last-click-with-precedence is applied
+     *  at insert; first-touch is preserved (ON CONFLICT never overwrites it). */
+    source: text("source").notNull().default("direct"),
+    referrer: text("referrer"),
+    referrerHost: text("referrer_host"),
+    landingPath: text("landing_path"),
+    utmSource: text("utm_source"),
+    utmMedium: text("utm_medium"),
+    utmCampaign: text("utm_campaign"),
+    utmTerm: text("utm_term"),
+    utmContent: text("utm_content"),
+    /** From Vercel's x-vercel-ip-country header. */
+    country: text("country"),
+    userAgent: text("user_agent"),
+    /** Known crawler/bot UA → excluded from every dashboard count, but stored
+     *  for debugging rather than dropped silently. */
+    isBot: boolean("is_bot").notNull().default(false),
+    pageviewCount: integer("pageview_count").notNull().default(1),
+    startedAt: timestamp("started_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    /** Bumped on every pageview within the 30-min window. Drives the
+     *  "live visitors" card (last_seen within 5 min). */
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    // Visitors + conversion denominator: scan a site's sessions in a date range.
+    index("analytics_sessions_site_started_idx").on(t.siteId, t.startedAt),
+    // Live visitors: most-recent activity per site.
+    index("analytics_sessions_site_lastseen_idx").on(t.siteId, t.lastSeenAt),
+    // Unique-visitor dedup across a range.
+    index("analytics_sessions_visitor_idx").on(t.visitorId),
   ],
 );
 
@@ -639,3 +745,5 @@ export type ShipmentJob = typeof shipmentJobs.$inferSelect;
 export type NewShipmentJob = typeof shipmentJobs.$inferInsert;
 export type CustomerCouponRedemption = typeof customerCouponRedemptions.$inferSelect;
 export type NewCustomerCouponRedemption = typeof customerCouponRedemptions.$inferInsert;
+export type AnalyticsSession = typeof analyticsSessions.$inferSelect;
+export type NewAnalyticsSession = typeof analyticsSessions.$inferInsert;

@@ -1,0 +1,143 @@
+# ==========================================================================
+# Artillery mirror of the k6 suite -- same journeys, same 70/20/8/2 mix.
+#
+#   artillery run --dotenv ../.env artillery/artillery.yml
+#   artillery run --dotenv ../.env artillery/artillery.yml -o report.json
+#   artillery report report.json
+#
+# NOTE: Artillery is an OPEN model (arrivals/sec), unlike k6/Locust (closed,
+# fixed VUs). The phases below ramp ARRIVAL RATE; with ~25s scenario duration,
+# arrivalRate~=40/s sustains roughly ~1000 concurrent sessions. Tune arrivalRate
+# if your scenario think-time differs. Edit the peaks per stage:
+#   stage1 (100) ~= 4/s, stage2 (250) ~= 10/s, stage3 (500) ~= 20/s, stage4 (1000) ~= 40/s.
+# ==========================================================================
+config:
+  target: "{{ $processEnvironment.BASE_URL }}"
+  processor: "./processor.js"
+  http:
+    timeout: 15           # seconds -- anything slower is an "infinite load" failure
+    pool: 200             # reuse sockets
+  variables:
+    siteId: "prc"
+  # Pass/fail gate = success criteria. Breach -> non-zero exit (CI-friendly).
+  ensure:
+    thresholds:
+      - http.response_time.p95: 2000
+      - http.response_time.p99: 5000
+    # Real transport errors (ECONNRESET / "Connection closed" / timeouts) must
+    # be < 1% of requests. 401/429/409 are status codes, NOT errors, so they do
+    # not count here -- exactly the behaviour the spec wants.
+    maxErrorRate: 1
+  phases:
+    # ---- Stage 4 (1000) profile: ramp 5m -> sustain 15m -> ramp-down 5m ----
+    - name: "ramp-up"
+      duration: 300
+      arrivalRate: 1
+      rampTo: 40
+    - name: "sustain"
+      duration: 900
+      arrivalRate: 40
+    - name: "ramp-down"
+      duration: 300
+      arrivalRate: 40
+      rampTo: 1
+
+before:
+  flow:
+    - log: "Load test target = {{ $processEnvironment.BASE_URL }} (writes via ENABLE_WRITES env)"
+
+scenarios:
+  # ---- 70% Browsing ------------------------------------------------------
+  - name: "browse"
+    weight: 70
+    flow:
+      - function: "initVars"
+      - get:
+          url: "/"
+          name: "homepage"
+      - think: 2
+      - get:
+          url: "/product/{{ slug }}"
+          name: "pdp"
+      - think: 3
+      - get:
+          url: "/api/stock?skuIds={{ slug }}"
+          name: "stock"
+
+  # ---- 20% Cart activity -------------------------------------------------
+  - name: "cart"
+    weight: 20
+    flow:
+      - function: "initVars"
+      - get:
+          url: "/product/{{ slug }}"
+          name: "pdp"
+      - think: 2
+      - get:
+          url: "/api/stock?skuIds={{ slug }}"
+          name: "stock"
+      - get:
+          url: "/api/serviceability?pincode={{ pincode }}"
+          name: "serviceability"
+          capture:
+            - json: "$.serviceable"
+              as: "serviceable"
+
+  # ---- 8% Checkout (+ optional order write) ------------------------------
+  - name: "checkout"
+    weight: 8
+    flow:
+      - function: "initVars"
+      - get:
+          url: "/checkout"
+          name: "checkout_page"
+      - think: 3
+      - get:
+          url: "/api/serviceability?pincode={{ pincode }}"
+          name: "serviceability"
+      - get:
+          url: "/api/coupons/validate?code={{ coupon }}&siteId=prc&subtotalInr=1299&shippingInr=0"
+          name: "coupon_validate"
+      - think: 2
+      # Write step -- only fires when ENABLE_WRITES=true (set by initVars).
+      - post:
+          ifTrue: "enableWrites"
+          url: "/api/orders/create"
+          name: "order_create"
+          json:
+            siteId: "prc"
+            idempotencyKey: "{{ idempotencyKey }}"
+            items:
+              - skuId: "{{ testSku }}"
+                variantSlug: null
+                qty: 1
+            address:
+              fullName: "{{ fullName }}"
+              phone: "{{ phone }}"
+              email: "{{ email }}"
+              line1: "1 Artillery Rd"
+              city: "Bengaluru"
+              state: "Karnataka"
+              pincode: "{{ pincode }}"
+            paymentMethod: "{{ paymentMethod }}"
+          # 400/409/422 are valid business outcomes; only 5xx is a failure.
+          expect:
+            - statusCode: [200, 400, 409, 422, 429]
+
+  # ---- 2% Admin (expects 401/429 -- healthy) -----------------------------
+  - name: "admin"
+    weight: 2
+    flow:
+      - function: "initVars"
+      - get:
+          url: "/admin/login"
+          name: "admin_login_page"
+      - think: 1
+      - post:
+          url: "/api/admin/signin"
+          name: "admin_signin"
+          json:
+            email: "{{ adminEmail }}"
+            password: "{{ adminPassword }}"
+          expect:
+            - statusCode: [200, 401, 429]

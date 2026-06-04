@@ -142,6 +142,12 @@ export default function CheckoutPage() {
   const [couponMessage, setCouponMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [couponBusy, setCouponBusy] = useState(false);
   const [couponApplied, setCouponApplied] = useState<string | null>(null);
+  // Signature (`code|subtotal`) of the inputs last validated against the coupon
+  // service. Applying a coupon sets `couponApplied`, which would otherwise make
+  // the revalidate effect refire an identical /api/coupons/validate for inputs
+  // we just checked. Recording the validated signature lets that effect skip the
+  // redundant call and only fire when the subtotal genuinely changes later.
+  const lastCouponValidation = useRef<string | null>(null);
 
   // Geo-locate / auto-fill state
   const [geoBusy, setGeoBusy] = useState(false);
@@ -218,6 +224,11 @@ export default function CheckoutPage() {
   // the apply state so the customer doesn't see a misleading total.
   useEffect(() => {
     if (!couponApplied) return;
+    // Skip the redundant fire that immediately follows an apply — those inputs
+    // were just validated. Only hit the service when the subtotal has actually
+    // moved since the last validation.
+    const sig = `${couponApplied}|${subtotal}`;
+    if (lastCouponValidation.current === sig) return;
     let cancelled = false;
     (async () => {
       try {
@@ -240,6 +251,7 @@ export default function CheckoutPage() {
           });
           return;
         }
+        lastCouponValidation.current = sig;
         setCouponDiscountInr(data.discountInr ?? 0);
       } catch {
         // Network failure during revalidate — leave the existing discount in
@@ -434,6 +446,7 @@ export default function CheckoutPage() {
         }
         return;
       }
+      lastCouponValidation.current = `${data.code ?? code}|${subtotal}`;
       setCouponCode(data.code ?? code);
       setCouponDiscountInr(data.discountInr ?? 0);
       setCouponApplied(data.code ?? code);
@@ -470,6 +483,7 @@ export default function CheckoutPage() {
         };
         if (cancelled || !data.ok) return;
         const applied = data.code ?? AUTO_COUPON.code;
+        lastCouponValidation.current = `${applied}|${subtotal}`;
         setCouponCode(applied);
         setCouponDiscountInr(data.discountInr ?? 0);
         setCouponApplied(applied);

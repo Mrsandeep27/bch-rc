@@ -2,8 +2,10 @@
  * PRC Cars — Real product lineup (replaces Storm placeholder SKUs).
  *
  * All 4 are Trasped/Hengguan HG4-series 1:64 chassis with different body shells.
- * Pricing follows competitor median research: ₹1,299 sell / ₹1,999 MRP / 35% off.
- * Monster Truck premium tier at ₹1,499 / ₹2,299 (bigger chassis, 4WD).
+ * Per-SKU pricing (2026-06-05) — listed `retailINR` is the pre-coupon price; the
+ * auto-applied CODEPRC100 (-₹100) brings the customer to the published "from"
+ * target: BMW ₹999, Porsche/Thar ₹1,299, F1 Classic ₹1,499, Monster Truck ₹1,799.
+ * MRP carries a ~30-35% strikethrough.
  */
 
 export type Scale = "1:64" | "1:43" | "1:24";
@@ -74,8 +76,8 @@ export const PRODUCTS: Sku[] = [
     scale: "1:64",
     name: "Pocket BMW",
     tagline: "M-striped racing icon · 2.4 GHz · LED headlights",
-    retailINR: 1299,
-    mrpINR: 1999,
+    retailINR: 1099,
+    mrpINR: 1599,
     landingCostINR: 550,
     bullets: [
       "Die-cast alloy BMW M-style body",
@@ -118,7 +120,7 @@ export const PRODUCTS: Sku[] = [
     scale: "1:64",
     name: "Pocket Porsche",
     tagline: "GT3 silhouette · drift wheels · iconic Stuttgart lines",
-    retailINR: 1299,
+    retailINR: 1399,
     mrpINR: 1999,
     landingCostINR: 550,
     bullets: [
@@ -164,7 +166,7 @@ export const PRODUCTS: Sku[] = [
     scale: "1:64",
     name: "Pocket Thar",
     tagline: "Off-road champ · grippy treads · made for Indian roads",
-    retailINR: 1299,
+    retailINR: 1399,
     mrpINR: 1999,
     landingCostINR: 600,
     bullets: [
@@ -209,8 +211,8 @@ export const PRODUCTS: Sku[] = [
     scale: "1:64",
     name: "Pocket Monster Truck",
     tagline: "Oversized wheels · 4WD · climbs anything · LED roof bar",
-    retailINR: 1499,
-    mrpINR: 2299,
+    retailINR: 1899,
+    mrpINR: 2699,
     landingCostINR: 700,
     bullets: [
       "Massive over-scaled rubber wheels",
@@ -262,8 +264,8 @@ export const PRODUCTS: Sku[] = [
     scale: "1:64",
     name: "Pocket F1 Classic",
     tagline: "Formula racing silhouette · entry-grade · most popular",
-    retailINR: 1199,
-    mrpINR: 1799,
+    retailINR: 1599,
+    mrpINR: 2299,
     landingCostINR: 500,
     bullets: [
       "Trasped HG4-218 Formula 1 generic body",

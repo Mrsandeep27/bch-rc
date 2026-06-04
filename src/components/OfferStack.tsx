@@ -10,7 +10,10 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { OFFERS } from "@/lib/config";
+import { getHeroSku } from "@/lib/products";
 import { formatINR } from "@/lib/utils";
+
+const HERO_RETAIL = getHeroSku().retailINR;
 
 type Offer = {
   icon: LucideIcon;
@@ -27,7 +30,7 @@ const OFFERS_LIST: Offer[] = [
   {
     icon: CreditCard,
     title: `Prepaid ₹${OFFERS.prepaidDiscountINR} off`,
-    sub: `Pay online → ${formatINR(1299 - OFFERS.prepaidDiscountINR)}`,
+    sub: `Pay online → ${formatINR(HERO_RETAIL - OFFERS.prepaidDiscountINR)}`,
   },
   {
     icon: Package,

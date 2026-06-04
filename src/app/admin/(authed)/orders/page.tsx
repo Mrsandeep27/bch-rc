@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { Package, Search } from "lucide-react";
-import { and, desc, inArray, or, sql } from "drizzle-orm";
+import { Package, Plus, Search } from "lucide-react";
+import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { orders } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
@@ -26,7 +26,7 @@ const FAILED_STATUSES = [
   "REFUNDED",
 ] as const;
 
-type View = "live" | "pending" | "failed" | "all";
+type View = "live" | "pending" | "failed" | "manual" | "all";
 
 export default async function AdminOrdersList({
   searchParams,
@@ -45,9 +45,11 @@ export default async function AdminOrdersList({
       ? "pending"
       : params.view === "failed"
         ? "failed"
-        : params.view === "all"
-          ? "all"
-          : "live";
+        : params.view === "manual"
+          ? "manual"
+          : params.view === "all"
+            ? "all"
+            : "live";
 
   const q = (params.q ?? "").trim();
 
@@ -67,7 +69,7 @@ export default async function AdminOrdersList({
     .where(inArray(orders.siteId, visibleSiteIds))
     .groupBy(orders.status);
 
-  const counts = { live: 0, pending: 0, failed: 0, all: 0 };
+  const counts = { live: 0, pending: 0, failed: 0, manual: 0, all: 0 };
   for (const row of bucketRows) {
     counts.all += row.count;
     if ((LIVE_STATUSES as readonly string[]).includes(row.status))
@@ -77,6 +79,18 @@ export default async function AdminOrdersList({
     else if ((FAILED_STATUSES as readonly string[]).includes(row.status))
       counts.failed += row.count;
   }
+
+  // Manual orders count — cuts across status, so it's a separate query.
+  const [{ count: manualCount }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(orders)
+    .where(
+      and(
+        inArray(orders.siteId, visibleSiteIds),
+        eq(orders.createdVia, "ADMIN_MANUAL"),
+      ),
+    );
+  counts.manual = manualCount;
 
   // Build the filter list:
   //   - always: scope to the admin's sites
@@ -91,6 +105,8 @@ export default async function AdminOrdersList({
     conditions.push(inArray(orders.status, [...PENDING_STATUSES]));
   else if (view === "failed")
     conditions.push(inArray(orders.status, [...FAILED_STATUSES]));
+  else if (view === "manual")
+    conditions.push(eq(orders.createdVia, "ADMIN_MANUAL"));
   // view === "all" → no status filter
   if (q) {
     const like = `%${q}%`;
@@ -113,7 +129,7 @@ export default async function AdminOrdersList({
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl sm:text-3xl font-bold text-brand-ink">
             Orders
@@ -124,6 +140,14 @@ export default async function AdminOrdersList({
               : `Showing ${rows.length} of ${counts[view]} ${view === "all" ? "total" : view}`}
           </p>
         </div>
+        <Link
+          href="/admin/orders/new"
+          className="shrink-0 inline-flex items-center gap-1.5 bg-brand-red hover:bg-brand-red-hover text-white px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold"
+        >
+          <Plus size={14} />
+          <span className="hidden sm:inline">New manual order</span>
+          <span className="sm:hidden">New</span>
+        </Link>
       </div>
 
       {/* Search bar — preserves the current view + site. Submitting an empty
@@ -184,6 +208,13 @@ export default async function AdminOrdersList({
           count={counts.failed}
           active={view === "failed"}
           danger
+        />
+        <ViewChip
+          href={buildHref({ view: "manual", site: params.site })}
+          label="Manual"
+          sub="Created by an admin (any status)"
+          count={counts.manual}
+          active={view === "manual"}
         />
         <ViewChip
           href={buildHref({ view: "all", site: params.site })}

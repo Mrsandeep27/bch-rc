@@ -20,7 +20,7 @@ type BundleOption = {
   cars: { src: string; alt: string }[];
 };
 
-const SINGLE_PRICE = 1299;
+const SINGLE_PRICE = getHeroSku().retailINR;
 
 const CAR_BMW = { src: "/products/PRC-bmw.jpg", alt: "Pocket BMW" };
 const CAR_PORSCHE = { src: "/products/PRC-porsche.jpg", alt: "Pocket Porsche" };

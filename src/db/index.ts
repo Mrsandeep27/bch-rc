@@ -185,7 +185,13 @@ function isTransientConnectionError(err: unknown): boolean {
     msg.includes("connection terminated") ||
     msg.includes("econnreset") ||
     msg.includes("connect_timeout") ||
-    msg.includes("connection timeout")
+    msg.includes("connection timeout") ||
+    // Postgres cancels a query that runs past statement_timeout under load.
+    // Cosmetically a "permanent" error per the legacy classifier, but the
+    // query itself isn't broken — a retry on a fresh connection often
+    // succeeds when the pool isn't saturated. Stops the dashboard-under-load
+    // failure mode from surfacing as a hard error to the operator.
+    msg.includes("canceling statement due to statement timeout")
   );
 }
 
