@@ -1,8 +1,8 @@
-import { redirect } from "next/navigation";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { orders } from "@/db/schema";
 import { isCodAuthenticated } from "@/lib/cod-auth";
+import { CodLoginForm } from "./CodLoginForm";
 import { CodOrderCard } from "./CodOrderCard";
 import { CodSignOut } from "./CodSignOut";
 
@@ -13,12 +13,18 @@ export const dynamic = "force-dynamic";
  * PENDING_COD_VERIFICATION with customer phone, address, and items so the
  * operator can call, confirm address + intent, then click Confirm/Reject.
  *
- * Unauthenticated → /cod/login (no flash, no leak: the redirect runs before
- * any DB read).
+ * Auth flow: unauthenticated requests render the login form INLINE rather
+ * than redirect() to /cod/login. Throwing NEXT_REDIRECT from a Server
+ * Component is intercepted by Next.js's framework, but a custom root
+ * error.tsx (which we have for the brand's "we hit a bump" page) catches
+ * the throw before that interception runs and renders the error page
+ * instead of the 307 — turning every fresh visit into a crash screen.
+ * Rendering the form here side-steps the framework dance entirely.
  */
 export default async function CodConsole() {
-  if (!(await isCodAuthenticated())) {
-    redirect("/cod/login");
+  const authed = await isCodAuthenticated();
+  if (!authed) {
+    return <CodLoginForm />;
   }
 
   const pending = await db
