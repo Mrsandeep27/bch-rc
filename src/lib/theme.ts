@@ -34,9 +34,9 @@ export const THEME = {
   heroH1: "Drift. Race. Pocket.",
   heroSub: "F1 in your pocket — ₹1,299. LED · drift wheels · COD pan-India.",
   heroCtaLabel: "🛒 Shop the Pocket F1 — ₹1,299",
-  heroImageSrc: "/hero/hero-v2-frontal-right.png",
+  heroImageSrc: "/hero/hero-v2-frontal-right.webp",
   heroVideoSrc: "/hero/drift-loop.mp4",
-  heroPosterSrc: "/hero/hero-v2-frontal-right.png",
+  heroPosterSrc: "/hero/hero-v2-frontal-right.webp",
 
   // Color palette — Palette A · Racing Red (locked 2026-06-01)
   colors: {

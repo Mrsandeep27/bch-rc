@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import { motion } from "framer-motion";
 import { Truck, PackageCheck, ShieldCheck } from "lucide-react";
 import { HERO_VARIANTS, type HeroVariant } from "@/lib/copy";
 import { THEME } from "@/lib/theme";
@@ -53,12 +52,7 @@ export default function Hero({
       <div className="relative z-10 max-w-7xl mx-auto px-5 sm:px-10 py-16 sm:py-28 min-h-[100svh] flex pb-36 sm:pb-40">
         <div className="w-full sm:max-w-xl flex flex-col justify-center text-left">
           {/* Launch-week offer chip — slim, sits inline above the eyebrow */}
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
-            className="mb-4 sm:mb-5"
-          >
+          <div className="hero-anim mb-4 sm:mb-5">
             <div className="inline-flex items-center gap-2.5 bg-brand-red/95 text-white pl-2 pr-3.5 py-1.5 rounded-full shadow-lg backdrop-blur-sm">
               <span className="flex items-center gap-1.5 bg-white text-brand-red text-[9px] font-mono font-bold uppercase tracking-widest px-2 py-0.5 rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-brand-red animate-pulse" />
@@ -71,22 +65,16 @@ export default function Hero({
                 ends in <LaunchCountdown variant="chip" />
               </span>
             </div>
-          </motion.div>
+          </div>
 
-          <motion.span
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.05, ease: "easeOut" }}
-            className="font-mono text-[10px] sm:text-xs uppercase tracking-[0.2em] text-white/80 mb-4 sm:mb-5 drop-shadow"
+          <span
+            className="hero-anim hero-anim-delay-1 block font-mono text-[10px] sm:text-xs uppercase tracking-[0.2em] text-white/80 mb-4 sm:mb-5 drop-shadow"
           >
             Made in Bangalore · 1:64 scale
-          </motion.span>
+          </span>
 
-          <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.05, ease: "easeOut" }}
-            className="font-display text-white text-[2.75rem] leading-[0.95] sm:text-6xl md:text-7xl lg:text-8xl font-bold text-balance [text-shadow:0_2px_24px_rgba(0,0,0,0.55)]"
+          <h1
+            className="hero-anim hero-anim-delay-1 font-display text-white text-[2.75rem] leading-[0.95] sm:text-6xl md:text-7xl lg:text-8xl font-bold text-balance [text-shadow:0_2px_24px_rgba(0,0,0,0.55)]"
           >
             {variant === "default" ? (
               <>
@@ -95,25 +83,19 @@ export default function Hero({
             ) : (
               h1
             )}
-          </motion.h1>
+          </h1>
 
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.15, ease: "easeOut" }}
-            className="text-white text-base sm:text-lg md:text-xl max-w-md mt-5 sm:mt-7 [text-shadow:0_1px_12px_rgba(0,0,0,0.5)]"
+          <p
+            className="hero-anim hero-anim-delay-2 text-white text-base sm:text-lg md:text-xl max-w-md mt-5 sm:mt-7 [text-shadow:0_1px_12px_rgba(0,0,0,0.5)]"
           >
             {sub}
-          </motion.p>
+          </p>
 
           {/* Proof strip — three concrete differentiators in one line. Replaces
               vague "youthful" copy with the three lines that separate PRC from
               Amazon toy listings, surfaced before the price. */}
-          <motion.ul
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2, ease: "easeOut" }}
-            className="mt-5 sm:mt-6 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] sm:text-xs font-mono uppercase tracking-widest text-white/90 max-w-md [text-shadow:0_1px_8px_rgba(0,0,0,0.6)]"
+          <ul
+            className="hero-anim hero-anim-delay-3 mt-5 sm:mt-6 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] sm:text-xs font-mono uppercase tracking-widest text-white/90 max-w-md [text-shadow:0_1px_8px_rgba(0,0,0,0.6)]"
             aria-label="Why PRC Cars"
           >
             <li className="flex items-center gap-1.5">
@@ -128,7 +110,7 @@ export default function Hero({
               <span className="w-1 h-1 rounded-full bg-brand-red" />
               Real Yelahanka warehouse
             </li>
-          </motion.ul>
+          </ul>
 
           {/* SEO-friendly money-keyword headline — visually small, semantically
               an h2 so Google sees "Mini RC Drift Cars from ₹1,199" while users
@@ -138,12 +120,7 @@ export default function Hero({
             alloy body. Pan-India COD, ships in 24&nbsp;hrs from Bangalore.
           </h2>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.25, ease: "easeOut" }}
-            className="mt-7 sm:mt-9 flex flex-col items-start gap-3"
-          >
+          <div className="hero-anim hero-anim-delay-4 mt-7 sm:mt-9 flex flex-col items-start gap-3">
             <button
               type="button"
               onClick={handlePrimaryCta}
@@ -151,28 +128,22 @@ export default function Hero({
             >
               {ctaLabel}
             </button>
-          </motion.div>
+          </div>
         </div>
       </div>
 
       {/* Scroll indicator — bottom-left, just above the trust strip */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.6, delay: 0.6 }}
-        className="absolute z-20 left-6 sm:left-10 bottom-32 sm:bottom-28 hidden sm:flex items-center gap-3 pointer-events-none"
+      <div
+        className="hero-anim hero-anim-delay-5 absolute z-20 left-6 sm:left-10 bottom-32 sm:bottom-28 hidden sm:flex items-center gap-3 pointer-events-none"
         aria-hidden
       >
         <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-white/55">scroll</span>
         <span className="block h-px w-12 bg-white/40 origin-left animate-pulse" />
-      </motion.div>
+      </div>
 
       {/* Trust strip pinned at bottom of hero viewport (3 columns) */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, delay: 0.5, ease: "easeOut" }}
-        className="absolute z-20 inset-x-0 bottom-0 border-t border-white/15 bg-black/40 backdrop-blur-sm"
+      <div
+        className="hero-anim hero-anim-delay-5 absolute z-20 inset-x-0 bottom-0 border-t border-white/15 bg-black/40 backdrop-blur-sm"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-10 py-4 sm:py-5 grid grid-cols-3 gap-2 sm:gap-6">
           <HeroTrustItem
@@ -191,7 +162,7 @@ export default function Hero({
             sub="Age 8+ · WhatsApp support"
           />
         </div>
-      </motion.div>
+      </div>
     </section>
   );
 }

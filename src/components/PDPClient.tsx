@@ -63,7 +63,7 @@ function GalleryImage({
       src={src}
       alt={alt}
       fill
-      sizes="(max-width: 768px) 90vw, 50vw"
+      sizes="(min-width: 1024px) 600px, 100vw"
       className="object-contain object-center"
       priority={priority}
       onError={() => setFailed(true)}
@@ -164,10 +164,10 @@ export default function PDPClient({ sku }: { sku: Sku }) {
 
   return (
     <>
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-12 max-w-6xl mx-auto px-4 py-6 sm:py-8">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-6 lg:gap-12 max-w-6xl mx-auto px-3 sm:px-4 py-2 sm:py-8">
       {/* Image gallery */}
-      <div className="lg:sticky lg:top-20 lg:self-start space-y-3 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto no-scrollbar">
-        <div className="aspect-square rounded-2xl overflow-hidden border border-brand-line bg-white relative">
+      <div className="lg:sticky lg:top-20 lg:self-start space-y-2 sm:space-y-3 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto no-scrollbar">
+        <div className="aspect-[4/3] sm:aspect-square max-h-[42vh] sm:max-h-none rounded-2xl overflow-hidden border border-brand-line bg-brand-cream relative">
           <GalleryImage src={activeSrc} sku={sku} alt={sku.name} priority />
         </div>
         {gallery.length > 1 && (
@@ -195,52 +195,28 @@ export default function PDPClient({ sku }: { sku: Sku }) {
       {/* Info column */}
       <div>
         {sku.badge && (
-          <span className="inline-block bg-brand-red text-white text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full mb-3">
+          <span className="inline-block bg-brand-red text-white text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full mb-2 sm:mb-3">
             {sku.badge}
           </span>
         )}
-        <p className="text-xs font-mono uppercase tracking-widest text-brand-ink-soft">
+        <p className="text-[10px] sm:text-xs font-mono uppercase tracking-widest text-brand-ink-soft">
           {sku.scale} · {sku.bodyShape}
         </p>
-        <h1 className="text-3xl sm:text-4xl font-bold text-brand-ink mt-1 text-balance">
+        <h1 className="text-2xl sm:text-4xl font-bold text-brand-ink mt-1 leading-tight text-balance">
           {sku.name}
         </h1>
-        <p className="text-lg text-brand-ink-soft mt-2">{sku.tagline}</p>
+        <p className="text-sm sm:text-lg text-brand-ink-soft mt-1 sm:mt-2">{sku.tagline}</p>
 
-        {/* Rating row */}
-        <div className="flex items-center gap-2 mt-4 text-sm">
-          <span className="text-gold">★★★★★</span>
-          <span className="font-semibold text-brand-ink">4.7</span>
-          <span className="text-brand-ink-soft">· 238 verified reviews</span>
-        </div>
-
-        {/* Price block */}
-        <div className="mt-6">
-          <div className="flex items-baseline gap-3 flex-wrap">
-            <span className="text-4xl font-bold text-brand-ink">
-              {formatINR(sku.retailINR)}
-            </span>
-            <span className="text-lg text-brand-ink-soft line-through">
-              {formatINR(sku.mrpINR)}
-            </span>
-            <span className="text-sm font-semibold bg-success/10 text-success px-2 py-0.5 rounded">
-              Save {formatINR(savings)} · {pct}% off
-            </span>
-          </div>
-          <p className="text-xs text-brand-ink-soft mt-2">
-            Inclusive of all taxes · Pay online → save ₹100
-          </p>
-        </div>
-
-        {/* Color picker */}
+        {/* Color picker — moved above price so it's visible in the mobile fold
+            without scrolling. Most buyers decide colour before re-checking price. */}
         {sku.colors && sku.colors.length > 0 && (
-          <div className="mt-6">
+          <div className="mt-3 sm:mt-5">
             <div className="flex items-baseline justify-between">
-              <span className="text-xs font-mono uppercase tracking-widest text-brand-ink-soft">
+              <span className="text-[10px] sm:text-xs font-mono uppercase tracking-widest text-brand-ink-soft">
                 Colour
               </span>
               {selectedColor && (
-                <span className="text-sm font-semibold text-brand-ink">
+                <span className="text-xs sm:text-sm font-semibold text-brand-ink">
                   {selectedColor.name}
                   {stockLoaded && (selectedStock ?? 0) <= 0 ? (
                     <span className="text-brand-red font-normal"> · Sold out</span>
@@ -254,7 +230,11 @@ export default function PDPClient({ sku }: { sku: Sku }) {
                 </span>
               )}
             </div>
-            <div className="mt-2.5 flex flex-wrap gap-2">
+            <div
+              role="radiogroup"
+              aria-label="Choose colour"
+              className="mt-2 flex flex-wrap gap-2"
+            >
               {sku.colors.map((c) => {
                 const active = c.slug === selectedColorSlug;
                 const cStock = stockOf(c.slug);
@@ -272,14 +252,15 @@ export default function PDPClient({ sku }: { sku: Sku }) {
                         cStock != null ? Math.min(q, Math.max(1, cStock)) : q,
                       );
                     }}
+                    role="radio"
+                    aria-checked={active}
                     aria-label={soldOut ? `${c.name} — sold out` : c.name}
-                    aria-pressed={active}
                     aria-disabled={soldOut}
                     title={soldOut ? `${c.name} — sold out` : c.name}
                     className={cn(
-                      "w-11 h-11 sm:w-10 sm:h-10 rounded-full border-2 transition-all relative shrink-0 overflow-hidden",
+                      "w-11 h-11 sm:w-10 sm:h-10 rounded-full border-2 transition-colors relative shrink-0 overflow-hidden",
                       active
-                        ? "border-brand-ink ring-2 ring-offset-2 ring-brand-red"
+                        ? "border-brand-ink ring-2 ring-offset-1 ring-brand-red"
                         : "border-brand-line hover:border-brand-ink-soft active:scale-95",
                       soldOut && "opacity-40 cursor-not-allowed hover:border-brand-line active:scale-100"
                     )}
@@ -304,8 +285,33 @@ export default function PDPClient({ sku }: { sku: Sku }) {
           </div>
         )}
 
+        {/* Rating row */}
+        <div className="flex items-center gap-1.5 sm:gap-2 mt-3 sm:mt-4 text-xs sm:text-sm">
+          <span className="text-gold">★★★★★</span>
+          <span className="font-semibold text-brand-ink">4.7</span>
+          <span className="text-brand-ink-soft">· 238 verified reviews</span>
+        </div>
+
+        {/* Price block */}
+        <div className="mt-2 sm:mt-4">
+          <div className="flex items-baseline gap-2 sm:gap-3 flex-wrap">
+            <span className="text-3xl sm:text-4xl font-bold text-brand-ink">
+              {formatINR(sku.retailINR)}
+            </span>
+            <span className="text-base sm:text-lg text-brand-ink-soft line-through">
+              {formatINR(sku.mrpINR)}
+            </span>
+            <span className="text-xs sm:text-sm font-semibold bg-success/10 text-success px-2 py-0.5 rounded">
+              Save {formatINR(savings)} · {pct}% off
+            </span>
+          </div>
+          <p className="text-[11px] sm:text-xs text-brand-ink-soft mt-1 sm:mt-2">
+            Inclusive of all taxes · Pay online → save ₹100
+          </p>
+        </div>
+
         {/* Bullets */}
-        <ul className="mt-6 space-y-2">
+        <ul className="mt-4 sm:mt-6 space-y-2">
           {sku.bullets.map((b) => (
             <li key={b} className="flex items-start gap-2 text-sm text-brand-ink">
               <Zap size={16} className="text-brand-red shrink-0 mt-0.5" />
@@ -315,7 +321,7 @@ export default function PDPClient({ sku }: { sku: Sku }) {
         </ul>
 
         {/* Qty + CTAs */}
-        <div className="mt-7 flex items-stretch gap-3">
+        <div className="mt-4 sm:mt-7 flex items-stretch gap-3">
           <div className="flex items-center border-2 border-brand-line rounded-xl">
             <button
               type="button"

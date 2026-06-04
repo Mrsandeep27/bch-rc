@@ -213,7 +213,6 @@ export const PRODUCTS: Sku[] = [
       "/products/PRC-monster-4.jpg",
     ],
     colors: [
-      { name: "Blue #68",       slug: "blue-68",     swatch: "#1e40af",                              stock: 12, image: "/products/colors/PRC-monster-blue-68.jpg" },
       { name: "Blue",           slug: "blue",        swatch: "#2563eb",                              stock: 11, image: "/products/colors/PRC-monster-blue.jpg" },
       { name: "Yellow",         slug: "yellow",      swatch: "#facc15",                              stock: 11, image: "/products/colors/PRC-monster-yellow.jpg" },
       { name: "White & Red",    slug: "white-red",   swatch: "gradient:#f8fafc,#dc2626",             stock: 11, image: "/products/colors/PRC-monster-white-red.jpg" },

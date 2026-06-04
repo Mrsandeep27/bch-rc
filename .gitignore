@@ -41,6 +41,15 @@ public/products/raw/
 public/*.mp4
 public/*.MOV
 
+# Fresh shoot raw inputs (2026-06-04). Staged for the cleaning pipeline at
+# scripts/clean-fresh-shoot.py; outputs land in public/products/colors/ and
+# are committed. The 187 MB of raw iPhone JPEGs are NOT.
+public/fresh/
+
+# Legacy backups of AI-generated color variants kept locally in case we need
+# to revert the 2026-06-04 real-photo swap.
+public/products/colors/_legacy/
+
 # Python utility scripts artifacts
 __pycache__/
 *.pyc

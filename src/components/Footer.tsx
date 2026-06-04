@@ -19,14 +19,8 @@ const QUICK_LINKS = [
 ] as const;
 
 // Google Maps embed for Yelahanka 1st Stage HQ (Bharath Cycle Hub registered
-// address). Uses the unauthenticated "?q=..." iframe URL — no API key needed.
-const MAP_SRC =
-  "https://www.google.com/maps?q=" +
-  encodeURIComponent(
-    "HIG A Sector, Yelahanka 1st Stage, Bengaluru, Karnataka 560064"
-  ) +
-  "&output=embed";
-
+// address). Iframe was replaced with a clickable card (no Maps embed) — the
+// embed pulled ~1.5–2 MB of tiles + JS sitewide. Click opens Maps in a new tab.
 const MAP_LINK = "https://maps.google.com/?q=" + encodeURIComponent(
   "HIG A Sector, Yelahanka 1st Stage, Bengaluru, Karnataka 560064"
 );
@@ -156,18 +150,17 @@ export default function Footer() {
               href={MAP_LINK}
               target="_blank"
               rel="noopener"
-              className="relative block rounded-xl overflow-hidden border border-white/10 hover:border-brand-red transition-colors"
+              className="relative block rounded-xl overflow-hidden border border-white/10 hover:border-brand-red transition-colors bg-gradient-to-br from-neutral-900 to-neutral-800 h-36"
               aria-label="Open warehouse address in Google Maps"
             >
-              <iframe
-                src={MAP_SRC}
-                title="PRC Cars warehouse — Yelahanka, Bengaluru"
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                className="w-full h-36 block pointer-events-none"
-              />
               <span className="absolute top-2 left-2 bg-brand-red text-white text-[9px] font-mono uppercase tracking-widest px-2 py-1 rounded-full">
                 Warehouse
+              </span>
+              <span className="absolute inset-0 flex items-center justify-center text-white text-sm font-semibold">
+                <span className="inline-flex items-center gap-1.5 bg-black/40 backdrop-blur px-3 py-1.5 rounded-full">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 22s-8-7.5-8-13a8 8 0 1116 0c0 5.5-8 13-8 13z"/><circle cx="12" cy="9" r="2.5"/></svg>
+                  Open in Google Maps
+                </span>
               </span>
             </a>
             <p className="text-xs text-neutral-400 mt-2 leading-snug">

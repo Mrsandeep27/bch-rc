@@ -71,9 +71,9 @@
   --color-gold: var(--gold);
   --color-success: var(--success);
 
-  --font-sans: "General Sans", var(--font-geist-sans), system-ui, sans-serif;
+  --font-sans: "General Sans", system-ui, -apple-system, sans-serif;
   --font-display: "Nippo", "General Sans", system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono);
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
 html,
@@ -99,6 +99,22 @@ h3,
 h4 {
   font-family: var(--font-sans);
   letter-spacing: -0.005em;
+}
+
+/* Hero entrance — replaces framer-motion fade-up animations. Pure CSS keeps
+   the LCP path framework-free and saves ~30 KB of hydration JS. */
+@keyframes hero-fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.hero-anim { animation: hero-fade-up 0.55s ease-out both; }
+.hero-anim-delay-1 { animation-delay: 0.05s; }
+.hero-anim-delay-2 { animation-delay: 0.15s; }
+.hero-anim-delay-3 { animation-delay: 0.2s; }
+.hero-anim-delay-4 { animation-delay: 0.25s; }
+.hero-anim-delay-5 { animation-delay: 0.5s; }
+@media (prefers-reduced-motion: reduce) {
+  .hero-anim { animation: none; }
 }
 
 @layer utilities {
