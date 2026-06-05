@@ -28,92 +28,52 @@ export const HERO_VARIANTS: Record<
   // ("car-crazy guy"), price (₹999/₹1,099), payment (COD), dispatch
   // (24-hr Bangalore). All present.
   default: {
-    h1: "The gift every car-crazy guy actually keeps using.",
+    h1: "The gift he won't put down.",
     h1Accent: "gift",
-    sub:
-      "A real die-cast RC drift car that fits in his palm — LED, drift wheels in the box, " +
-      "actually drifts on tile. ₹999 online or ₹1,099 COD, gift-ready box, ships in " +
-      "24 hrs from Bangalore.",
-    ctaLabel: "🛒 Order his gift — from ₹999, COD",
-    underCta: [
-      "Pay on delivery — nothing now",
-      "7-day replacement",
-      "Real WhatsApp support",
-    ],
+    sub: "Real die-cast RC drift car. ₹999 online or ₹1,099 COD. Ships from Bangalore.",
+    ctaLabel: "🛒 Order his gift — ₹999, COD",
+    underCta: ["Pay on delivery", "7-day replacement", "WhatsApp support"],
   },
   // Explicit gift UTM — same shape since default is now gifting-first.
   // Kept distinct so we can fork copy later without touching default.
   gift: {
-    h1: "The gift every car-crazy guy actually keeps using.",
+    h1: "The gift he won't put down.",
     h1Accent: "gift",
-    sub:
-      "Die-cast Pocket RC drift cars from ₹999 — gift-ready box, dispatched " +
-      "in 24 hrs from Bangalore.",
-    ctaLabel: "🎁 Order his gift — from ₹999, COD",
-    underCta: [
-      "Pay on delivery — nothing now",
-      "7-day replacement",
-      "Real WhatsApp support",
-    ],
+    sub: "Real die-cast RC drift car. ₹999 online or ₹1,099 COD. Gift-ready box.",
+    ctaLabel: "🎁 Order his gift — ₹999, COD",
+    underCta: ["Pay on delivery", "7-day replacement", "WhatsApp support"],
   },
   // Hinglish IG-DM landing — message-match for the "Unexpected Gift 🎁"
   // reels (Copy Crimes #8 fix). Same gifting frame, buyer's voice.
   couple: {
-    h1: "₹999 mein asli RC drift car — uska face dekhna jab ye drift karega.",
-    sub:
-      "Real die-cast drift car, palm-size, LED + drift wheels in the box. " +
-      "Gift-ready packaging. COD pan-India. Aaj order karo, Bangalore se " +
-      "24 ghante mein niklega.",
-    ctaLabel: "🎁 Surprise him — from ₹999, COD",
-    underCta: [
-      "COD pan-India · nothing now",
-      "7-day replacement guarantee",
-      "WhatsApp support — real human",
-    ],
+    h1: "₹999 mein asli RC drift car.",
+    sub: "Uska face dekhna jab ye drift karega. COD pan-India. Bangalore se 24 ghante mein.",
+    ctaLabel: "🎁 Surprise him — ₹999, COD",
+    underCta: ["COD pan-India", "7-day replacement", "WhatsApp support"],
   },
   // Parent UTM — gift for any car-lover 8 to 38. Doesn't infantilise the
   // recipient (was "Your Kid"). Joy frame leads, spec demoted.
   parent: {
-    h1: "The gift the car-lover in your life actually keeps using.",
+    h1: "The gift the car-lover won't put down.",
     h1Accent: "gift",
-    sub:
-      "Real die-cast RC drift car for any car-lover 8 to 38 — drop-tested " +
-      "1.2 m, USB-C, drift wheels included. ₹999 online or ₹1,099 COD, " +
-      "gift-ready box, ships in 24 hrs from Bangalore.",
-    ctaLabel: "🛒 Order his gift — from ₹999, COD",
-    underCta: [
-      "Pay on delivery — nothing now",
-      "7-day replacement",
-      "Drop-tested for indoor floors",
-    ],
+    sub: "Real die-cast RC drift car. For car-lovers 8 to 38. ₹999 online or ₹1,099 COD.",
+    ctaLabel: "🛒 Order his gift — ₹999, COD",
+    underCta: ["Pay on delivery", "7-day replacement", "Drop-tested"],
   },
   // Road-trip flavour, same gifting frame.
   carride: {
     h1: "Hand him this. Get the silence.",
-    sub:
-      "Real die-cast RC drift car that drifts on tile + marble — the back-seat " +
-      "gift that lasts past the airport. ₹999 online or ₹1,099 COD, ships " +
-      "24 hrs from Bangalore.",
-    ctaLabel: "🛒 Order his gift — from ₹999, COD",
-    underCta: [
-      "Pay on delivery — nothing now",
-      "7-day replacement",
-      "Real WhatsApp support",
-    ],
+    sub: "Real die-cast RC drift car. ₹999 online or ₹1,099 COD.",
+    ctaLabel: "🛒 Order his gift — ₹999, COD",
+    underCta: ["Pay on delivery", "7-day replacement", "WhatsApp support"],
   },
   // Most-Aware visitor (drift-clip UTM) — already knows what they want.
   // Don't re-pitch price (Psych p03/p07). Speak in the enthusiast register.
   enthusiast: {
     h1: "Your drift car. In your palm. Tonight.",
-    sub:
-      "1:64 die-cast, 2.4 GHz, drift + grip wheels in the box, USB-C, real " +
-      "LED. Ships from Bangalore in 24 hrs. Pan-India COD.",
+    sub: "1:64 die-cast. ₹999. COD pan-India.",
     ctaLabel: "Cart it. Drift it tonight. →",
-    underCta: [
-      "Drop-tested for indoor floors",
-      "7-day replacement",
-      "Real WhatsApp support",
-    ],
+    underCta: ["Drop-tested", "7-day replacement", "WhatsApp support"],
   },
 };
 
