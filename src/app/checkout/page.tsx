@@ -6,6 +6,7 @@ import Script from "next/script";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
+  ChevronLeft,
   Lock,
   MapPin,
   Minus,
@@ -758,8 +759,28 @@ export default function CheckoutPage() {
       />
       <AnnouncementBar />
 
-      <main className="bg-brand-cream min-h-screen py-12 px-4">
+      <main className="bg-brand-cream min-h-screen py-6 sm:py-12 px-4">
         <div className="max-w-2xl mx-auto">
+          {/* Back button — checkout has no <Header /> (intentional, to keep
+              the conversion page distraction-free), so we ship the back
+              affordance inline. router.back() preserves Next.js scroll
+              state; falls back to home for deep-link landings. */}
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== "undefined" && window.history.length > 1) {
+                router.back();
+              } else {
+                router.push("/");
+              }
+            }}
+            aria-label="Go back"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-ink-soft hover:text-brand-ink mb-4 -ml-1 px-2 py-1 rounded-md hover:bg-brand-ink/5 transition-colors"
+          >
+            <ChevronLeft size={18} strokeWidth={2.5} />
+            <span>Back</span>
+          </button>
+
           <h1 className="text-3xl font-bold text-brand-ink">Checkout</h1>
           <p className="text-brand-ink-soft mt-2">
             Pay securely via UPI, cards, or COD.
