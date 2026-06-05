@@ -18,6 +18,10 @@ import { ProductPlaceholder } from "@/components/ProductPlaceholder";
 import PDPStickyCTA from "@/components/PDPStickyCTA";
 import { Skeleton } from "@/components/Skeleton";
 import { recordView } from "@/lib/recently-viewed";
+import {
+  trackAddToCart,
+  trackInitiateCheckout,
+} from "@/lib/analytics-client";
 
 // Below-fold sections — split into their own JS chunks so the buy-box +
 // gallery don't wait on their bundle. Skeletons hold the layout so scrolling
@@ -148,13 +152,28 @@ export default function PDPClient({ sku }: { sku: Sku }) {
 
   function addToCart() {
     if (outOfStock) return;
+    const finalQty = Math.min(qty, maxQty);
     // `add` opens the drawer itself.
-    useCart.getState().add(sku.id, selectedColorSlug, Math.min(qty, maxQty));
+    useCart.getState().add(sku.id, selectedColorSlug, finalQty);
+    trackAddToCart({
+      sku: sku.id,
+      name: sku.name,
+      priceInr: sku.retailINR,
+      quantity: finalQty,
+    });
   }
 
   function buyNow() {
     if (outOfStock) return;
-    useCart.getState().add(sku.id, selectedColorSlug, Math.min(qty, maxQty));
+    const finalQty = Math.min(qty, maxQty);
+    useCart.getState().add(sku.id, selectedColorSlug, finalQty);
+    trackAddToCart({
+      sku: sku.id,
+      name: sku.name,
+      priceInr: sku.retailINR,
+      quantity: finalQty,
+    });
+    trackInitiateCheckout(sku.retailINR * finalQty);
     router.push("/checkout");
   }
 

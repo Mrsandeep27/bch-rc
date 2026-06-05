@@ -169,6 +169,20 @@ export default function CheckoutPage() {
     setIsTouchDevice(window.matchMedia("(pointer: coarse)").matches);
   }, []);
 
+  // GA4/Meta InitiateCheckout — fire once on mount when the cart has
+  // something to spend. Subtotal is the most honest "value" Meta can use
+  // for ad auction bidding at this stage (fees and bonus haven't been
+  // chosen yet). Dedup vs the PDP buyNow() event by event_id (analytics
+  // helper generates a fresh UUID per fire; Meta dedups its side).
+  const beganCheckoutRef = useRef(false);
+  useEffect(() => {
+    if (beganCheckoutRef.current || subtotal <= 0) return;
+    beganCheckoutRef.current = true;
+    import("@/lib/analytics-client").then((m) =>
+      m.trackInitiateCheckout(subtotal),
+    );
+  }, [subtotal]);
+
   // Provenance tracking: which address fields did the buyer type vs. which
   // did we autofill? Critical for the "user corrects a wrong GPS pincode"
   // flow — when the buyer manually fixes the pincode, our pincode-lookup
@@ -759,7 +773,7 @@ export default function CheckoutPage() {
       />
       <AnnouncementBar />
 
-      <main className="bg-brand-cream min-h-screen py-6 sm:py-12 px-4">
+      <main className="bg-brand-cream min-h-screen py-6 sm:py-12 px-5 sm:px-6">
         <div className="max-w-2xl mx-auto">
           {/* Back button — checkout has no <Header /> (intentional, to keep
               the conversion page distraction-free), so we ship the back
@@ -1284,7 +1298,7 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          <div className="sticky bottom-0 mt-6 -mx-4 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-brand-cream/95 backdrop-blur border-t border-brand-line lg:static lg:bg-transparent lg:border-0 lg:mx-0 lg:px-0 lg:py-0">
+          <div className="sticky bottom-0 mt-6 -mx-5 px-5 sm:-mx-6 sm:px-6 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-brand-cream/95 backdrop-blur border-t border-brand-line lg:static lg:bg-transparent lg:border-0 lg:mx-0 lg:px-0 lg:py-0">
             {confirming ? (
               <div className="mb-3 rounded-lg border border-success bg-success/10 px-4 py-3 text-sm text-success">
                 Payment received — confirming your order… please don&apos;t close

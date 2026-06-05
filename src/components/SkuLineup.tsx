@@ -9,6 +9,7 @@ import { formatINR, calcDiscountPct, cn } from "@/lib/utils";
 import { useCart } from "@/lib/cart-store";
 import { ProductImage } from "@/components/ProductImage";
 import { THEME } from "@/lib/theme";
+import { trackAddToCart } from "@/lib/analytics-client";
 
 /** Resolve a swatch token (hex or `gradient:from,to[,...]`) to a CSS background value. */
 function swatchBg(swatch: string): string {
@@ -175,6 +176,12 @@ function SkuCard({ sku, index, stockMap }: SkuCardProps) {
             if (skuSoldOut) return;
             // Default to the first DB-in-stock colour. PDP picker can override.
             useCart.getState().add(sku.id, firstInStockSlug);
+            trackAddToCart({
+              sku: sku.id,
+              name: sku.name,
+              priceInr: sku.retailINR,
+              quantity: 1,
+            });
           }}
           className="pointer-events-auto bg-brand-red hover:bg-brand-red-hover text-white rounded-full py-2.5 px-4 transition-colors inline-flex items-center justify-center gap-2 font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand-red"
         >

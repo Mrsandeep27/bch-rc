@@ -11,6 +11,7 @@ import { eq } from "drizzle-orm";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import PurchaseTrackingPing from "@/components/PurchaseTrackingPing";
 import { WhatsAppIcon } from "@/components/BrandIcons";
 import { THEME } from "@/lib/theme";
 import { waLink, OFFERS, bundleDiscountInr, bundleTierLabel } from "@/lib/config";
@@ -73,8 +74,37 @@ export default async function OrderSuccessPage({
       })
     : null;
 
+  // GA4/Meta/CAPI Purchase event — fires once when the page mounts, gated
+  // by sessionStorage(orderId) so a refresh doesn't re-fire. We only ping
+  // for orders that have actually settled (prepaid: CAPTURED, COD: address
+  // verified) so failed/abandoned orders don't pollute the conversion
+  // signal Meta uses to bid on ads.
+  const settled =
+    (order.paymentStatus === "CAPTURED" && order.status !== "FAILED") ||
+    (order.paymentMethod === "COD" && order.status !== "PENDING_COD_VERIFICATION");
+  const contactEmail =
+    (order.shippingAddress as { email?: string | null } | null)?.email ?? null;
+  const contactPhone =
+    (order.shippingAddress as { phone?: string | null } | null)?.phone ?? null;
+
   return (
     <>
+      {settled && (
+        <PurchaseTrackingPing
+          orderId={order.id}
+          totalInr={order.totalInr}
+          itemCount={items.reduce((n, i) => n + i.qty, 0)}
+          paymentMethod={order.paymentMethod}
+          email={contactEmail}
+          phone={contactPhone}
+          contents={items.map((i) => ({
+            sku: i.skuId,
+            quantity: i.qty,
+            item_price: i.unitPriceInr,
+            name: i.name,
+          }))}
+        />
+      )}
       <AnnouncementBar />
       <Header />
 

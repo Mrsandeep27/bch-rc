@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import "./globals.css";
 import NavigationLoader from "@/components/NavigationLoader";
+import Analytics from "@/components/Analytics";
+import ConsentBanner from "@/components/ConsentBanner";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://pocketrccars.com"),
@@ -72,6 +74,13 @@ export default function RootLayout({
           <NavigationLoader />
         </Suspense>
         {children}
+        {/* X03 — GA4 + Meta Pixel script loader. No-op until both consent is
+            granted AND the relevant NEXT_PUBLIC_ env var is set, so merging
+            this before Syed provides the IDs is safe. */}
+        <Suspense fallback={null}>
+          <Analytics />
+        </Suspense>
+        <ConsentBanner />
       </body>
     </html>
   );
