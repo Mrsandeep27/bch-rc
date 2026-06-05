@@ -6,14 +6,14 @@ import NavigationLoader from "@/components/NavigationLoader";
 export const metadata: Metadata = {
   metadataBase: new URL("https://pocketrccars.com"),
   title: {
-    default: "Mini RC Drift Cars from ₹999 | PRC Cars",
+    default: "Mini RC Cars from ₹999 — RC Drift Cars | PRC Cars",
     template: "%s | PRC Cars",
   },
   alternates: {
     canonical: "/",
   },
   description:
-    "India's most-gifted mini RC drift cars. LED headlights, swappable drift wheels, 1:64 scale. From ₹999. Pan-India COD. Ships in 24 hrs from Bangalore.",
+    "Shop India's most-gifted mini RC cars — 1:64 scale die-cast RC drift cars with LED headlights and swappable drift wheels. RC cars from ₹999. Pan-India COD. Ships in 24 hrs from Bangalore.",
   keywords: [
     "RC car India",
     "mini RC drift car",
@@ -23,9 +23,9 @@ export const metadata: Metadata = {
     "PRC Cars",
   ],
   openGraph: {
-    title: "Mini RC Drift Cars from ₹999 | PRC Cars",
+    title: "Mini RC Cars from ₹999 | PRC Cars",
     description:
-      "LED · drift wheels · gift-ready box. Delivered pan-India in 24 hrs from Bangalore.",
+      "1:64 RC drift cars · LED · drift wheels · gift-ready box. Mini RC cars delivered pan-India in 24 hrs from Bangalore.",
     url: "https://pocketrccars.com",
     siteName: "PRC Cars",
     locale: "en_IN",
@@ -41,9 +41,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Mini RC Drift Cars from ₹999 | PRC Cars",
+    title: "Mini RC Cars from ₹999 | PRC Cars",
     description:
-      "LED · drift wheels · gift-ready box. From ₹999 · COD pan-India.",
+      "Mini RC cars · 1:64 RC drift cars · LED · drift wheels. From ₹999 · COD pan-India.",
     images: ["/og-image.jpg"],
   },
   icons: {

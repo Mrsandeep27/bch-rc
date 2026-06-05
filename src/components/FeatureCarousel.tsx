@@ -57,7 +57,7 @@ function Tile({ feat, i }: { feat: Feature; i: number }) {
           without the mobile jitter. */}
       <Image
         src={feat.bgImage}
-        alt=""
+        alt={`PRC mini RC car — ${feat.title} ${feat.body}`}
         fill
         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
         className="object-cover transition-transform duration-700 lg:group-hover:scale-105"
@@ -117,7 +117,7 @@ export default function FeatureCarousel() {
             the old 78%-wide peek layout — now you swipe and a single card
             lands centered, with only ~4% of the next card visible as an
             affordance hint. Desktop (sm+): standard 2/4 col static grid. */}
-        <div className="mt-6 sm:mt-10 -mx-4 sm:mx-0 overflow-x-auto sm:overflow-visible snap-x snap-mandatory sm:snap-none no-scrollbar touch-pan-x overscroll-x-contain">
+        <div className="mt-6 sm:mt-10 -mx-4 sm:mx-0 overflow-x-auto overflow-y-hidden sm:overflow-visible snap-x snap-mandatory sm:snap-none no-scrollbar touch-pan-x overscroll-x-contain">
           <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 px-4 sm:px-0 pb-2 sm:pb-0">
             {FEATURES.map((f, i) => (
               <div

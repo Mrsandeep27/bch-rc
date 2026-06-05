@@ -11,7 +11,7 @@ export type QA = { q: string; a: string };
 export const HOME_FAQS: QA[] = [
   {
     q: "Is ₹999+ worth it? Why not a ₹400 toy from Amazon?",
-    a: "₹400 toys are pull-back / single-channel — no real RC, plastic body, dies in a week. PRC is a 2.4 GHz die-cast alloy car with LED, USB-C, drift wheels included. Honest range: 12–15 mins per charge on smooth floors. Ships from our own Yelahanka warehouse, not drop-shipped from anywhere.",
+    a: "₹400 toys are pull-back / single-channel — not a real RC car, plastic body, dies in a week. PRC is a 2.4 GHz die-cast alloy RC car with LED, USB-C, drift wheels included. Honest range: 12–15 mins per charge on smooth floors. Ships from our own Yelahanka warehouse, not drop-shipped from anywhere.",
   },
   {
     q: "Do you ship COD? Any extra fee?",
@@ -47,6 +47,6 @@ export const HOME_FAQS: QA[] = [
   },
   {
     q: "Is this really 1:64 scale? How small is it?",
-    a: "Yes — same scale as Hot Wheels. ~7 cm long, fits in your palm. It's the only fully-functional RC at this size in India.",
+    a: "Yes — same scale as Hot Wheels. ~7 cm long, fits in your palm. It's the only fully-functional RC car at this size in India.",
   },
 ];
