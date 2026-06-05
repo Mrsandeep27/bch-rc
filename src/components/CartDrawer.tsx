@@ -52,7 +52,16 @@ export default function CartDrawer({
   const currentBundleBonus = bundleDiscountInr(count);
   const nextTier = BUNDLE_TIERS.find((t) => t.minQty > count);
   const bundleGap = nextTier ? nextTier.minQty - count : 0;
-  const bundleNextExtra = nextTier ? nextTier.bonusInr - currentBundleBonus : 0;
+  // Surfaced as a percentage off the current subtotal so the badge reads as
+  // a discount instead of a raw rupee amount — feels bigger, scales with
+  // what the buyer is actually about to pay. The exact ₹ amount still
+  // shows on the receipt + checkout summary for accounting clarity.
+  const currentBundlePct =
+    subtotal > 0 ? Math.round((currentBundleBonus / subtotal) * 100) : 0;
+  const nextTierPct =
+    nextTier && subtotal > 0
+      ? Math.round((nextTier.bonusInr / subtotal) * 100)
+      : 0;
 
   // Open from ?openCart=1 query param on first mount.
   const initialOpenAppliedRef = useRef(false);
@@ -157,76 +166,96 @@ export default function CartDrawer({
               </button>
             </header>
 
+            {/* Single status card — free-shipping + bundle bonus stacked
+                as two rows inside one container instead of two separate
+                pill-style banners, which read as visual noise. Each row is
+                a self-contained line; rows are dividers, not separate
+                cards, so the whole strip feels like one progress widget. */}
             {count > 0 && (
-              <div
-                className={
-                  delta > 0
-                    ? "mx-5 my-3 p-3 rounded-lg bg-brand-red-soft text-brand-red text-sm font-medium"
-                    : "mx-5 my-3 p-3 rounded-lg bg-success/10 text-success text-sm font-medium"
-                }
-              >
-                {delta > 0 ? (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <Sparkles size={14} className="shrink-0" aria-hidden />
-                      <span>
-                        Add {formatINR(delta)} more for FREE shipping
-                      </span>
+              <div className="mx-5 my-3 rounded-xl border border-brand-line bg-white/60 backdrop-blur-sm overflow-hidden text-sm">
+                {/* Free-shipping row */}
+                <div
+                  className={
+                    delta > 0
+                      ? "px-3.5 py-2.5 bg-brand-red-soft/60 text-brand-ink"
+                      : "px-3.5 py-2.5 bg-success/10 text-success"
+                  }
+                >
+                  {delta > 0 ? (
+                    <>
+                      <div className="flex items-center justify-between gap-2 font-medium">
+                        <span className="flex items-center gap-2 min-w-0">
+                          <Sparkles
+                            size={14}
+                            className="shrink-0 text-brand-red"
+                            aria-hidden
+                          />
+                          <span className="truncate">
+                            Add {formatINR(delta)} for FREE shipping
+                          </span>
+                        </span>
+                        <span className="text-[11px] font-mono text-brand-ink-soft tabular-nums shrink-0">
+                          {Math.round(progressPct)}%
+                        </span>
+                      </div>
+                      <div className="h-1 bg-brand-line rounded-full mt-2 overflow-hidden">
+                        <div
+                          className="h-full bg-brand-red transition-[width] duration-300"
+                          style={{ width: `${progressPct}%` }}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex items-center gap-2 font-medium">
+                      <PartyPopper size={14} className="shrink-0" aria-hidden />
+                      <span>Free shipping unlocked</span>
                     </div>
-                    <div className="h-1 bg-white/60 rounded-full mt-2 overflow-hidden">
-                      <div
-                        className="h-full bg-brand-red"
-                        style={{ width: `${progressPct}%` }}
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <PartyPopper size={14} className="shrink-0" aria-hidden />
-                    <span>Free shipping unlocked!</span>
-                  </div>
-                )}
-              </div>
-            )}
+                  )}
+                </div>
 
-            {/* Bundle nudge — sits below the free-ship banner so the buyer
-                always sees the next-tier value next to the current cart. The
-                gap between tiers (₹298 → ₹698) is large enough that even one
-                more car can pay for itself if mixed with the right pair. */}
-            {count > 0 && (
-              <div
-                className={
-                  bundleGap > 0 && bundleNextExtra > 0
-                    ? "mx-5 my-3 p-3 rounded-lg bg-brand-ink/5 text-brand-ink text-sm font-medium"
-                    : currentBundleBonus > 0
-                      ? "mx-5 my-3 p-3 rounded-lg bg-success/10 text-success text-sm font-medium"
-                      : ""
-                }
-              >
-                {currentBundleBonus > 0 && (
-                  <div className="flex items-center gap-2">
-                    <Gift size={14} className="shrink-0" aria-hidden />
-                    <span>
-                      Bundle bonus active — {formatINR(currentBundleBonus)} off
-                      auto-applied
-                    </span>
-                  </div>
-                )}
-                {bundleGap > 0 && bundleNextExtra > 0 && (
+                {/* Bundle bonus row — only renders when the buyer has either
+                    unlocked a tier OR is one car away from the next one, so
+                    we don't add empty space to a single-item cart. */}
+                {(currentBundleBonus > 0 || (bundleGap > 0 && nextTier)) && (
                   <div
                     className={
                       currentBundleBonus > 0
-                        ? "mt-1 text-brand-ink-soft flex items-center gap-2"
-                        : "flex items-center gap-2"
+                        ? "px-3.5 py-2.5 border-t border-brand-line bg-success/10 text-success font-medium"
+                        : "px-3.5 py-2.5 border-t border-brand-line bg-brand-ink/[0.03] text-brand-ink font-medium"
                     }
                   >
-                    {currentBundleBonus === 0 && (
-                      <Gift size={14} className="shrink-0" aria-hidden />
+                    {currentBundleBonus > 0 ? (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="flex items-center gap-2 min-w-0">
+                          <Gift size={14} className="shrink-0" aria-hidden />
+                          <span className="truncate">
+                            Bundle bonus applied
+                          </span>
+                        </span>
+                        <span className="text-[13px] font-bold tabular-nums shrink-0">
+                          −{currentBundlePct}%
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="flex items-center gap-2 min-w-0">
+                          <Gift
+                            size={14}
+                            className="shrink-0 text-brand-red"
+                            aria-hidden
+                          />
+                          <span className="truncate">
+                            Add {bundleGap} more car
+                            {bundleGap > 1 ? "s" : ""} → unlock bundle bonus
+                          </span>
+                        </span>
+                        {nextTierPct > 0 && (
+                          <span className="text-[11px] font-mono text-brand-red tabular-nums shrink-0">
+                            up to −{nextTierPct}%
+                          </span>
+                        )}
+                      </div>
                     )}
-                    <span>
-                      Add {bundleGap} more car{bundleGap > 1 ? "s" : ""} → unlock{" "}
-                      {formatINR(bundleNextExtra)} extra bonus
-                    </span>
                   </div>
                 )}
               </div>
@@ -248,13 +277,13 @@ export default function CartDrawer({
                   </button>
                 </div>
               ) : (
-                <ul>
+                <ul className="divide-y divide-brand-line">
                   {lines.map((line) => (
                     <li
                       key={`${line.sku.id}-${line.variantSlug ?? "default"}`}
-                      className="flex gap-4 py-4 border-b border-brand-line last:border-b-0"
+                      className="flex gap-3 py-3.5"
                     >
-                      <div className="w-20 h-20 rounded-lg bg-brand-cream relative overflow-hidden flex-shrink-0">
+                      <div className="w-16 h-16 rounded-lg bg-brand-cream relative overflow-hidden flex-shrink-0">
                         <Image
                           src={line.variantImage ?? line.sku.heroImage}
                           alt={
@@ -262,57 +291,65 @@ export default function CartDrawer({
                             (line.variantName ? ` (${line.variantName})` : "")
                           }
                           fill
-                          sizes="80px"
-                          className="object-contain p-2"
+                          sizes="64px"
+                          className="object-contain p-1.5"
                         />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-semibold text-brand-ink">
-                          {line.sku.name}
+                      <div className="flex-1 min-w-0 flex flex-col justify-between">
+                        {/* Top row: name + line total */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="font-semibold text-brand-ink text-sm leading-tight truncate">
+                              {line.sku.name}
+                            </div>
+                            <div className="text-[11px] text-brand-ink-soft mt-0.5 truncate">
+                              {line.sku.scale}
+                              {line.variantName ? ` · ${line.variantName}` : ""}
+                            </div>
+                          </div>
+                          <div className="font-bold text-brand-ink text-sm tabular-nums whitespace-nowrap">
+                            {formatINR(line.lineTotalINR)}
+                          </div>
                         </div>
-                        <div className="text-xs text-brand-ink-soft">
-                          {line.sku.scale}
-                          {line.variantName ? ` · ${line.variantName}` : ""}
-                        </div>
-                        <div className="mt-1 text-sm text-brand-ink">
-                          {formatINR(line.unitPriceINR)}
-                        </div>
-                        <div className="flex items-center gap-1 mt-2 border border-brand-line rounded-lg w-fit">
+
+                        {/* Bottom row: stepper + trash, horizontally aligned
+                            so the line item is two compact rows instead of
+                            five stacked elements. */}
+                        <div className="flex items-center justify-between gap-2 mt-2">
+                          <div className="inline-flex items-center border border-brand-line rounded-full overflow-hidden bg-white">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setQty(line.sku.id, line.variantSlug, line.qty - 1)
+                              }
+                              aria-label="Decrease quantity"
+                              className="h-8 w-8 flex items-center justify-center text-brand-ink-soft hover:bg-brand-cream active:bg-brand-line transition-colors"
+                            >
+                              <Minus size={13} />
+                            </button>
+                            <span className="px-2.5 text-[13px] font-semibold tabular-nums text-brand-ink min-w-[28px] text-center">
+                              {line.qty}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setQty(line.sku.id, line.variantSlug, line.qty + 1)
+                              }
+                              aria-label="Increase quantity"
+                              className="h-8 w-8 flex items-center justify-center text-brand-ink-soft hover:bg-brand-cream active:bg-brand-line transition-colors"
+                            >
+                              <Plus size={13} />
+                            </button>
+                          </div>
                           <button
                             type="button"
-                            onClick={() =>
-                              setQty(line.sku.id, line.variantSlug, line.qty - 1)
-                            }
-                            aria-label="Decrease quantity"
-                            className="h-11 w-11 flex items-center justify-center text-brand-ink-soft hover:text-brand-ink"
+                            onClick={() => remove(line.sku.id, line.variantSlug)}
+                            aria-label={`Remove ${line.sku.name}`}
+                            className="h-8 w-8 flex items-center justify-center text-brand-ink-soft hover:text-brand-red rounded-full hover:bg-brand-red-soft transition-colors"
                           >
-                            <Minus size={14} />
-                          </button>
-                          <span className="px-3 text-sm tabular-nums">{line.qty}</span>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setQty(line.sku.id, line.variantSlug, line.qty + 1)
-                            }
-                            aria-label="Increase quantity"
-                            className="h-11 w-11 flex items-center justify-center text-brand-ink-soft hover:text-brand-ink"
-                          >
-                            <Plus size={14} />
+                            <Trash2 size={14} />
                           </button>
                         </div>
-                      </div>
-                      <div className="flex flex-col items-end justify-between">
-                        <div className="font-semibold text-brand-ink whitespace-nowrap">
-                          {formatINR(line.lineTotalINR)}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => remove(line.sku.id, line.variantSlug)}
-                          aria-label={`Remove ${line.sku.name}`}
-                          className="h-11 w-11 flex items-center justify-center text-brand-ink-soft hover:text-brand-red"
-                        >
-                          <Trash2 size={14} />
-                        </button>
                       </div>
                     </li>
                   ))}
@@ -321,21 +358,32 @@ export default function CartDrawer({
             </div>
 
             {count > 0 && (
-              <div className="border-t border-brand-line p-5 space-y-3">
-                <div className="flex justify-between text-brand-ink">
+              <div className="border-t border-brand-line p-5 space-y-2.5">
+                <div className="flex justify-between text-brand-ink-soft text-sm">
                   <span>Subtotal</span>
-                  <span className="font-semibold">{formatINR(subtotal)}</span>
+                  <span className="font-medium tabular-nums">
+                    {formatINR(subtotal)}
+                  </span>
                 </div>
                 {currentBundleBonus > 0 && (
                   <div className="flex justify-between text-success text-sm">
-                    <span>Bundle bonus</span>
-                    <span className="font-semibold">
-                      -{formatINR(currentBundleBonus)}
+                    <span className="flex items-center gap-1.5">
+                      <Gift size={13} className="shrink-0" aria-hidden />
+                      Bundle bonus
+                    </span>
+                    <span className="font-semibold tabular-nums">
+                      −{currentBundlePct}%
                     </span>
                   </div>
                 )}
-                <p className="text-xs text-brand-ink-soft">
-                  Shipping & taxes calculated at checkout
+                <div className="flex justify-between text-brand-ink font-bold pt-2 border-t border-brand-line">
+                  <span>Total</span>
+                  <span className="tabular-nums">
+                    {formatINR(Math.max(0, subtotal - currentBundleBonus))}
+                  </span>
+                </div>
+                <p className="text-[11px] text-brand-ink-soft -mt-1">
+                  Shipping &amp; taxes calculated at checkout
                 </p>
                 <Link
                   href="/checkout"
