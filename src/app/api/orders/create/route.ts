@@ -29,7 +29,7 @@ import {
 } from "@/db/schema";
 import { sql, eq, and } from "drizzle-orm";
 import { PRODUCTS } from "@/lib/products";
-import { OFFERS } from "@/lib/config";
+import { OFFERS, bundleDiscountInr } from "@/lib/config";
 import { razorpay } from "@/lib/razorpay";
 import { generateOrderId } from "@/lib/order-id";
 import { redeemCoupon, CouponError } from "@/lib/coupons";
@@ -247,6 +247,11 @@ export async function POST(req: Request) {
       : 0;
   const prepaidDiscount =
     body.paymentMethod !== "COD" ? OFFERS.prepaidDiscountINR : 0;
+  // Bundle bonus — auto-applied when the customer adds any 2+ cars.
+  // Driven by TOTAL cart quantity so 2-of-the-same and 1-each-of-two both
+  // qualify. Server-side authoritative so a client can't spoof the discount.
+  const cartQty = body.items.reduce((n, i) => n + i.qty, 0);
+  const bundleDiscount = bundleDiscountInr(cartQty);
 
   // ── 3. Open transaction: atomic stock decrement, customer upsert, coupon
   //       redemption (with customerId for per-customer limit), address insert,
@@ -346,7 +351,8 @@ export async function POST(req: Request) {
         //     order id present in the DB before redeemCoupon (the ledger row
         //     FK-references orders.id) — but we don't know the final total
         //     yet. We'll UPDATE it after coupon redemption resolves.
-        const totalBeforeCoupon = subtotal + shipping + codFee - prepaidDiscount;
+        const totalBeforeCoupon =
+          subtotal + shipping + codFee - prepaidDiscount - bundleDiscount;
         if (totalBeforeCoupon <= 0) {
           throw new Error("BODY:Invalid total");
         }
@@ -362,7 +368,7 @@ export async function POST(req: Request) {
           subtotalInr: subtotal,
           shippingInr: shipping,
           codFeeInr: codFee,
-          discountInr: prepaidDiscount,
+          discountInr: prepaidDiscount + bundleDiscount,
           totalInr: totalBeforeCoupon,
           couponCode: null,
           paymentMethod: body.paymentMethod,
@@ -403,7 +409,7 @@ export async function POST(req: Request) {
           await tx
             .update(orders)
             .set({
-              discountInr: prepaidDiscount + couponDiscountInr,
+              discountInr: prepaidDiscount + bundleDiscount + couponDiscountInr,
               totalInr: total,
               couponCode: appliedCouponCode,
               updatedAt: new Date(),

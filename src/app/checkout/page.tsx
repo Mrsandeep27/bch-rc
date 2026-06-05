@@ -26,7 +26,12 @@ import {
   getCartSubtotal,
   getCartCount,
 } from "@/lib/cart-store";
-import { AUTO_COUPON, OFFERS } from "@/lib/config";
+import {
+  AUTO_COUPON,
+  OFFERS,
+  bundleDiscountInr,
+  bundleTierLabel,
+} from "@/lib/config";
 import { formatINR } from "@/lib/utils";
 
 type PaymentMethod = "upi" | "cod";
@@ -379,7 +384,14 @@ export default function CheckoutPage() {
       ? OFFERS.codFeeINR
       : 0;
   const prepaidDiscount = payment === "upi" ? OFFERS.prepaidDiscountINR : 0;
-  const total = Math.max(0, subtotal + shipping + codFee - prepaidDiscount - couponDiscountInr);
+  // Bundle bonus — mix ANY 2 cars = ₹298 off, ANY 3+ cars = ₹698 off.
+  // Driven by TOTAL cart quantity, not distinct SKUs.
+  const bundleDiscount = bundleDiscountInr(count);
+  const bundleLabel = bundleTierLabel(count);
+  const total = Math.max(
+    0,
+    subtotal + shipping + codFee - prepaidDiscount - bundleDiscount - couponDiscountInr,
+  );
 
   // Per-field validity, recomputed live. Drives both the inline red borders /
   // messages and the submit gate.
@@ -1234,6 +1246,12 @@ export default function CheckoutPage() {
               <div className="flex justify-between text-success">
                 <span>Online-pay bonus</span>
                 <span>-{formatINR(prepaidDiscount)}</span>
+              </div>
+            )}
+            {bundleDiscount > 0 && (
+              <div className="flex justify-between text-success">
+                <span>Bundle bonus{bundleLabel ? ` (${bundleLabel})` : ""}</span>
+                <span>-{formatINR(bundleDiscount)}</span>
               </div>
             )}
             {couponDiscountInr > 0 && (

@@ -1,26 +1,34 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { Check, ShoppingBag, Plus } from "lucide-react";
-import { THEME } from "@/lib/theme";
-import { getHeroSku } from "@/lib/products";
+import { BUNDLE_TIERS } from "@/lib/config";
 import { useCart } from "@/lib/cart-store";
 import { formatINR, cn } from "@/lib/utils";
+
+// Bundle bonus is universal — any 2 cars get ₹298 off, any 3+ get ₹698 off.
+// Driven by total cart quantity, applied automatically at checkout
+// (src/app/api/orders/create/route.ts via bundleDiscountInr).
+//
+// These cards exist purely to communicate the offer + let the buyer scroll
+// to the SKU lineup to pick. We don't pre-fill specific cars any more —
+// the customer mixes freely.
+
+const TIER_BY_QTY: Record<2 | 3, { bonusInr: number }> = {
+  2: { bonusInr: BUNDLE_TIERS.find((t) => t.minQty === 2)?.bonusInr ?? 298 },
+  3: { bonusInr: BUNDLE_TIERS.find((t) => t.minQty === 3)?.bonusInr ?? 698 },
+};
 
 type BundleOption = {
   qty: 1 | 2 | 3;
   label: string;
-  priceINR: number;
-  perCarINR: number;
   saveINR: number;
   badge?: "MOST POPULAR" | "BEST VALUE";
   sub: string;
   cars: { src: string; alt: string }[];
 };
-
-const SINGLE_PRICE = getHeroSku().retailINR;
 
 const CAR_BMW = { src: "/products/PRC-bmw.webp", alt: "Pocket BMW" };
 const CAR_PORSCHE = { src: "/products/PRC-porsche.webp", alt: "Pocket Porsche" };
@@ -30,28 +38,22 @@ const OPTIONS: BundleOption[] = [
   {
     qty: 1,
     label: "Buy 1",
-    priceINR: SINGLE_PRICE,
-    perCarINR: SINGLE_PRICE,
     saveINR: 0,
     sub: "Just for me",
     cars: [CAR_BMW],
   },
   {
     qty: 2,
-    label: "Buy 2",
-    priceINR: THEME.bundle2PriceINR,
-    perCarINR: Math.round(THEME.bundle2PriceINR / 2),
-    saveINR: THEME.bundle2SaveINR,
+    label: "Mix any 2",
+    saveINR: TIER_BY_QTY[2].bonusInr,
     badge: "MOST POPULAR",
     sub: "Gift + keep",
     cars: [CAR_BMW, CAR_PORSCHE],
   },
   {
     qty: 3,
-    label: "Buy 3",
-    priceINR: THEME.bundle3PriceINR,
-    perCarINR: Math.round(THEME.bundle3PriceINR / 3),
-    saveINR: THEME.bundle3SaveINR,
+    label: "Mix any 3+",
+    saveINR: TIER_BY_QTY[3].bonusInr,
     badge: "BEST VALUE",
     sub: "Race night",
     cars: [CAR_BMW, CAR_PORSCHE, CAR_MONSTER],
@@ -61,18 +63,23 @@ const OPTIONS: BundleOption[] = [
 export default function BundlePicker() {
   const [selectedQty, setSelectedQty] = useState<1 | 2 | 3>(2);
 
-  const selected = OPTIONS.find((o) => o.qty === selectedQty)!;
-
-  const handleAdd = () => {
-    const hero = getHeroSku();
-    // Default to the first in-stock colour for the hero SKU. If the SKU has
-    // no colour variants, pass null.
-    const firstInStock =
-      hero.colors?.find((c) => c.stock > 0)?.slug ?? hero.colors?.[0]?.slug ?? null;
-    const { add, open } = useCart.getState();
-    add(hero.id, firstInStock, selectedQty);
-    open();
+  const handlePick = () => {
+    // No more pre-filling a fixed combo — the bundle is "any cars". Scroll to
+    // the SKU lineup (id="sku" on the home page) so the buyer mixes freely.
+    // If we're not on the home page, hop there with the hash and the browser
+    // takes care of the in-page scroll.
+    if (typeof window === "undefined") return;
+    const lineup = document.getElementById("sku");
+    if (lineup) {
+      lineup.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    window.location.href = "/#sku";
   };
+
+  // Open the cart drawer so the buyer can see live bundle progress as they
+  // browse. No-op if the cart is empty — they'll see the empty-state nudge.
+  const handleOpenCart = () => useCart.getState().open();
 
   return (
     <section id="bundles" className="py-6 sm:py-14 bg-brand-cream">
@@ -85,12 +92,12 @@ export default function BundlePicker() {
             More cars. Bigger savings.
           </h2>
           <p className="text-brand-ink-soft text-sm sm:text-lg mt-2 sm:mt-3 max-w-xl mx-auto">
-            Mix any cars. The more you stack, the lower the per-car price.
+            Mix any cars. Discount auto-applies in cart — no code needed.
           </p>
         </div>
 
         {/* Mobile: horizontal snap-scroll (3 cards, swipe). Desktop: 3-col grid. */}
-        <div className="mt-4 sm:mt-10 -mx-4 sm:mx-0 overflow-x-auto sm:overflow-visible snap-x snap-mandatory sm:snap-none no-scrollbar">
+        <div className="mt-4 sm:mt-10 -mx-4 sm:mx-0 overflow-x-auto overflow-y-hidden sm:overflow-visible snap-x snap-mandatory sm:snap-none no-scrollbar">
           <div className="flex items-start sm:items-stretch sm:grid sm:grid-cols-3 gap-3 sm:gap-6 px-4 sm:px-0 pb-2 sm:pb-0 pt-3 sm:pt-0">
           {OPTIONS.map((opt, i) => {
             const isSelected = opt.qty === selectedQty;
@@ -170,24 +177,30 @@ export default function BundlePicker() {
                   ))}
                 </div>
 
-                <div className="mt-3 sm:mt-4 flex items-baseline justify-center gap-2 flex-wrap">
-                  <span className="text-2xl sm:text-3xl font-bold text-brand-ink">
-                    {formatINR(opt.priceINR)}
-                  </span>
-                  {opt.saveINR > 0 && (
-                    <span className="text-sm text-brand-ink-soft line-through">
-                      {formatINR(SINGLE_PRICE * opt.qty)}
-                    </span>
+                {/* Savings headline replaces the (misleading) fixed total
+                    price — the actual cart total depends on which cars the
+                    buyer mixes, so we show the bonus they'll get instead. */}
+                <div className="mt-3 sm:mt-4">
+                  {opt.saveINR > 0 ? (
+                    <div className="font-display text-2xl sm:text-3xl font-bold text-success">
+                      Save {formatINR(opt.saveINR)}
+                    </div>
+                  ) : (
+                    <div className="font-display text-2xl sm:text-3xl font-bold text-brand-ink">
+                      Single car
+                    </div>
                   )}
                 </div>
 
                 <div className="mt-1 text-xs sm:text-sm text-brand-ink-soft font-mono font-medium">
-                  {formatINR(opt.perCarINR)} per car
+                  {opt.qty === 1
+                    ? "Just one car"
+                    : `Mix any ${opt.qty}${opt.qty === 3 ? "+" : ""} cars`}
                 </div>
 
                 <div className="mt-2.5 sm:mt-3 inline-block bg-success/10 text-success text-xs font-bold px-2.5 py-1 rounded-full">
                   {opt.saveINR > 0
-                    ? `SAVE ${formatINR(opt.saveINR)}`
+                    ? `${formatINR(opt.saveINR)} BONUS`
                     : "FREE SHIPPING"}
                 </div>
               </motion.button>
@@ -196,16 +209,18 @@ export default function BundlePicker() {
           </div>
         </div>
 
-        <div className="mt-5 sm:mt-10 flex flex-col items-center">
+        <div className="mt-5 sm:mt-10 flex flex-col items-center gap-2">
           <button
             type="button"
-            onClick={handleAdd}
+            onClick={selectedQty === 1 ? handleOpenCart : handlePick}
             className="bg-brand-red hover:bg-brand-red-hover text-white px-7 sm:px-8 py-3.5 sm:py-5 rounded-full font-semibold text-base sm:text-lg shadow-2xl transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2"
           >
             <ShoppingBag size={20} aria-hidden />
-            Add {selectedQty} {selectedQty === 1 ? "car" : "cars"} — {formatINR(selected.priceINR)}
+            {selectedQty === 1
+              ? "Pick your car"
+              : `Pick any ${selectedQty}${selectedQty === 3 ? "+" : ""} cars`}
           </button>
-          <p className="text-brand-ink text-[11px] sm:text-sm mt-2.5 sm:mt-3 font-mono font-medium text-center">
+          <p className="text-brand-ink text-[11px] sm:text-sm mt-1 font-mono font-medium text-center">
             Free shipping · COD pan-India · 24-hr dispatch
           </p>
         </div>

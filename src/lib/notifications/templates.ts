@@ -4,6 +4,18 @@
  * trust the payload — escape every variable before injecting into HTML.
  */
 
+import {
+  OFFERS,
+  bundleDiscountInr,
+  bundleTierLabel,
+} from "@/lib/config";
+
+// Locally-aliased helpers so the breakdown logic below reads cleanly and we
+// don't accidentally drift if the public API ever changes shape.
+const PREPAID_BONUS_INR = OFFERS.prepaidDiscountINR;
+const bundleBonusInrLocal = bundleDiscountInr;
+const bundleTierLabelLocal = bundleTierLabel;
+
 const BRAND = "PRC Cars";
 const BASE_URL = "https://pocketrccars.com";
 const SUPPORT_PHONE = "+91 63623 46498";
@@ -108,12 +120,31 @@ function priceBreakdown(p: EmailPayload): string {
     );
   }
   if (p.discountInr && p.discountInr > 0) {
-    const label = p.couponCode
-      ? `Online-pay bonus + coupon (${escapeHtml(p.couponCode)})`
-      : "Online-pay bonus";
-    rows.push(
-      `<tr><td style="padding:3px 0;color:#0a7d2c">${label}</td><td style="padding:3px 0;text-align:right;color:#0a7d2c">-${formatINR(p.discountInr)}</td></tr>`,
-    );
+    // Derive the bonus breakdown so the customer sees each line separately
+    // (online-pay bonus, bundle bonus, coupon) instead of one opaque number.
+    const cartQty = (p.items ?? []).reduce((n, i) => n + i.qty, 0);
+    const prepaidBonus = p.paymentMethod !== "COD" ? PREPAID_BONUS_INR : 0;
+    const bundleBonus = bundleBonusInrLocal(cartQty);
+    const bundleName = bundleTierLabelLocal(cartQty);
+    const couponBonus = Math.max(0, p.discountInr - prepaidBonus - bundleBonus);
+    if (prepaidBonus > 0) {
+      rows.push(
+        `<tr><td style="padding:3px 0;color:#0a7d2c">Online-pay bonus</td><td style="padding:3px 0;text-align:right;color:#0a7d2c">-${formatINR(prepaidBonus)}</td></tr>`,
+      );
+    }
+    if (bundleBonus > 0) {
+      rows.push(
+        `<tr><td style="padding:3px 0;color:#0a7d2c">Bundle bonus${bundleName ? ` (${escapeHtml(bundleName)})` : ""}</td><td style="padding:3px 0;text-align:right;color:#0a7d2c">-${formatINR(bundleBonus)}</td></tr>`,
+      );
+    }
+    if (couponBonus > 0) {
+      const couponLabel = p.couponCode
+        ? `Coupon (${escapeHtml(p.couponCode)})`
+        : "Coupon";
+      rows.push(
+        `<tr><td style="padding:3px 0;color:#0a7d2c">${couponLabel}</td><td style="padding:3px 0;text-align:right;color:#0a7d2c">-${formatINR(couponBonus)}</td></tr>`,
+      );
+    }
   }
   rows.push(
     `<tr><td style="padding-top:10px;border-top:1px solid #eee;font-weight:700">Total</td><td style="padding-top:10px;border-top:1px solid #eee;text-align:right;font-weight:700">${formatINR(p.totalInr)}</td></tr>`,
@@ -131,10 +162,23 @@ function priceBreakdownText(p: EmailPayload): string {
     lines.push(`  COD fee: ${formatINR(p.codFeeInr)}`);
   }
   if (p.discountInr && p.discountInr > 0) {
-    const label = p.couponCode
-      ? `Online-pay bonus + coupon (${p.couponCode})`
-      : "Online-pay bonus";
-    lines.push(`  ${label}: -${formatINR(p.discountInr)}`);
+    const cartQty = (p.items ?? []).reduce((n, i) => n + i.qty, 0);
+    const prepaidBonus = p.paymentMethod !== "COD" ? PREPAID_BONUS_INR : 0;
+    const bundleBonus = bundleBonusInrLocal(cartQty);
+    const bundleName = bundleTierLabelLocal(cartQty);
+    const couponBonus = Math.max(0, p.discountInr - prepaidBonus - bundleBonus);
+    if (prepaidBonus > 0) {
+      lines.push(`  Online-pay bonus: -${formatINR(prepaidBonus)}`);
+    }
+    if (bundleBonus > 0) {
+      lines.push(
+        `  Bundle bonus${bundleName ? ` (${bundleName})` : ""}: -${formatINR(bundleBonus)}`,
+      );
+    }
+    if (couponBonus > 0) {
+      const couponLabel = p.couponCode ? `Coupon (${p.couponCode})` : "Coupon";
+      lines.push(`  ${couponLabel}: -${formatINR(couponBonus)}`);
+    }
   }
   lines.push(`  Total: ${formatINR(p.totalInr)}`);
   return lines.join("\n");

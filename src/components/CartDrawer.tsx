@@ -12,7 +12,12 @@ import {
   getCartCount,
   getFreeShippingDelta,
 } from "@/lib/cart-store";
-import { OFFERS, waLink } from "@/lib/config";
+import {
+  OFFERS,
+  BUNDLE_TIERS,
+  bundleDiscountInr,
+  waLink,
+} from "@/lib/config";
 import { formatINR } from "@/lib/utils";
 
 export default function CartDrawer({
@@ -33,6 +38,13 @@ export default function CartDrawer({
     100,
     (subtotal / OFFERS.freeShippingMinINR) * 100,
   );
+  // Bundle bonus nudge — show the current tier the buyer has unlocked, and
+  // how much MORE they'd save by hitting the next tier. The tiers list is
+  // sorted ascending so we can peek "the next tier above current" by index.
+  const currentBundleBonus = bundleDiscountInr(count);
+  const nextTier = BUNDLE_TIERS.find((t) => t.minQty > count);
+  const bundleGap = nextTier ? nextTier.minQty - count : 0;
+  const bundleNextExtra = nextTier ? nextTier.bonusInr - currentBundleBonus : 0;
 
   const waMessage =
     "Hi, I want to order:\n" +
@@ -172,6 +184,35 @@ export default function CartDrawer({
               </div>
             )}
 
+            {/* Bundle nudge — sits below the free-ship banner so the buyer
+                always sees the next-tier value next to the current cart. The
+                gap between tiers (₹298 → ₹698) is large enough that even one
+                more car can pay for itself if mixed with the right pair. */}
+            {count > 0 && (
+              <div
+                className={
+                  bundleGap > 0 && bundleNextExtra > 0
+                    ? "mx-5 my-3 p-3 rounded-lg bg-brand-ink/5 text-brand-ink text-sm font-medium"
+                    : currentBundleBonus > 0
+                      ? "mx-5 my-3 p-3 rounded-lg bg-success/10 text-success text-sm font-medium"
+                      : ""
+                }
+              >
+                {currentBundleBonus > 0 && (
+                  <div>
+                    🎁 Bundle bonus active — {formatINR(currentBundleBonus)} off
+                    auto-applied
+                  </div>
+                )}
+                {bundleGap > 0 && bundleNextExtra > 0 && (
+                  <div className={currentBundleBonus > 0 ? "mt-1 text-brand-ink-soft" : ""}>
+                    Add {bundleGap} more car{bundleGap > 1 ? "s" : ""} → unlock{" "}
+                    {formatINR(bundleNextExtra)} extra bonus
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex-1 overflow-y-auto px-5">
               {count === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center gap-4 py-10">
@@ -266,6 +307,14 @@ export default function CartDrawer({
                   <span>Subtotal</span>
                   <span className="font-semibold">{formatINR(subtotal)}</span>
                 </div>
+                {currentBundleBonus > 0 && (
+                  <div className="flex justify-between text-success text-sm">
+                    <span>Bundle bonus</span>
+                    <span className="font-semibold">
+                      -{formatINR(currentBundleBonus)}
+                    </span>
+                  </div>
+                )}
                 <p className="text-xs text-brand-ink-soft">
                   Shipping & taxes calculated at checkout
                 </p>
@@ -279,7 +328,7 @@ export default function CartDrawer({
                       : "bg-brand-red hover:bg-brand-red-hover text-white py-3.5 rounded-xl font-semibold flex items-center justify-center gap-2"
                   }
                 >
-                  Checkout · {formatINR(subtotal)}
+                  Checkout · {formatINR(Math.max(0, subtotal - currentBundleBonus))}
                 </Link>
                 <a
                   href={waLink(waMessage)}

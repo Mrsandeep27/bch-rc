@@ -13,7 +13,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { WhatsAppIcon } from "@/components/BrandIcons";
 import { THEME } from "@/lib/theme";
-import { waLink } from "@/lib/config";
+import { waLink, OFFERS, bundleDiscountInr, bundleTierLabel } from "@/lib/config";
 import { formatINR } from "@/lib/utils";
 import { resolveServiceability } from "@/lib/serviceability";
 import { db } from "@/db";
@@ -189,12 +189,47 @@ export default async function OrderSuccessPage({
                   <span>{formatINR(order.codFeeInr)}</span>
                 </div>
               )}
-              {order.discountInr > 0 && (
-                <div className="flex justify-between text-success">
-                  <span>Online-pay bonus</span>
-                  <span>-{formatINR(order.discountInr)}</span>
-                </div>
-              )}
+              {/* Discount breakdown — derived from items + payment method so
+                  the customer sees each bonus separately instead of a single
+                  opaque "Discount -₹398" line. Sum equals order.discountInr. */}
+              {(() => {
+                const items = (order.items as OrderItem[]) ?? [];
+                const cartQty = items.reduce((n, i) => n + i.qty, 0);
+                const prepaidBonus =
+                  order.paymentMethod !== "COD" ? OFFERS.prepaidDiscountINR : 0;
+                const bundleBonus = bundleDiscountInr(cartQty);
+                const bundleName = bundleTierLabel(cartQty);
+                const couponBonus = Math.max(
+                  0,
+                  order.discountInr - prepaidBonus - bundleBonus,
+                );
+                return (
+                  <>
+                    {prepaidBonus > 0 && (
+                      <div className="flex justify-between text-success">
+                        <span>Online-pay bonus</span>
+                        <span>-{formatINR(prepaidBonus)}</span>
+                      </div>
+                    )}
+                    {bundleBonus > 0 && (
+                      <div className="flex justify-between text-success">
+                        <span>
+                          Bundle bonus{bundleName ? ` (${bundleName})` : ""}
+                        </span>
+                        <span>-{formatINR(bundleBonus)}</span>
+                      </div>
+                    )}
+                    {couponBonus > 0 && (
+                      <div className="flex justify-between text-success">
+                        <span>
+                          Coupon{order.couponCode ? ` (${order.couponCode})` : ""}
+                        </span>
+                        <span>-{formatINR(couponBonus)}</span>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
               <div className="flex justify-between font-bold text-base text-brand-ink pt-2 border-t border-brand-line mt-2">
                 <span>Total {isCod ? "(pay on delivery)" : "paid"}</span>
                 <span>{formatINR(order.totalInr)}</span>
