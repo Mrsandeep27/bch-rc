@@ -183,7 +183,7 @@ export default function Footer() {
             © 2026 {THEME.brandName}. All rights reserved.
           </p>
           <p className="text-xs text-brand-red mt-1">
-            Pocket-priced 1:64 RC cars · Made for India
+            Pocket-priced 1:64 drift cars · Made for India
           </p>
           <div className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-neutral-500">
             <span>Registered Business</span>

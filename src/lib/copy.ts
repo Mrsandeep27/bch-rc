@@ -12,7 +12,7 @@ export const HERO_VARIANTS: Record<
 > = {
   default: {
     h1: "Drift. Race. Pocket.",
-    sub: "Die-cast 1:64 RC cars from ₹999 — real drift RC cars, not pull-back toys. Same-day from Bangalore · COD pan-India.",
+    sub: "Die-cast 1:64 RC cars from ₹999 — real drift, not pull-back toys. Same-day from Bangalore · COD pan-India.",
     ctaLabel: "🛒 Order yours — from ₹999, COD",
   },
   gift: {

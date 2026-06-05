@@ -216,8 +216,8 @@ export default function SkuLineup() {
           Pick your RC car.
         </h2>
         <p className="text-brand-ink-soft text-center mt-2 text-base sm:text-lg">
-          5 die-cast 1:64 RC cars built for drift · from ₹999 online · every RC
-          car ships in 24&nbsp;hrs from Bangalore.
+          5 die-cast 1:64 RC cars built for drift · from ₹999 online · ships in
+          24&nbsp;hrs from Bangalore.
         </p>
       </div>
 
@@ -232,7 +232,7 @@ export default function SkuLineup() {
         <div className="mt-5 sm:mt-8 flex justify-center">
           <span className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-brand-ink text-white text-xs sm:text-sm font-mono font-semibold uppercase tracking-widest">
             <span className="w-2 h-2 rounded-full bg-brand-red animate-pulse" />
-            More RC cars dropping soon · stay tuned
+            More drift cars dropping soon · stay tuned
           </span>
         </div>
       </div>

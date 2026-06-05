@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     canonical: "/",
   },
   description:
-    "Shop India's most-gifted mini RC cars — 1:64 scale die-cast RC drift cars with LED headlights and swappable drift wheels. RC cars from ₹999. Pan-India COD. Ships in 24 hrs from Bangalore.",
+    "India's most-gifted mini RC cars — 1:64 die-cast RC drift cars with LED, drift wheels & USB-C. From ₹999. Pan-India COD, ships in 24 hrs from Bangalore.",
   keywords: [
     "RC car India",
     "mini RC drift car",
