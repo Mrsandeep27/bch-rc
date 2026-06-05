@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import { nanoid } from "nanoid";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
-import Footer from "@/components/Footer";
 import { PayButton } from "@/components/PayButton";
 import {
   useCart,
@@ -1125,18 +1124,16 @@ export default function CheckoutPage() {
               </label>
             </div>
 
-            {/* Payment trust badges — accepted methods + secured-by signal. */}
-            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-brand-line pt-4">
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-ink">
-                <Lock size={13} className="text-success" aria-hidden />
-                100% secure payments
+            {/* Payment trust badges — compact single-line variant. */}
+            <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-brand-line pt-3 text-[11px] text-brand-ink-soft">
+              <span className="inline-flex items-center gap-1 font-semibold text-brand-ink">
+                <Lock size={11} className="text-success" aria-hidden />
+                Secure
               </span>
-              <span className="text-xs text-brand-ink-soft">
-                UPI · Visa · Mastercard · RuPay · Net Banking
-              </span>
-              <span className="text-[11px] text-brand-ink-soft">
-                Encrypted &amp; processed by Razorpay
-              </span>
+              <span aria-hidden>·</span>
+              <span>UPI · Cards · Net Banking</span>
+              <span aria-hidden>·</span>
+              <span>Razorpay</span>
             </div>
           </div>
 
@@ -1306,8 +1303,6 @@ export default function CheckoutPage() {
           </div>
         </div>
       </main>
-
-      <Footer />
     </>
   );
 }
