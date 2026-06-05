@@ -86,6 +86,43 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* Mobile scroll smoothness.
+   - scroll-behavior: smooth → in-page anchor jumps (#sku, #bundles, #faq) ease
+     instead of teleporting. Respects prefers-reduced-motion below.
+   - overscroll-behavior-y: contain → kills the iOS bounce that surfaces as
+     "stuck" perception when scroll inertia rubber-bands into nested
+     scrollers (the announcement marquee, horizontal SKU scroll, cart drawer).
+   - -webkit-overflow-scrolling: touch → legacy iOS momentum scroll. No-op on
+     iOS 13+ but harmless. */
+html {
+  scroll-behavior: smooth;
+}
+body {
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
+/* Skip paint + layout work for off-screen sections. Browsers reserve the
+   estimated height (contain-intrinsic-size) so the scrollbar / layout don't
+   jump, then render the section only as it nears the viewport. Massive win
+   on long mobile pages with 6–8 dynamic below-the-fold blocks (SkuLineup,
+   FeatureCarousel, OurStory, UgcGrid, BundlePicker, OfferStack, FAQ,
+   FinalCta) — was the main cause of the mid-scroll stutter on iPhone SE.
+   Each below-the-fold section in app/page.tsx is wrapped with .cv-auto. */
+.cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 800px;
+}
+
+/* Marquee — promote to its own compositor layer so its continuous transform
+   doesn't repaint the rest of the page on every frame. */
+.animate-marquee {
+  will-change: transform;
+}
+
 /* Display font (Nippo) is reserved for h1/h2 only — at 40px+ where its airy
    proportions read as confident, not thin. Card titles (h3/h4) use General
    Sans body font where weight-700 renders solid at 20-28px. */

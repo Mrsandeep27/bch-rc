@@ -85,14 +85,34 @@ export default async function Page({
             appears. */}
         <div id="hero-end-sentinel" aria-hidden className="h-px w-full" />
         <TrustMarquee />
-        <SkuLineup />
-        <FeatureCarousel />
-        <OurStorySection />
-        <UgcGrid />
-        <BundlePicker />
-        <OfferStack />
-        <FAQ />
-        <FinalCta />
+        {/* Each below-fold section is wrapped with .cv-auto (content-visibility:
+            auto) so the browser skips paint/layout for whatever's off-screen.
+            Direct .cv-auto on the imported sections would need a className prop
+            on every component — wrapping is the smaller, safer change. */}
+        <div className="cv-auto">
+          <SkuLineup />
+        </div>
+        <div className="cv-auto">
+          <FeatureCarousel />
+        </div>
+        <div className="cv-auto">
+          <OurStorySection />
+        </div>
+        <div className="cv-auto">
+          <UgcGrid />
+        </div>
+        <div className="cv-auto">
+          <BundlePicker />
+        </div>
+        <div className="cv-auto">
+          <OfferStack />
+        </div>
+        <div className="cv-auto">
+          <FAQ />
+        </div>
+        <div className="cv-auto">
+          <FinalCta />
+        </div>
       </main>
       <Footer />
       <HomeClientUi openCart={openCart} />
