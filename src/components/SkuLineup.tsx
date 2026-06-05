@@ -160,8 +160,8 @@ function SkuCard({ sku, index, stockMap }: SkuCardProps) {
             </span>
           </div>
           <div className="text-[11px] font-mono text-success mt-1">
-            {formatINR(sku.retailINR - THEME.prepaidDiscountINR)} prepaid · save
-            ₹{THEME.prepaidDiscountINR}
+            {formatINR(sku.retailINR - THEME.prepaidDiscountINR)} online · ₹
+            {THEME.prepaidDiscountINR} bonus
           </div>
         </div>
 
@@ -216,7 +216,7 @@ export default function SkuLineup() {
           Pick your drift.
         </h2>
         <p className="text-brand-ink-soft text-center mt-2 text-base sm:text-lg">
-          5 die-cast 1:64 RC drift cars · from ₹1,199 prepaid · ships in
+          5 die-cast 1:64 RC drift cars · from ₹999 online · ships in
           24&nbsp;hrs from Bangalore.
         </p>
       </div>

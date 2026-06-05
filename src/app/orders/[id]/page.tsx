@@ -191,7 +191,7 @@ export default async function OrderSuccessPage({
               )}
               {order.discountInr > 0 && (
                 <div className="flex justify-between text-success">
-                  <span>Prepaid discount</span>
+                  <span>Online-pay bonus</span>
                   <span>-{formatINR(order.discountInr)}</span>
                 </div>
               )}

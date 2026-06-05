@@ -54,7 +54,7 @@ export type Announcement = {
 
 export const ANNOUNCEMENTS: Announcement[] = [
   {
-    text: "Pay prepaid → save ₹100 automatically",
+    text: "Pay online → ₹100 bonus + same-day dispatch",
   },
   {
     text: "Ships in 24 hrs from Bangalore · Free shipping over ₹1,099",

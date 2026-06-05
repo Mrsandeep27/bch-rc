@@ -18,8 +18,8 @@ export const HOME_FAQS: QA[] = [
     a: "Yes — COD available pan-India. ₹49 COD fee only on orders under ₹999. Free on everything else.",
   },
   {
-    q: "How do I save ₹100? (Prepaid vs COD)",
-    a: "Pay prepaid (UPI / card / netbanking) and ₹100 comes off automatically at checkout. COD pays the full sticker price — the ₹100 saving is a thank-you for skipping the cash-handling overhead.",
+    q: "How do I save ₹100? (Online-pay bonus)",
+    a: "Pay online via UPI / card / netbanking and you instantly get ₹100 off + same-day dispatch from Bangalore (COD orders wait for a verification call before they leave the warehouse). Either way, your order ships pan-India.",
   },
   {
     q: "What if it arrives broken or stops working?",

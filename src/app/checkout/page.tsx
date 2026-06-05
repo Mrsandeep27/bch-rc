@@ -1232,7 +1232,7 @@ export default function CheckoutPage() {
             )}
             {prepaidDiscount > 0 && (
               <div className="flex justify-between text-success">
-                <span>Prepaid discount</span>
+                <span>Online-pay bonus</span>
                 <span>-{formatINR(prepaidDiscount)}</span>
               </div>
             )}

@@ -29,8 +29,8 @@ const OFFERS_LIST: Offer[] = [
   },
   {
     icon: CreditCard,
-    title: `Prepaid ₹${OFFERS.prepaidDiscountINR} off`,
-    sub: `Pay online → ${formatINR(HERO_RETAIL - OFFERS.prepaidDiscountINR)}`,
+    title: `Pay online → ₹${OFFERS.prepaidDiscountINR} bonus`,
+    sub: `UPI / card → ${formatINR(HERO_RETAIL - OFFERS.prepaidDiscountINR)} + same-day dispatch`,
   },
   {
     icon: Package,

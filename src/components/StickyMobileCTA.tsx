@@ -83,7 +83,7 @@ export default function StickyMobileCTA({
                   {formatINR(hero.retailINR)}
                 </span>
                 <span className="hidden sm:inline text-[10px] font-mono uppercase tracking-widest text-success ml-1">
-                  prepaid
+                  online
                 </span>
               </div>
             </div>

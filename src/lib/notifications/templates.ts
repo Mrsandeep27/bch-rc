@@ -109,8 +109,8 @@ function priceBreakdown(p: EmailPayload): string {
   }
   if (p.discountInr && p.discountInr > 0) {
     const label = p.couponCode
-      ? `Discount (${escapeHtml(p.couponCode)} + prepaid)`
-      : "Prepaid discount";
+      ? `Online-pay bonus + coupon (${escapeHtml(p.couponCode)})`
+      : "Online-pay bonus";
     rows.push(
       `<tr><td style="padding:3px 0;color:#0a7d2c">${label}</td><td style="padding:3px 0;text-align:right;color:#0a7d2c">-${formatINR(p.discountInr)}</td></tr>`,
     );
@@ -131,7 +131,9 @@ function priceBreakdownText(p: EmailPayload): string {
     lines.push(`  COD fee: ${formatINR(p.codFeeInr)}`);
   }
   if (p.discountInr && p.discountInr > 0) {
-    const label = p.couponCode ? `Discount (${p.couponCode} + prepaid)` : "Prepaid discount";
+    const label = p.couponCode
+      ? `Online-pay bonus + coupon (${p.couponCode})`
+      : "Online-pay bonus";
     lines.push(`  ${label}: -${formatINR(p.discountInr)}`);
   }
   lines.push(`  Total: ${formatINR(p.totalInr)}`);
