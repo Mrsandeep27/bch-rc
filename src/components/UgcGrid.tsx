@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
-import { Play, Volume2, VolumeX } from "lucide-react";
+import { Play, Volume2, VolumeX, ShoppingBag } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { InstagramIcon } from "@/components/BrandIcons";
 import { THEME } from "@/lib/theme";
@@ -270,7 +270,7 @@ export default function UgcGrid() {
           </p>
         </div>
 
-        <div className="mt-8 -mx-4 sm:mx-0 overflow-x-auto snap-x snap-mandatory no-scrollbar touch-pan-x">
+        <div className="mt-8 -mx-4 sm:mx-0 overflow-x-auto overflow-y-hidden snap-x snap-mandatory no-scrollbar touch-pan-x">
           <div className="flex gap-3 sm:gap-4 px-4 sm:px-0 pb-4">
             {UGC.map((card, i) => (
               <ReelCard
@@ -288,15 +288,26 @@ export default function UgcGrid() {
           </div>
         </div>
 
-        <div className="mt-8 text-center">
+        {/* F05 - Mid-arc CTA now ADVANCES the purchase instead of leaking
+            an engaged buyer off to Instagram. The "Follow" link demoted
+            to a tiny secondary text link so brand can still grow IG
+            audience without ceding the primary mid-page CTA pixel. */}
+        <div className="mt-8 text-center flex flex-col items-center gap-3">
+          <Link
+            href="/#sku"
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-brand-red hover:bg-brand-red-hover text-white text-sm font-semibold shadow-lg transition-colors"
+          >
+            <ShoppingBag size={16} />
+            Pick your drift — from ₹999, COD
+          </Link>
           <Link
             href={`https://instagram.com/${THEME.instagramHandle}`}
             target="_blank"
-            rel="noopener"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border-2 border-brand-ink text-brand-ink hover:bg-brand-ink hover:text-white text-sm font-semibold transition-colors"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-xs text-brand-ink-soft hover:text-brand-ink"
           >
-            <InstagramIcon size={16} />
-            Follow @{THEME.instagramHandle}
+            <InstagramIcon size={14} />
+            Or follow @{THEME.instagramHandle} for new drops
           </Link>
         </div>
       </div>

@@ -174,7 +174,7 @@ export const FAQS: { q: string; a: string; defaultOpen?: boolean }[] = [
   },
   {
     q: "Where do you ship?",
-    a: "Pan-India. Bangalore, Mumbai, Delhi-NCR metros in 2–3 days. Tier-2 / Tier-3 cities in 4–7 days. Dispatch from Bangalore within 24 hours of order confirmation.",
+    a: "Pan-India. Most big cities (Bangalore, Mumbai, Delhi-NCR, Chennai, Hyderabad, Pune) get it in 2-3 days. Smaller cities and towns 4-7 days. Real Shiprocket tracking on WhatsApp — we ship it ourselves from Bangalore, no middleman.",
   },
   {
     q: "Can I gift-wrap it?",

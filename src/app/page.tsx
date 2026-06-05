@@ -3,6 +3,7 @@ import dynamic from "next/dynamic";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
+import HeroMiniFaq from "@/components/HeroMiniFaq";
 import TrustMarquee from "@/components/TrustMarquee";
 import SkuLineup from "@/components/SkuLineup";
 import Footer from "@/components/Footer";
@@ -38,7 +39,11 @@ const UgcGrid = dynamic(() => import("@/components/UgcGrid"), {
 const BundlePicker = dynamic(() => import("@/components/BundlePicker"), {
   loading: () => <Skeleton className="h-96 w-full max-w-7xl mx-auto my-12" />,
 });
-const OfferStack = dynamic(() => import("@/components/OfferStack"), {
+// P03 — OfferStack (5-card offer soup) replaced by ValueStack (one totalled
+// value-stack). The 2-car bundle lives in BundlePicker; the LED upgrade
+// moves to the PDP upsell. Keeping the import comment so a future change
+// can flip it back if A/B testing shows the soup outperforms.
+const ValueStack = dynamic(() => import("@/components/ValueStack"), {
   loading: () => <Skeleton className="h-64 w-full max-w-7xl mx-auto my-12" />,
 });
 const FAQ = dynamic(() => import("@/components/FAQ"), {
@@ -70,17 +75,27 @@ export default function Page() {
             viewport (i.e. the user is past the hero), the sticky buy bar
             appears. */}
         <div id="hero-end-sentinel" aria-hidden className="h-px w-full" />
+
+        {/* F03 — top-3-objections mini-FAQ. Sits directly under the hero so
+            COD / size / "what if it breaks?" are answered AT the decision
+            pixel, not 13 sections down in the full FAQ. */}
+        <HeroMiniFaq />
+
+        {/* TrustMarquee — product-spec marquee (USB-C, 2.4 GHz, die-cast,
+            etc.). Not a trust/policy strip; safe to keep here even though
+            relievers also live in the hero. */}
         <TrustMarquee />
-        {/* Each below-fold section is wrapped with .cv-auto (content-visibility:
-            auto) so the browser skips paint/layout for whatever's off-screen.
-            Direct .cv-auto on the imported sections would need a className prop
-            on every component — wrapping is the smaller, safer change. */}
-        <div className="cv-auto">
-          <SkuLineup />
-        </div>
-        <div className="cv-auto">
-          <FeatureCarousel />
-        </div>
+
+        {/* F02 — three proofs (UGC, founder guarantee via Our Story,
+            scale shot via OurStorySection's MapPin card) lifted ABOVE
+            the SkuLineup first-buy decision. Previously the buyer hit
+            "Add to cart" before seeing any social proof or founder
+            promise. New order: hero -> mini-FAQ -> spec marquee ->
+            Our Story (founder + warehouse proof) -> UGC (social proof)
+            -> SkuLineup (first buy) -> FeatureCarousel ->
+            BundlePicker -> OfferStack -> FAQ -> FinalCta.
+            Each below-fold section is wrapped with .cv-auto so the
+            browser skips paint/layout for off-screen content. */}
         <div className="cv-auto">
           <OurStorySection />
         </div>
@@ -88,10 +103,16 @@ export default function Page() {
           <UgcGrid />
         </div>
         <div className="cv-auto">
+          <SkuLineup />
+        </div>
+        <div className="cv-auto">
+          <FeatureCarousel />
+        </div>
+        <div className="cv-auto">
           <BundlePicker />
         </div>
         <div className="cv-auto">
-          <OfferStack />
+          <ValueStack />
         </div>
         <div className="cv-auto">
           <FAQ />

@@ -3,13 +3,17 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ShoppingBag, Star, ShieldCheck } from "lucide-react";
+import { ShoppingBag, Zap } from "lucide-react";
 import { getVisibleProducts, type Sku, type ColorVariant } from "@/lib/products";
 import { formatINR, calcDiscountPct, cn } from "@/lib/utils";
+import { useRouter } from "next/navigation";
 import { useCart } from "@/lib/cart-store";
 import { ProductImage } from "@/components/ProductImage";
 import { THEME } from "@/lib/theme";
-import { trackAddToCart } from "@/lib/analytics-client";
+import {
+  trackAddToCart,
+  trackInitiateCheckout,
+} from "@/lib/analytics-client";
 
 /** Resolve a swatch token (hex or `gradient:from,to[,...]`) to a CSS background value. */
 function swatchBg(swatch: string): string {
@@ -61,9 +65,17 @@ type SkuCardProps = {
 };
 
 function SkuCard({ sku, index, stockMap }: SkuCardProps) {
+  const router = useRouter();
+  // Keep the hero ring on the SKU we promote, but treat the badge field as
+  // a hint, not a social-proof claim (W09 — see FACTUAL_BADGES below).
   const isHero = sku.badge === "MOST GIFTED";
   const pct = calcDiscountPct(sku.mrpINR, sku.retailINR);
   const pickReason = PICK_REASONS[index] ?? "Editor's pick";
+  // W05 - honest dual price. The advertised "from" is the online price;
+  // COD pays full retail. Surface both so a COD buyer doesn't get a
+  // surprise +Rs. 100 at checkout.
+  const onlinePrice = sku.retailINR - THEME.prepaidDiscountINR;
+  const codPrice = sku.retailINR;
 
   // DB inventory is the source of truth. Keys: `${sku.id}:${variantSlug}`
   // ("" for colourless SKUs). Optimistic (available) until the map loads.
@@ -102,14 +114,17 @@ function SkuCard({ sku, index, stockMap }: SkuCardProps) {
 
       <div className="aspect-square relative flex items-center justify-center overflow-hidden">
         <ProductImage sku={sku} />
-        {sku.badge && (
+        {/* W09 - Only render FACTUAL badges. NEW (product status) and PRO
+            (tier) describe the product itself. MOST GIFTED + BESTSELLER are
+            social-proof claims that need a review/order count behind them;
+            until reviews are seeded we cut them rather than ship hollow
+            superlatives. The data field stays on the SKU so a future
+            commit (after R01 review-collection lands real counts) can
+            flip them back on. */}
+        {sku.badge && (sku.badge === "NEW" || sku.badge === "PRO") && (
           <span
-            className={cn(
-              "absolute top-3 left-3 bg-brand-red text-white text-[10px] sm:text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full z-10 shadow-md",
-              isHero && "flex items-center gap-1"
-            )}
+            className="absolute top-3 left-3 bg-brand-red text-white text-[10px] sm:text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full z-10 shadow-md"
           >
-            {isHero && <Star size={12} className="fill-white" />}
             {sku.badge}
           </span>
         )}
@@ -148,50 +163,84 @@ function SkuCard({ sku, index, stockMap }: SkuCardProps) {
           <SwatchRow colors={sku.colors} />
         )}
 
+        {/* W05 - Honest dual-price block. Big number = the online price
+            the "from" anchor advertises. Sub-line names the COD ceiling
+            so the COD buyer sees the real all-in BEFORE the cart screen
+            (Copy Crimes #5 fix). MRP slash stays for the deal anchor. */}
         <div className="-mt-1">
           <div className="flex items-baseline gap-2 flex-wrap">
             <span className="text-xl sm:text-2xl font-bold text-brand-ink">
-              {formatINR(sku.retailINR)}
+              {formatINR(onlinePrice)}
+            </span>
+            <span className="text-[10px] font-mono uppercase tracking-widest text-brand-ink-soft">
+              online
             </span>
             <span className="text-xs text-brand-ink-soft line-through">
               {formatINR(sku.mrpINR)}
             </span>
             <span className="text-[10px] font-mono uppercase tracking-widest text-brand-red font-semibold">
-              {calcDiscountPct(sku.mrpINR, sku.retailINR)}% off
+              {pct}% off
             </span>
           </div>
-          <div className="text-[11px] font-mono text-success mt-1">
-            {formatINR(sku.retailINR - THEME.prepaidDiscountINR)} online · ₹
-            {THEME.prepaidDiscountINR} bonus
+          <div className="text-[11px] font-mono text-brand-ink-soft mt-0.5">
+            or {formatINR(codPrice)} cash on delivery
           </div>
         </div>
 
-        {/* Re-enable pointer events on this button so it intercepts clicks
-            and never propagates to the card-wide PDP link. */}
-        <button
-          type="button"
-          disabled={skuSoldOut}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (skuSoldOut) return;
-            // Default to the first DB-in-stock colour. PDP picker can override.
-            useCart.getState().add(sku.id, firstInStockSlug);
-            trackAddToCart({
-              sku: sku.id,
-              name: sku.name,
-              priceInr: sku.retailINR,
-              quantity: 1,
-            });
-          }}
-          className="pointer-events-auto bg-brand-red hover:bg-brand-red-hover text-white rounded-full py-2.5 px-4 transition-colors inline-flex items-center justify-center gap-2 font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand-red"
-        >
-          <ShoppingBag size={16} aria-hidden />
-          {skuSoldOut ? "Sold out" : "Add to cart"}
-        </button>
+        {/* W14 + X08 - Two-button stack. Primary = Buy now (impulse,
+            straight to /checkout). Secondary = Add to cart (browse mode).
+            Both carry the price + COD signal ON the button per W14.
+            Re-enables pointer events so clicks never bubble to the
+            card-wide PDP link. */}
+        <div className="flex flex-col gap-2 pointer-events-auto">
+          <button
+            type="button"
+            disabled={skuSoldOut}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (skuSoldOut) return;
+              useCart.getState().add(sku.id, firstInStockSlug);
+              trackAddToCart({
+                sku: sku.id,
+                name: sku.name,
+                priceInr: sku.retailINR,
+                quantity: 1,
+              });
+              trackInitiateCheckout(onlinePrice);
+              router.push("/checkout");
+            }}
+            className="bg-brand-red hover:bg-brand-red-hover text-white rounded-full py-2.5 px-4 transition-colors inline-flex items-center justify-center gap-2 font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand-red"
+          >
+            <Zap size={15} aria-hidden />
+            {skuSoldOut ? "Sold out" : `Buy now — ${formatINR(onlinePrice)}, COD`}
+          </button>
+          <button
+            type="button"
+            disabled={skuSoldOut}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (skuSoldOut) return;
+              useCart.getState().add(sku.id, firstInStockSlug);
+              trackAddToCart({
+                sku: sku.id,
+                name: sku.name,
+                priceInr: sku.retailINR,
+                quantity: 1,
+              });
+            }}
+            className="bg-white border border-brand-ink/15 hover:border-brand-ink text-brand-ink rounded-full py-2 px-4 transition-colors inline-flex items-center justify-center gap-2 font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <ShoppingBag size={14} aria-hidden />
+            Add to cart
+          </button>
+        </div>
 
-        <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-brand-ink-soft -mt-1">
-          <ShieldCheck size={12} className="text-success" aria-hidden />
-          7-day replacement · WhatsApp support
+        {/* P15 - Voss accusation-audit. Name the IG-scam fear out loud at
+            the tap so it doesn't sit unspoken between brain and button.
+            Sits below the buy lane so the reassurance is the last text
+            before the click. */}
+        <div className="text-[10px] text-brand-ink-soft -mt-0.5 leading-snug pointer-events-none">
+          Worried it&apos;s an IG scam? Pay nothing now — COD, on delivery.
         </div>
       </div>
     </motion.div>
