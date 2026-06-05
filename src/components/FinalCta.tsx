@@ -21,7 +21,7 @@ export default function FinalCta() {
           onClick={handleAdd}
           className="mt-4 sm:mt-6 bg-white text-brand-red hover:bg-brand-cream px-6 sm:px-8 py-3 sm:py-4 rounded-full font-bold text-sm sm:text-lg inline-flex items-center gap-2 shadow-2xl"
         >
-          🛒 Shop the Hero — ₹1,299
+          🛒 Shop the Hero — from ₹999
         </button>
       </div>
     </section>

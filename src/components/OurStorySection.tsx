@@ -166,7 +166,7 @@ export default function OurStorySection() {
             className="mt-3 sm:mt-7 inline-flex items-center gap-1 sm:gap-2 text-[11px] sm:text-sm font-semibold text-brand-red border-b-2 border-brand-red pb-0.5 sm:pb-1 hover:gap-3 transition-all"
           >
             <span className="sm:hidden">Pick yours →</span>
-            <span className="hidden sm:inline">Pick your drift — from ₹1,299</span>
+            <span className="hidden sm:inline">Pick your drift — from ₹999</span>
             <ArrowRight size={14} className="hidden sm:block" />
           </Link>
 

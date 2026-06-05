@@ -80,7 +80,7 @@ export default function StickyMobileCTA({
               <div className="text-lg font-bold text-brand-ink leading-tight flex items-baseline gap-1.5">
                 <span>{formatINR(prepaidPrice)}</span>
                 <span className="text-xs text-brand-ink-soft line-through font-normal">
-                  {formatINR(hero.retailINR)}
+                  {formatINR(hero.mrpINR)}
                 </span>
                 <span className="hidden sm:inline text-[10px] font-mono uppercase tracking-widest text-success ml-1">
                   online

@@ -12,32 +12,32 @@ export const HERO_VARIANTS: Record<
 > = {
   default: {
     h1: "Drift. Race. Pocket.",
-    sub: "1:64 drift cars · ₹1,299 · COD pan-India.",
-    ctaLabel: "Shop now — ₹1,299",
+    sub: "Die-cast 1:64 drift cars from ₹999. Same-day from Bangalore · COD pan-India.",
+    ctaLabel: "Shop now — from ₹999",
   },
   gift: {
     h1: "The Gift Every Car Guy Melts Over",
-    sub: "Pocket F1 drift car · ₹1,299. Delivered gift-ready, dispatched in 24 hrs.",
-    ctaLabel: "🎁 Pick a Gift — ₹1,299",
+    sub: "Die-cast Pocket drift cars from ₹999 — gift-ready, dispatched in 24 hrs.",
+    ctaLabel: "🎁 Pick a Gift — from ₹999",
   },
   couple: {
     h1: "Bata bhi nahi paayegi, smile rok bhi nahi paayega",
-    sub: "The mini drift car every car-guy wants. From ₹1,299.",
-    ctaLabel: "🎁 Surprise Him — ₹1,299",
+    sub: "The mini drift car every car-guy wants. From ₹999.",
+    ctaLabel: "🎁 Surprise Him — from ₹999",
   },
   parent: {
     h1: "Swap His Screen Time for Real Play",
-    sub: "USB-C · 30-min runtime · drop-tested · Age 8+. From ₹1,299.",
-    ctaLabel: "Order for Your Kid — ₹1,299",
+    sub: "USB-C · 30-min runtime · drop-tested 1.2m · Age 8+. From ₹999.",
+    ctaLabel: "Order for Your Kid — from ₹999",
   },
   carride: {
     h1: "The Toy That Survives the Back Seat",
-    sub: "Hand over the remote. Get the silence. From ₹1,299.",
-    ctaLabel: "Get Yours — ₹1,299",
+    sub: "Hand over the remote. Get the silence. From ₹999.",
+    ctaLabel: "Get Yours — from ₹999",
   },
   enthusiast: {
-    h1: "1:64 Drift. Alloy body. ₹1,299.",
-    sub: "Hobby-grade build, pocket-grade price. Pan-India COD.",
+    h1: "1:64 drift. Alloy body. From ₹999.",
+    sub: "Hobby-grade build, pocket-grade price. Pan-India COD · 24-hr dispatch.",
     ctaLabel: "Cart it. Drift it tonight. →",
   },
 };

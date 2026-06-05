@@ -10,7 +10,7 @@ export type QA = { q: string; a: string };
 
 export const HOME_FAQS: QA[] = [
   {
-    q: "Is ₹1,299 worth it? Why not a ₹400 toy from Amazon?",
+    q: "Is ₹999+ worth it? Why not a ₹400 toy from Amazon?",
     a: "₹400 toys are pull-back / single-channel — no real RC, plastic body, dies in a week. PRC is a 2.4 GHz die-cast alloy car with LED, USB-C, drift wheels included. Honest range: 12–15 mins per charge on smooth floors. Ships from our own Yelahanka warehouse, not drop-shipped from anywhere.",
   },
   {

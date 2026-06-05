@@ -11,7 +11,7 @@ export const THEME = {
   brandName: "PRC Cars",
   fullName: "Pocket RC Cars",
   tagline: "Drift. Race. Pocket.",
-  subTagline: "F1 in your pocket — ₹1,299. Pan-India COD.",
+  subTagline: "Die-cast drift cars from ₹999. Pan-India COD.",
   domain: "pocketrccars.com",
   scaleFocus: "1:64",
   city: "Bangalore",
@@ -32,8 +32,8 @@ export const THEME = {
 
   // Hero
   heroH1: "Drift. Race. Pocket.",
-  heroSub: "F1 in your pocket — ₹1,299. LED · drift wheels · COD pan-India.",
-  heroCtaLabel: "🛒 Shop the Pocket F1 — ₹1,299",
+  heroSub: "Die-cast 1:64 drift cars from ₹999. LED · drift wheels · COD pan-India.",
+  heroCtaLabel: "🛒 Shop the lineup — from ₹999",
   heroImageSrc: "/hero/hero-v2-frontal-right.webp",
   heroVideoSrc: "/hero/drift-loop.mp4",
   heroPosterSrc: "/hero/hero-v2-frontal-right.webp",

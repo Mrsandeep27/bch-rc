@@ -6,7 +6,6 @@ import { HERO_VARIANTS, type HeroVariant } from "@/lib/copy";
 import { THEME } from "@/lib/theme";
 import { defaultVariantSlug, getHeroSku } from "@/lib/products";
 import { useCart } from "@/lib/cart-store";
-import LaunchCountdown from "@/components/LaunchCountdown";
 
 export default function Hero({
   variant = "default",
@@ -52,22 +51,6 @@ export default function Hero({
       {/* Content stack — left-aligned on desktop, centered on mobile */}
       <div className="relative z-10 max-w-7xl mx-auto px-5 sm:px-10 py-16 sm:py-28 min-h-[100svh] flex pb-36 sm:pb-40">
         <div className="w-full sm:max-w-xl flex flex-col justify-center text-left">
-          {/* Launch-week offer chip — slim, sits inline above the eyebrow */}
-          <div className="hero-anim mb-4 sm:mb-5">
-            <div className="inline-flex items-center gap-2.5 bg-brand-red/95 text-white pl-2 pr-3.5 py-1.5 rounded-full shadow-lg backdrop-blur-sm">
-              <span className="flex items-center gap-1.5 bg-white text-brand-red text-[9px] font-mono font-bold uppercase tracking-widest px-2 py-0.5 rounded-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-brand-red animate-pulse" />
-                Launch Week
-              </span>
-              <span className="font-display font-bold text-sm sm:text-base leading-none">
-                Flat 35% off
-              </span>
-              <span className="hidden sm:flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-white/80 border-l border-white/30 pl-2.5">
-                ends in <LaunchCountdown variant="chip" />
-              </span>
-            </div>
-          </div>
-
           <span
             className="hero-anim hero-anim-delay-1 block font-mono text-[10px] sm:text-xs uppercase tracking-[0.2em] text-white/80 mb-4 sm:mb-5 drop-shadow"
           >
@@ -114,10 +97,10 @@ export default function Hero({
           </ul>
 
           {/* SEO-friendly money-keyword headline — visually small, semantically
-              an h2 so Google sees "Mini RC Drift Cars from ₹1,199" while users
+              an h2 so Google sees "Mini RC Drift Cars from ₹999" while users
               still see the brand H1 above. */}
           <h2 className="sr-only">
-            Mini RC Drift Cars from ₹1,199 — 2.4&nbsp;GHz, USB-C, Die-Cast
+            Mini RC Drift Cars from ₹999 — 2.4&nbsp;GHz, USB-C, Die-Cast
             alloy body. Pan-India COD, ships in 24&nbsp;hrs from Bangalore.
           </h2>
 
