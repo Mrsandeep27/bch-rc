@@ -8,37 +8,112 @@ export type HeroVariant =
 
 export const HERO_VARIANTS: Record<
   HeroVariant,
-  { h1: string; sub: string; ctaLabel: string }
+  {
+    h1: string;
+    /** Optional emphasised lead word styled in brand-red. Lets the H1 read
+     *  as one line while the keyword ("gift") visually anchors the hook. */
+    h1Accent?: string;
+    sub: string;
+    ctaLabel: string;
+    /** Three-line trust strip surfaced directly under the CTA. Ordered
+     *  blocker-first: COD pre-pay-fear reliever first, then replacement,
+     *  then real human support. Replaces the "Free shipping / 24-hr
+     *  dispatch / 7-day replacement" generic bottom strip. */
+    underCta: [string, string, string];
+  }
 > = {
+  // Default — built for the IG-gifter the traffic model targets. The reels
+  // arrive in gift mode; the page now opens in gift mode too. Five-second
+  // test: product noun ("RC drift car"), buyer (gift-giver), feeling
+  // ("car-crazy guy"), price (₹999/₹1,099), payment (COD), dispatch
+  // (24-hr Bangalore). All present.
   default: {
-    h1: "Drift. Race. Pocket.",
-    sub: "Die-cast 1:64 RC cars from ₹999 — real drift, not pull-back toys. Same-day from Bangalore · COD pan-India.",
-    ctaLabel: "🛒 Order yours — from ₹999, COD",
+    h1: "The gift every car-crazy guy actually keeps using.",
+    h1Accent: "gift",
+    sub:
+      "A real die-cast RC drift car that fits in his palm — LED, drift wheels in the box, " +
+      "actually drifts on tile. ₹999 online or ₹1,099 COD, gift-ready box, ships in " +
+      "24 hrs from Bangalore.",
+    ctaLabel: "🛒 Order his gift — from ₹999, COD",
+    underCta: [
+      "Pay on delivery — nothing now",
+      "7-day replacement",
+      "Real WhatsApp support",
+    ],
   },
+  // Explicit gift UTM — same shape since default is now gifting-first.
+  // Kept distinct so we can fork copy later without touching default.
   gift: {
-    h1: "The Gift Every Car Guy Melts Over",
-    sub: "Die-cast Pocket drift cars from ₹999 — gift-ready, dispatched in 24 hrs.",
-    ctaLabel: "🎁 Pick a Gift — from ₹999",
+    h1: "The gift every car-crazy guy actually keeps using.",
+    h1Accent: "gift",
+    sub:
+      "Die-cast Pocket RC drift cars from ₹999 — gift-ready box, dispatched " +
+      "in 24 hrs from Bangalore.",
+    ctaLabel: "🎁 Order his gift — from ₹999, COD",
+    underCta: [
+      "Pay on delivery — nothing now",
+      "7-day replacement",
+      "Real WhatsApp support",
+    ],
   },
+  // Hinglish IG-DM landing — message-match for the "Unexpected Gift 🎁"
+  // reels (Copy Crimes #8 fix). Same gifting frame, buyer's voice.
   couple: {
-    h1: "Bata bhi nahi paayegi, smile rok bhi nahi paayega",
-    sub: "The mini drift car every car-guy wants. From ₹999.",
-    ctaLabel: "🎁 Surprise Him — from ₹999",
+    h1: "₹999 mein asli RC drift car — uska face dekhna jab ye drift karega.",
+    sub:
+      "Real die-cast drift car, palm-size, LED + drift wheels in the box. " +
+      "Gift-ready packaging. COD pan-India. Aaj order karo, Bangalore se " +
+      "24 ghante mein niklega.",
+    ctaLabel: "🎁 Surprise him — from ₹999, COD",
+    underCta: [
+      "COD pan-India · nothing now",
+      "7-day replacement guarantee",
+      "WhatsApp support — real human",
+    ],
   },
+  // Parent UTM — gift for any car-lover 8 to 38. Doesn't infantilise the
+  // recipient (was "Your Kid"). Joy frame leads, spec demoted.
   parent: {
-    h1: "Swap His Screen Time for Real Play",
-    sub: "USB-C · 12-15 min real drift · drop-tested 1.2m · for car-lovers 8 to 38. From ₹999.",
-    ctaLabel: "🛒 Order yours — from ₹999, COD",
+    h1: "The gift the car-lover in your life actually keeps using.",
+    h1Accent: "gift",
+    sub:
+      "Real die-cast RC drift car for any car-lover 8 to 38 — drop-tested " +
+      "1.2 m, USB-C, drift wheels included. ₹999 online or ₹1,099 COD, " +
+      "gift-ready box, ships in 24 hrs from Bangalore.",
+    ctaLabel: "🛒 Order his gift — from ₹999, COD",
+    underCta: [
+      "Pay on delivery — nothing now",
+      "7-day replacement",
+      "Drop-tested for indoor floors",
+    ],
   },
+  // Road-trip flavour, same gifting frame.
   carride: {
-    h1: "The Toy That Survives the Back Seat",
-    sub: "Hand over the remote. Get the silence. From ₹999.",
-    ctaLabel: "Get Yours — from ₹999",
+    h1: "Hand him this. Get the silence.",
+    sub:
+      "Real die-cast RC drift car that drifts on tile + marble — the back-seat " +
+      "gift that lasts past the airport. ₹999 online or ₹1,099 COD, ships " +
+      "24 hrs from Bangalore.",
+    ctaLabel: "🛒 Order his gift — from ₹999, COD",
+    underCta: [
+      "Pay on delivery — nothing now",
+      "7-day replacement",
+      "Real WhatsApp support",
+    ],
   },
+  // Most-Aware visitor (drift-clip UTM) — already knows what they want.
+  // Don't re-pitch price (Psych p03/p07). Speak in the enthusiast register.
   enthusiast: {
-    h1: "1:64 drift. Alloy body. From ₹999.",
-    sub: "Hobby-grade build, pocket-grade price. Pan-India COD · 24-hr dispatch.",
+    h1: "Your drift car. In your palm. Tonight.",
+    sub:
+      "1:64 die-cast, 2.4 GHz, drift + grip wheels in the box, USB-C, real " +
+      "LED. Ships from Bangalore in 24 hrs. Pan-India COD.",
     ctaLabel: "Cart it. Drift it tonight. →",
+    underCta: [
+      "Drop-tested for indoor floors",
+      "7-day replacement",
+      "Real WhatsApp support",
+    ],
   },
 };
 
@@ -52,16 +127,23 @@ export type Announcement = {
   emoji?: string;
 };
 
+// P12 — joy / operational reassurance wins position #1 in the marquee.
+// Money cue (the ₹100 bonus) moves into position #3. The reviewer's point:
+// whatever cue occupies the privileged opening moment becomes the focal
+// criterion. Leading with "Pay online → ₹100 bonus" framed the page as
+// "is it worth it?" before desire could build. Now the marquee opens on
+// "Ships today from Bangalore" (operational reassurance), then the COD
+// pan-India reliever, then the bonus.
 export const ANNOUNCEMENTS: Announcement[] = [
   {
-    text: "Pay online → ₹100 bonus + same-day dispatch",
-  },
-  {
-    text: "Ships in 24 hrs from Bangalore · Free shipping over ₹1,099",
+    text: "Ships today from Bangalore · order before 4 PM",
   },
   {
     emoji: "📦",
-    text: "Pan-India COD · 7-day replacement · WhatsApp support",
+    text: "Pan-India COD · 7-day replacement · real WhatsApp support",
+  },
+  {
+    text: "Pay online → ₹100 bonus + same-day dispatch",
   },
 ];
 

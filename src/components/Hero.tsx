@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import { Truck, PackageCheck, ShieldCheck } from "lucide-react";
+import { Truck, ShieldCheck } from "lucide-react";
 import { HERO_VARIANTS, type HeroVariant } from "@/lib/copy";
 import { THEME } from "@/lib/theme";
 import { defaultVariantSlug, getHeroSku } from "@/lib/products";
@@ -46,7 +46,7 @@ export default function Hero({
     if (forcedVariant && forcedVariant !== "default") return forcedVariant;
     return heroVariantFromSource(sp?.get("utm_source") ?? null);
   }, [forcedVariant, sp]);
-  const { h1, sub, ctaLabel } = HERO_VARIANTS[variant];
+  const { h1, h1Accent, sub, ctaLabel, underCta } = HERO_VARIANTS[variant];
 
   const handlePrimaryCta = () => {
     const heroSku = getHeroSku();
@@ -96,21 +96,32 @@ export default function Hero({
           </span>
 
           <h1
-            className="hero-anim hero-anim-delay-1 font-display text-white text-[2.75rem] leading-[0.95] sm:text-6xl md:text-7xl lg:text-8xl font-bold text-balance [text-shadow:0_2px_24px_rgba(0,0,0,0.55)]"
+            className="hero-anim hero-anim-delay-1 font-display text-white text-[2.25rem] leading-[1.02] sm:text-5xl md:text-6xl lg:text-7xl font-bold text-balance [text-shadow:0_2px_24px_rgba(0,0,0,0.55)]"
           >
-            {variant === "default" ? (
+            {h1Accent && h1.toLowerCase().includes(h1Accent.toLowerCase()) ? (
               <>
-                <span className="text-brand-red">Drift.</span> Race. Pocket.
+                {h1
+                  .split(new RegExp(`(${h1Accent})`, "i"))
+                  .map((part, i) =>
+                    part.toLowerCase() === h1Accent.toLowerCase() ? (
+                      <span key={i} className="text-brand-red">
+                        {part}
+                      </span>
+                    ) : (
+                      part
+                    ),
+                  )}
               </>
             ) : (
               h1
             )}
-            {/* Keyword-bearing tail for the H1 — invisible to sighted users so
-                the big brand line stays clean, but it puts the primary target
-                ("RC car" / "RC cars") inside the page's single H1 for SEO and
-                gives screen-reader users a plain-language description. */}
+            {/* Keyword-bearing tail for the H1 — invisible to sighted users
+                so the gifting line stays clean, but it puts the primary SEO
+                target ("RC drift cars from ₹999") inside the page's single
+                H1 element for Google and gives screen-reader users a
+                plain-language tail. */}
             <span className="sr-only">
-              {" "}— Mini RC cars & 1:64 RC drift cars from ₹999.
+              {" "}— Mini RC drift cars from ₹999, gift-ready box, COD pan-India.
             </span>
           </h1>
 
@@ -120,30 +131,7 @@ export default function Hero({
             {sub}
           </p>
 
-          {/* Proof strip — three concrete differentiators in one line. Replaces
-              vague "youthful" copy with the three lines that separate PRC from
-              Amazon toy listings, surfaced before the price. */}
-          <ul
-            className="hero-anim hero-anim-delay-3 mt-5 sm:mt-6 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] sm:text-xs font-mono uppercase tracking-widest text-white/90 max-w-md [text-shadow:0_1px_8px_rgba(0,0,0,0.6)]"
-            aria-label="Why PRC Cars"
-          >
-            <li className="flex items-center gap-1.5">
-              <span className="w-1 h-1 rounded-full bg-brand-red" />
-              Everything in the box
-            </li>
-            <li className="flex items-center gap-1.5">
-              <span className="w-1 h-1 rounded-full bg-brand-red" />
-              Tested on tile, marble &amp; concrete
-            </li>
-            <li className="flex items-center gap-1.5">
-              <span className="w-1 h-1 rounded-full bg-brand-red" />
-              Real Yelahanka warehouse
-            </li>
-          </ul>
-
-          {/* SEO-friendly money-keyword headline — visually small, semantically
-              an h2 so Google sees "Mini RC Drift Cars from ₹999" while users
-              still see the brand H1 above. */}
+          {/* SEO h2 — keyword tail invisible to sighted users. */}
           <h2 className="sr-only">
             Mini RC Cars from ₹999 — 1:64 RC drift cars with 2.4&nbsp;GHz
             control, USB-C charging and a die-cast alloy body. Pan-India COD,
@@ -158,6 +146,20 @@ export default function Hero({
             >
               {ctaLabel}
             </button>
+            {/* Under-CTA relievers — placed where pre-pay fear lives. COD
+                first because that's the #1 blocker on cold IG-gift traffic
+                (Voss accusation-audit + Fogg motivation at the tap). */}
+            <ul
+              className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[11px] sm:text-xs font-mono uppercase tracking-widest text-white/90 max-w-md [text-shadow:0_1px_8px_rgba(0,0,0,0.6)]"
+              aria-label="Why PRC Cars"
+            >
+              {underCta.map((item) => (
+                <li key={item} className="flex items-center gap-1.5">
+                  <span className="w-1 h-1 rounded-full bg-brand-red" />
+                  {item}
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       </div>
@@ -171,52 +173,29 @@ export default function Hero({
         <span className="block h-px w-12 bg-white/40 origin-left animate-pulse" />
       </div>
 
-      {/* Trust strip pinned at bottom of hero viewport (3 columns) */}
+      {/* F04 - Blocker-first 1-line trust strip pinned at bottom of hero.
+          Order matters: COD first (the #1 India-RC blocker), then 7-day
+          replacement (the dud-toy fear), then 24-hr dispatch (the impatience
+          objection). Replaces the previous "Free shipping / 24-hr / 7-day"
+          row which buried the biggest blocker. */}
       <div
         className="hero-anim hero-anim-delay-5 absolute z-20 inset-x-0 bottom-0 border-t border-white/15 bg-black/40 backdrop-blur-sm"
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-10 py-4 sm:py-5 grid grid-cols-3 gap-2 sm:gap-6">
-          <HeroTrustItem
-            icon={<Truck className="w-4 h-4 sm:w-5 sm:h-5" />}
-            title="Free shipping"
-            sub="On orders ₹1,099+"
-          />
-          <HeroTrustItem
-            icon={<PackageCheck className="w-4 h-4 sm:w-5 sm:h-5" />}
-            title="24-hr dispatch"
-            sub="From Bangalore"
-          />
-          <HeroTrustItem
-            icon={<ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5" />}
-            title="7-day replacement"
-            sub="Age 8+ · WhatsApp support"
-          />
+        <div className="max-w-7xl mx-auto px-4 sm:px-10 py-3 sm:py-4 flex flex-wrap items-center justify-center gap-x-4 sm:gap-x-6 gap-y-1 text-[11px] sm:text-xs font-mono uppercase tracking-widest text-white/85 text-center">
+          <span className="flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-brand-red shrink-0" aria-hidden />
+            COD pan-India · nothing now
+          </span>
+          <span className="flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-brand-red shrink-0" aria-hidden />
+            7-day replacement
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Truck className="w-3.5 h-3.5 text-brand-red shrink-0" aria-hidden />
+            Ships 24 hrs · Bangalore
+          </span>
         </div>
       </div>
     </section>
-  );
-}
-
-function HeroTrustItem({
-  icon,
-  title,
-  sub,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  sub: string;
-}) {
-  return (
-    <div className="flex items-start sm:items-center gap-2 sm:gap-3 min-w-0">
-      <span className="shrink-0 text-brand-red mt-0.5 sm:mt-0">{icon}</span>
-      <div className="min-w-0">
-        <div className="text-white font-semibold text-xs sm:text-sm leading-tight truncate">
-          {title}
-        </div>
-        <div className="text-white/60 text-[10px] sm:text-xs leading-tight truncate">
-          {sub}
-        </div>
-      </div>
-    </div>
   );
 }

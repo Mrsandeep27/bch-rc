@@ -5,21 +5,24 @@ import { motion } from "framer-motion";
 import { ArrowRight, MapPin, Truck, Clock } from "lucide-react";
 import { THEME } from "@/lib/theme";
 
+// W06 - re-aimed at the gift-giver buyer. Lead with what THEY get / what
+// THEY can promise the recipient, instead of "we / our". Same operational
+// facts, second-person framing.
 const STORY_POINTS = [
   {
-    title: "We Pick What Lasts",
+    title: "You get one that lasts past the wrapping paper",
     body:
-      "We don't drop-ship random toys. Every chassis is tested on tile, marble, and concrete before it earns a spot in our box. Picked by hand in Bangalore by people who actually drive them.",
+      "Every chassis is tested on tile, marble, and concrete before it earns a spot in your gift box. Picked by hand in Bangalore by people who actually drive them — no random drop-shipped toys.",
   },
   {
-    title: "From Our Warehouse to Your Door",
+    title: "Your order leaves Bangalore in 24 hrs",
     body:
-      "Orders dispatch in 24 hours from our Yelahanka warehouse. Shiprocket delivers pan-India — Tier-1 metros in 2 days, Tier-2/3 in 4. Real tracking, real ETAs, no third-party drop-shipping.",
+      "Real Yelahanka warehouse, real Shiprocket tracking. Most big cities get it in 2 days, smaller towns in 4. Real ETAs to your phone — no middleman.",
   },
   {
-    title: "We're Here After the Sale",
+    title: "You keep your weekend; the gift keeps drifting",
     body:
-      "7-day free replacement, spare wheels and batteries in stock, and a real WhatsApp number — not a bot. The kid keeps drifting; you keep your weekend.",
+      "7-day free replacement, spare wheels and batteries in stock, and a real WhatsApp number — not a bot. If something breaks, message us; we send a fresh one.",
   },
 ] as const;
 
