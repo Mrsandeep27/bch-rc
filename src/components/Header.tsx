@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ShoppingBag, Menu, X } from "lucide-react";
+import { ShoppingBag, Menu, X, ChevronLeft } from "lucide-react";
 import { WhatsAppIcon } from "@/components/BrandIcons";
 import { THEME, waLink } from "@/lib/theme";
 import { useCart, getCartCount } from "@/lib/cart-store";
@@ -25,11 +25,25 @@ export default function Header() {
   // server-rendered markup (no badge) identical to the first client render.
   const cartCount = hasHydrated ? getCartCount(items) : 0;
   const pathname = usePathname();
+  const router = useRouter();
   // Only the home page has a dark full-bleed hero behind the header.
   // Everywhere else (PDP, checkout, policy pages), keep the solid-bg style
   // even at scrollY === 0 — otherwise the white logo + nav are invisible
   // against the white page background.
   const isHomePage = pathname === "/";
+
+  // Back button — shown on every non-home page so the buyer always has a
+  // visible escape hatch alongside the browser back gesture. Tries
+  // router.back() first (preserves Next.js state/scroll); falls back to
+  // pushing "/" when there's no in-app history (e.g. deep-link landings,
+  // Razorpay return URLs that opened a fresh tab).
+  const handleBack = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+    } else {
+      router.push("/");
+    }
+  };
 
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -51,7 +65,7 @@ export default function Header() {
   return (
     <header
       className={cn(
-        "sticky top-8 z-40 transition-all duration-300",
+        "sticky top-0 z-40 transition-all duration-300",
         useSolidStyle
           ? "bg-white/95 backdrop-blur-md border-b border-brand-line shadow-sm text-brand-ink"
           : "bg-transparent text-white"
@@ -59,17 +73,39 @@ export default function Header() {
     >
       <div className="w-full px-3 sm:px-5 lg:px-8">
         <div className="flex items-center justify-between h-16 sm:h-18">
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 shrink-0" aria-label={`${THEME.brandName} home`}>
-            <Image
-              src={useSolidStyle ? THEME.logoDark : THEME.logoMain}
-              alt={THEME.brandName}
-              width={826}
-              height={304}
-              className="h-10 sm:h-12 lg:h-14 w-auto"
-              priority
-            />
-          </Link>
+          {/* Back button — non-home pages only */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {!isHomePage && (
+              <button
+                type="button"
+                onClick={handleBack}
+                aria-label="Go back"
+                className={cn(
+                  "inline-flex items-center justify-center h-9 w-9 sm:h-10 sm:w-10 rounded-full transition-colors",
+                  useSolidStyle
+                    ? "hover:bg-brand-cream text-brand-ink"
+                    : "hover:bg-white/10 text-white"
+                )}
+              >
+                <ChevronLeft size={20} strokeWidth={2.5} />
+              </button>
+            )}
+            {/* Logo */}
+            <Link
+              href="/"
+              className="flex items-center gap-2 shrink-0"
+              aria-label={`${THEME.brandName} home`}
+            >
+              <Image
+                src={useSolidStyle ? THEME.logoDark : THEME.logoMain}
+                alt={THEME.brandName}
+                width={826}
+                height={304}
+                className="h-10 sm:h-12 lg:h-14 w-auto"
+                priority
+              />
+            </Link>
+          </div>
 
           {/* Desktop nav */}
           <nav className="hidden lg:flex items-center gap-8">
