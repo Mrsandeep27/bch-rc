@@ -44,23 +44,18 @@ export default function Footer() {
               />
             </Link>
             <p className="text-sm text-neutral-400 mt-3 sm:mt-4 leading-relaxed max-w-xs">
-              India&apos;s most-gifted mini RC drift cars. Pan-India COD, ships
-              in 24 hrs from Bangalore.
+              India&apos;s most-gifted mini RC cars — 1:64 RC drift cars.
+              Pan-India COD, ships in 24 hrs from Bangalore.
             </p>
+            {/* Socials - Instagram first (it's the traffic source); WhatsApp
+                second (operator contact); YouTube last. All open in a new
+                tab with `noopener noreferrer` so the buy session is preserved
+                and the destination can't read window.opener. */}
             <div className="flex items-center gap-3 mt-4 sm:mt-5">
-              <a
-                href="https://youtube.com/@pocketrccars"
-                target="_blank"
-                rel="noopener"
-                aria-label="YouTube"
-                className="w-11 h-11 sm:w-10 sm:h-10 rounded-full bg-white/5 hover:bg-brand-red flex items-center justify-center transition-colors"
-              >
-                <YoutubeIcon size={18} />
-              </a>
               <a
                 href={`https://instagram.com/${THEME.instagramHandle}`}
                 target="_blank"
-                rel="noopener"
+                rel="noopener noreferrer"
                 aria-label="Instagram"
                 className="w-11 h-11 sm:w-10 sm:h-10 rounded-full bg-white/5 hover:bg-brand-red flex items-center justify-center transition-colors"
               >
@@ -69,11 +64,20 @@ export default function Footer() {
               <a
                 href={waLink()}
                 target="_blank"
-                rel="noopener"
+                rel="noopener noreferrer"
                 aria-label="WhatsApp"
                 className="w-11 h-11 sm:w-10 sm:h-10 rounded-full bg-white/5 hover:bg-whatsapp-green flex items-center justify-center transition-colors"
               >
                 <WhatsAppIcon size={18} />
+              </a>
+              <a
+                href="https://youtube.com/@pocketrccars"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="YouTube"
+                className="w-11 h-11 sm:w-10 sm:h-10 rounded-full bg-white/5 hover:bg-brand-red flex items-center justify-center transition-colors"
+              >
+                <YoutubeIcon size={18} />
               </a>
             </div>
           </div>
@@ -179,7 +183,7 @@ export default function Footer() {
             © 2026 {THEME.brandName}. All rights reserved.
           </p>
           <p className="text-xs text-brand-red mt-1">
-            Pocket-priced 1:64 drift cars · Made for India
+            Pocket-priced 1:64 RC cars · Made for India
           </p>
           <div className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-neutral-500">
             <span>Registered Business</span>

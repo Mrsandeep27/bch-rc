@@ -33,7 +33,7 @@ export const THEME = {
   // Hero
   heroH1: "Drift. Race. Pocket.",
   heroSub: "Die-cast 1:64 drift cars from ₹999. LED · drift wheels · COD pan-India.",
-  heroCtaLabel: "🛒 Shop the lineup — from ₹999",
+  heroCtaLabel: "🛒 Order yours — from ₹999, COD",
   heroImageSrc: "/hero/hero-v2-frontal-right.webp",
   heroVideoSrc: "/hero/drift-loop.mp4",
   heroPosterSrc: "/hero/hero-v2-frontal-right.webp",

@@ -12,8 +12,8 @@ export const HERO_VARIANTS: Record<
 > = {
   default: {
     h1: "Drift. Race. Pocket.",
-    sub: "Die-cast 1:64 drift cars from ₹999. Same-day from Bangalore · COD pan-India.",
-    ctaLabel: "Shop now — from ₹999",
+    sub: "Die-cast 1:64 RC cars from ₹999 — real drift RC cars, not pull-back toys. Same-day from Bangalore · COD pan-India.",
+    ctaLabel: "🛒 Order yours — from ₹999, COD",
   },
   gift: {
     h1: "The Gift Every Car Guy Melts Over",
@@ -27,8 +27,8 @@ export const HERO_VARIANTS: Record<
   },
   parent: {
     h1: "Swap His Screen Time for Real Play",
-    sub: "USB-C · 30-min runtime · drop-tested 1.2m · Age 8+. From ₹999.",
-    ctaLabel: "Order for Your Kid — from ₹999",
+    sub: "USB-C · 12-15 min real drift · drop-tested 1.2m · for car-lovers 8 to 38. From ₹999.",
+    ctaLabel: "🛒 Order yours — from ₹999, COD",
   },
   carride: {
     h1: "The Toy That Survives the Back Seat",

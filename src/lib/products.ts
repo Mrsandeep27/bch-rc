@@ -35,7 +35,6 @@ export type Sku = {
   tagline: string;
   retailINR: number;
   mrpINR: number;
-  landingCostINR: number;
   bullets: [string, string, string, string];
   badge?: "MOST GIFTED" | "NEW" | "BESTSELLER" | "PRO";
   bodyShape: string;
@@ -78,11 +77,10 @@ export const PRODUCTS: Sku[] = [
     tagline: "M-striped racing icon · 2.4 GHz · LED headlights",
     retailINR: 1099,
     mrpINR: 1599,
-    landingCostINR: 550,
     bullets: [
       "Die-cast alloy BMW M-style body",
       "2.4 GHz · race 3 cars side-by-side",
-      "USB-C · 20-min drift time per charge",
+      "USB-C · 12-15 min real drift per charge",
       "Drift + grip wheels swappable in seconds",
     ],
     badge: "NEW",
@@ -106,7 +104,7 @@ export const PRODUCTS: Sku[] = [
       lengthMM: 72,
       drive: "2WD",
       topSpeedKmh: 14,
-      batteryMin: 20,
+      batteryMin: 14,
       chargeMin: 30,
       rangeM: 25,
       minAge: 8,
@@ -122,7 +120,6 @@ export const PRODUCTS: Sku[] = [
     tagline: "GT3 silhouette · drift wheels · iconic Stuttgart lines",
     retailINR: 1399,
     mrpINR: 1999,
-    landingCostINR: 550,
     bullets: [
       "Porsche 911 GT3-inspired die-cast body",
       "Pre-tuned for tight corner drifts",
@@ -152,7 +149,7 @@ export const PRODUCTS: Sku[] = [
       lengthMM: 70,
       drive: "2WD",
       topSpeedKmh: 15,
-      batteryMin: 22,
+      batteryMin: 15,
       chargeMin: 30,
       rangeM: 28,
       minAge: 8,
@@ -168,11 +165,10 @@ export const PRODUCTS: Sku[] = [
     tagline: "Off-road champ · grippy treads · made for Indian roads",
     retailINR: 1399,
     mrpINR: 1999,
-    landingCostINR: 600,
     bullets: [
       "Mahindra Thar-style off-road body",
       "Grippy treaded tyres for marble + tile",
-      "USB-C · 20-min runtime",
+      "USB-C · 12-15 min real drift per charge",
       "LED headlights · drop-tested 1.2m",
     ],
     badge: "BESTSELLER",
@@ -197,7 +193,7 @@ export const PRODUCTS: Sku[] = [
       lengthMM: 75,
       drive: "2WD",
       topSpeedKmh: 13,
-      batteryMin: 22,
+      batteryMin: 15,
       chargeMin: 30,
       rangeM: 25,
       minAge: 8,
@@ -213,7 +209,6 @@ export const PRODUCTS: Sku[] = [
     tagline: "Oversized wheels · 4WD · climbs anything · LED roof bar",
     retailINR: 1899,
     mrpINR: 2699,
-    landingCostINR: 700,
     bullets: [
       "Massive over-scaled rubber wheels",
       "4WD drive · climbs cushions, books, steps",
@@ -245,7 +240,7 @@ export const PRODUCTS: Sku[] = [
       lengthMM: 85,
       drive: "4WD",
       topSpeedKmh: 12,
-      batteryMin: 25,
+      batteryMin: 18,
       chargeMin: 35,
       rangeM: 25,
       minAge: 8,
@@ -266,11 +261,10 @@ export const PRODUCTS: Sku[] = [
     tagline: "Formula racing silhouette · entry-grade · most popular",
     retailINR: 1599,
     mrpINR: 2299,
-    landingCostINR: 500,
     bullets: [
       "Trasped HG4-218 Formula 1 generic body",
       "2.4 GHz · 3-speed adjustable",
-      "USB-C · 20 min drift time",
+      "USB-C · 12-15 min real drift per charge",
       "LED headlights · drift wheels included",
     ],
     bodyShape: "F1 generic open-wheel",
@@ -290,7 +284,7 @@ export const PRODUCTS: Sku[] = [
       lengthMM: 70,
       drive: "2WD",
       topSpeedKmh: 14,
-      batteryMin: 20,
+      batteryMin: 14,
       chargeMin: 25,
       rangeM: 25,
       minAge: 8,
@@ -306,7 +300,6 @@ export const PRODUCTS: Sku[] = [
     tagline: "Ferrari-livery aero · white edition · race-detail body",
     retailINR: 1299,
     mrpINR: 1999,
-    landingCostINR: 550,
     bullets: [
       "Trasped HG4-234 Ferrari-style F1 in white",
       "Detailed aero kit + exposed wheels",
@@ -325,7 +318,7 @@ export const PRODUCTS: Sku[] = [
       lengthMM: 70,
       drive: "2WD",
       topSpeedKmh: 15,
-      batteryMin: 22,
+      batteryMin: 15,
       chargeMin: 30,
       rangeM: 25,
       minAge: 8,
@@ -341,11 +334,10 @@ export const PRODUCTS: Sku[] = [
     tagline: "Round-body classic · pocket-friendly drift · iconic curves",
     retailINR: 1299,
     mrpINR: 1999,
-    landingCostINR: 550,
     bullets: [
       "Trasped HG4-216 Beetle-style body",
       "Smooth drift on tile + marble",
-      "USB-C · 20 min runtime",
+      "USB-C · 12-15 min real drift per charge",
       "LED tail-lights · age 6+ friendly",
     ],
     bodyShape: "VW Beetle-style round-roof",
@@ -360,7 +352,7 @@ export const PRODUCTS: Sku[] = [
       lengthMM: 68,
       drive: "2WD",
       topSpeedKmh: 12,
-      batteryMin: 20,
+      batteryMin: 14,
       chargeMin: 25,
       rangeM: 22,
       minAge: 6,
@@ -376,7 +368,6 @@ export const PRODUCTS: Sku[] = [
     tagline: "Premium tier · with mounted driver figurine · collector grade",
     retailINR: 1899,
     mrpINR: 2699,
-    landingCostINR: 850,
     bullets: [
       "F1 Leclerc-style body with seated driver figurine",
       "Higher-detail livery + collector finish",
@@ -396,7 +387,7 @@ export const PRODUCTS: Sku[] = [
       lengthMM: 72,
       drive: "2WD",
       topSpeedKmh: 15,
-      batteryMin: 22,
+      batteryMin: 15,
       chargeMin: 30,
       rangeM: 28,
       minAge: 8,
@@ -420,7 +411,6 @@ export const PRODUCTS: Sku[] = [
     tagline: "Internal smoke-test SKU — DO NOT FULFIL",
     retailINR: 16,
     mrpINR: 16,
-    landingCostINR: 0,
     bullets: [
       "Internal QA only — do not ship",
       "Buy via UPI to land at ₹1 total",

@@ -133,7 +133,11 @@ export default async function ProductPage({
 }) {
   const { slug } = await params;
   const sku = PRODUCTS.find((p) => p.slug === slug);
-  if (!sku || sku.hidden) notFound();
+  // 404 hidden SKUs AND internal SKUs (e.g. qa-1rs). Internal SKUs need to
+  // exist in the data for admin tooling (manual orders, inventory) but must
+  // not be reachable as PDPs - otherwise a stranger who guesses the slug
+  // can place a ₹1 COD order that burns ₹180-240 in two-way RTO logistics.
+  if (!sku || sku.hidden || sku.internal) notFound();
 
   return (
     <>

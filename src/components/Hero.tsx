@@ -26,9 +26,13 @@ export default function Hero({
           On mobile: shift the focus inward (65%) so we see the car body, not
           just the right edge. On desktop: object-right keeps the car on the
           right half so left text gets a clean dark backdrop. */}
+      {/* Empty alt was intentional when hero was decorative behind text -
+          but with the dark gradient now reduced (BMW visible), the image
+          carries information for sighted users so screen-reader users need
+          a description too. Also helps image SEO. */}
       <Image
         src={THEME.heroImageSrc}
-        alt=""
+        alt="Pocket BMW M-style 1:64 die-cast RC drift car, headlights lit, in front of a low-key red glow"
         priority
         fill
         sizes="100vw"
@@ -67,6 +71,13 @@ export default function Hero({
             ) : (
               h1
             )}
+            {/* Keyword-bearing tail for the H1 — invisible to sighted users so
+                the big brand line stays clean, but it puts the primary target
+                ("RC car" / "RC cars") inside the page's single H1 for SEO and
+                gives screen-reader users a plain-language description. */}
+            <span className="sr-only">
+              {" "}— Mini RC cars & 1:64 RC drift cars from ₹999.
+            </span>
           </h1>
 
           <p
@@ -100,8 +111,9 @@ export default function Hero({
               an h2 so Google sees "Mini RC Drift Cars from ₹999" while users
               still see the brand H1 above. */}
           <h2 className="sr-only">
-            Mini RC Drift Cars from ₹999 — 2.4&nbsp;GHz, USB-C, Die-Cast
-            alloy body. Pan-India COD, ships in 24&nbsp;hrs from Bangalore.
+            Mini RC Cars from ₹999 — 1:64 RC drift cars with 2.4&nbsp;GHz
+            control, USB-C charging and a die-cast alloy body. Pan-India COD,
+            ships in 24&nbsp;hrs from Bangalore.
           </h2>
 
           <div className="hero-anim hero-anim-delay-4 mt-7 sm:mt-9 flex flex-col items-start gap-3">

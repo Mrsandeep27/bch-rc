@@ -127,15 +127,21 @@ export default function Header() {
 
           {/* Right cluster: WhatsApp + cart + mobile menu */}
           <div className="flex items-center gap-2 sm:gap-3">
+            {/* WhatsApp pill - mobile shows icon-only to save thumb-zone real
+                estate, sm+ adds the "Chat" label. Was previously hidden below
+                sm, leaving ~80% of (mobile) traffic without a header CTA to
+                contact us. The persistent FAB stays - this pill is the
+                always-visible-at-top backup. Prefill is Hinglish so a DM
+                lands qualified instead of generic. */}
             <a
-              href={waLink("Hi, I'm interested in the Pocket RC mini drift car.")}
+              href={waLink("Hi! Mujhe ye Pocket RC drift car chahiye — price aur COD details bhej do?")}
               target="_blank"
               rel="noopener noreferrer"
-              className="hidden sm:inline-flex items-center gap-2 bg-whatsapp-green hover:bg-whatsapp-green-hover text-white px-4 py-2 rounded-full text-sm font-semibold transition-colors"
+              className="inline-flex items-center gap-1.5 sm:gap-2 bg-whatsapp-green hover:bg-whatsapp-green-hover text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-sm font-semibold transition-colors"
               aria-label="Chat on WhatsApp"
             >
               <WhatsAppIcon size={16} />
-              <span>Chat</span>
+              <span className="hidden sm:inline">Chat</span>
             </a>
 
             <button

@@ -19,6 +19,10 @@ type Offer = {
   icon: LucideIcon;
   title: string;
   sub: string;
+  /** Honest, operational reason-why ("because…"). Triggers the reason-why
+   *  heuristic - a stated cause raises believability of the freebie even
+   *  when the cause is mundane. Optional - shows under the sub if present. */
+  because?: string;
 };
 
 const OFFERS_LIST: Offer[] = [
@@ -26,16 +30,19 @@ const OFFERS_LIST: Offer[] = [
     icon: Gift,
     title: "Free drift wheels",
     sub: "Extra wheels FREE · worth ₹199",
+    because: "Because tile drift wears the grip wheels in ~2 weeks.",
   },
   {
     icon: CreditCard,
     title: `Pay online → ₹${OFFERS.prepaidDiscountINR} bonus`,
     sub: `UPI / card → ${formatINR(HERO_RETAIL - OFFERS.prepaidDiscountINR)} + same-day dispatch`,
+    because: "Because cash on delivery costs us ~₹100 per box to handle.",
   },
   {
     icon: Package,
     title: "Buy-2 bundle",
-    sub: `Mix 2 → ${formatINR(OFFERS.bundle2PriceINR)} · save ${formatINR(OFFERS.bundle2SaveINR)}`,
+    sub: `Mix 2 → save ${formatINR(OFFERS.bundle2SaveINR)} automatically`,
+    because: "Because packing 2 boxes is the same labour as 1.",
   },
   {
     icon: Zap,
@@ -63,7 +70,7 @@ export default function OfferStack() {
         </div>
 
         {/* Mobile: horizontal snap-scroll. Desktop: 3/5 col grid. */}
-        <div className="mt-6 sm:mt-8 -mx-4 sm:mx-0 overflow-x-auto sm:overflow-visible snap-x snap-mandatory sm:snap-none no-scrollbar">
+        <div className="mt-6 sm:mt-8 -mx-4 sm:mx-0 overflow-x-auto overflow-y-hidden sm:overflow-visible snap-x snap-mandatory sm:snap-none no-scrollbar">
           <div className="flex sm:grid sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 px-4 sm:px-0 pb-2 sm:pb-0">
             {OFFERS_LIST.map((offer, i) => {
               const Icon = offer.icon;
@@ -85,6 +92,11 @@ export default function OfferStack() {
                   <div className="text-sm text-brand-ink-soft mt-1.5 leading-snug">
                     {offer.sub}
                   </div>
+                  {offer.because && (
+                    <div className="text-[11px] text-brand-ink-soft/80 mt-2 italic leading-snug">
+                      {offer.because}
+                    </div>
+                  )}
                 </motion.div>
               );
             })}
