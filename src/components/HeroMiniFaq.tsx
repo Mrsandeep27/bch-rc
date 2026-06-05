@@ -26,18 +26,18 @@ import { ShieldCheck, Ruler, Wrench } from "lucide-react";
 const ITEMS = [
   {
     icon: ShieldCheck,
-    q: "Is COD available?",
-    a: "Yes, pan-India. Pay nothing now — pay the courier when the box arrives.",
+    q: "COD?",
+    a: "Yes, pan-India. Pay courier on delivery.",
   },
   {
     icon: Ruler,
-    q: "How small is this really?",
-    a: "Palm-size at 1:64 scale (~7 cm). Hot Wheels size, but actually drives. Drifts on tile and marble.",
+    q: "How small?",
+    a: "Palm-size (~7 cm). Drifts on tile + marble.",
   },
   {
     icon: Wrench,
-    q: "What if it breaks?",
-    a: "7-day free replacement. Spare wheels (₹99) and batteries (₹199) in stock. Real WhatsApp number — not a bot.",
+    q: "If it breaks?",
+    a: "7-day replacement. Spares ₹99–199. Real WhatsApp.",
   },
 ] as const;
 

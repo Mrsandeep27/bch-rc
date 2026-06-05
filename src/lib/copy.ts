@@ -117,44 +117,44 @@ export const USPS = [
 export const FAQS: { q: string; a: string; defaultOpen?: boolean }[] = [
   {
     q: "Is COD available?",
-    a: "Yes — pan-India COD with a ₹49 fee on orders below ₹999. Pay online instead and save ₹100. UPI, cards, net banking, and BNPL (Simpl, LazyPay) all accepted.",
+    a: "Yes, pan-India. ₹49 fee under ₹999. Pay online → save ₹100.",
     defaultOpen: true,
   },
   {
     q: "How long does the battery last?",
-    a: "Storm Mini (1:64): 25 min runtime · USB-C full charge in 25 min. Storm (1:43): 35 min runtime · charge in 30 min. Storm Pro (1:24): 45 min runtime · charge in 40 min.",
+    a: "1:64 → 25 min · 1:43 → 35 min · 1:24 → 45 min. USB-C, ~30 min full charge.",
   },
   {
     q: "What age is this for?",
-    a: "Storm Mini — 6+. Storm — 8+. Storm Pro — 10+. Adults love all three.",
+    a: "1:64 → 6+ · 1:43 → 8+ · 1:24 → 10+. Adults love them too.",
   },
   {
     q: "What if it breaks?",
-    a: "7-Day Free Replacement on damage or defect — no questions asked. WhatsApp us a photo, we'll dispatch a new one the same day. Spare parts (shell ₹99, battery ₹199) shipped from Bangalore for normal wear-and-tear.",
+    a: "7-day free replacement. WhatsApp a photo, fresh one ships same day. Spare shell ₹99, battery ₹199.",
   },
   {
     q: "Where do you ship?",
-    a: "Pan-India. Most big cities (Bangalore, Mumbai, Delhi-NCR, Chennai, Hyderabad, Pune) get it in 2-3 days. Smaller cities and towns 4-7 days. Real Shiprocket tracking on WhatsApp — we ship it ourselves from Bangalore, no middleman.",
+    a: "Pan-India via Shiprocket. Metros 2–3 days, towns 4–7. Live WhatsApp tracking.",
   },
   {
     q: "Can I gift-wrap it?",
-    a: "Yes — every order ships in a premium gift box. Add a handwritten note free at checkout. Dispatch SMS goes to the buyer (you), not the recipient.",
+    a: "Premium gift box on every order. Free handwritten note at checkout. SMS goes to you, not the recipient.",
   },
   {
     q: "Does it work on carpet / tiles?",
-    a: "Both work. Smooth floors (tile, marble, wood) give the best drift. On carpet you lose the slide but gain grip — still fun.",
+    a: "Tile/marble/wood drifts best. Carpet = grip, not slide — still fun.",
   },
   {
     q: "What's in the box?",
-    a: "Car (assembled), 2.4 GHz remote, rechargeable battery, USB-C cable, spare drift wheel set, premium gift box, quick-start guide.",
+    a: "Car (assembled), 2.4 GHz remote, USB-C cable + battery, spare drift wheels, gift box, guide.",
   },
   {
     q: "Do you sell spare parts?",
-    a: "Yes — body shell ₹99, battery ₹199, drift wheels ₹99 (set), remote ₹299. Shipped from Bangalore in 3 days.",
+    a: "Shell ₹99 · battery ₹199 · drift wheels ₹99 · remote ₹299. Bangalore → 3 days.",
   },
   {
     q: "Bulk / wholesale orders for my shop?",
-    a: "Visit /wholesale to register (GSTIN required). MOQ from 12 pieces. Trade pricing 35–52% off MRP depending on quantity.",
+    a: "Visit /wholesale (GSTIN required). MOQ 12 pcs. Trade pricing 35–52% off MRP.",
   },
 ];
 

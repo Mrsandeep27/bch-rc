@@ -10,19 +10,16 @@ import { THEME } from "@/lib/theme";
 // facts, second-person framing.
 const STORY_POINTS = [
   {
-    title: "You get one that lasts past the wrapping paper",
-    body:
-      "Every chassis is tested on tile, marble, and concrete before it earns a spot in your gift box. Picked by hand in Bangalore by people who actually drive them — no random drop-shipped toys.",
+    title: "Lasts past the wrapping",
+    body: "Tested on tile, marble, concrete. Hand-picked in Bangalore.",
   },
   {
-    title: "Your order leaves Bangalore in 24 hrs",
-    body:
-      "Real Yelahanka warehouse, real Shiprocket tracking. Most big cities get it in 2 days, smaller towns in 4. Real ETAs to your phone — no middleman.",
+    title: "Ships in 24 hrs",
+    body: "Yelahanka warehouse + Shiprocket. 2 days metro, 4 days towns.",
   },
   {
-    title: "You keep your weekend; the gift keeps drifting",
-    body:
-      "7-day free replacement, spare wheels and batteries in stock, and a real WhatsApp number — not a bot. If something breaks, message us; we send a fresh one.",
+    title: "Breaks? We replace.",
+    body: "7-day replacement. Real WhatsApp — not a bot.",
   },
 ] as const;
 
@@ -114,8 +111,7 @@ export default function OurStorySection() {
                 </span>
               </div>
               <p className="hidden sm:block text-sm text-white/80 mt-2 leading-snug">
-                Bangalore drift studio + showroom — opening this year. WhatsApp
-                us to RSVP for the launch.
+                Bangalore showroom opening this year. WhatsApp to RSVP.
               </p>
             </div>
           </div>
@@ -138,12 +134,11 @@ export default function OurStorySection() {
             <span className="text-brand-red">{THEME.brandName}</span>
           </h2>
           <p className="hidden sm:block text-base text-brand-ink-soft mt-4 leading-relaxed">
-            Designed, packed, and shipped from{" "}
+            Shipped from{" "}
             <strong className="text-brand-ink font-semibold">
               Yelahanka, Bengaluru
             </strong>
-            . Real people, real warehouse, real WhatsApp number — not a
-            drop-shipper.
+            . Real warehouse. Real WhatsApp.
           </p>
 
           <ul className="mt-3 sm:mt-7 space-y-2.5 sm:space-y-5">
@@ -184,9 +179,8 @@ export default function OurStorySection() {
               S
             </span>
             <blockquote className="text-sm text-brand-ink-soft leading-relaxed">
-              &ldquo;Every car ships from my warehouse in Yelahanka. If yours
-              arrives broken or stops working in the first 7 days, message me
-              on WhatsApp — I&rsquo;ll replace it.&rdquo;
+              &ldquo;Every car ships from my Yelahanka warehouse. Broken in
+              7 days? WhatsApp me — I&rsquo;ll replace it.&rdquo;
               <footer className="mt-2 text-xs font-mono uppercase tracking-widest text-brand-ink not-italic">
                 — Syed,{" "}
                 <span className="text-brand-ink-soft">
