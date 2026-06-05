@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import dynamic from "next/dynamic";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
 import Header from "@/components/Header";
@@ -9,7 +10,13 @@ import HomeJsonLd from "@/components/HomeJsonLd";
 import HomeClientUi from "@/components/HomeClientUi";
 import { Skeleton, SkeletonGrid } from "@/components/Skeleton";
 import { HOME_FAQS } from "@/lib/faqs";
-import type { HeroVariant } from "@/lib/copy";
+
+// B06 — make the homepage edge-cacheable. ISR revalidates every hour; that's
+// well below the cadence of any catalogue change (prices, stock, copy) but
+// still lets a deploy refresh the cache via on-demand revalidation if needed.
+// Combined with B05 (cookies no longer Set-Cookie'd on every render) Vercel
+// will serve this from the edge instead of cold-rendering on every visit.
+export const revalidate = 3600;
 
 // Below-the-fold sections — still SSR'd (SEO + AI-citation), but the client JS
 // is split into separate chunks that browsers fetch in parallel after the
@@ -41,45 +48,24 @@ const FinalCta = dynamic(() => import("@/components/FinalCta"), {
   loading: () => <Skeleton className="h-64 w-full max-w-7xl mx-auto my-12" />,
 });
 
-// Map the ad UTM source → hero copy variant. Done server-side so Hero (the LCP
-// element) renders on the server instead of bailing to client render via
-// useSearchParams.
-function heroVariantFromSource(source: string | null): HeroVariant {
-  switch (source) {
-    case "ig_gift":
-      return "gift";
-    case "ig_couple":
-      return "couple";
-    case "ig_parent":
-      return "parent";
-    case "ig_carride":
-      return "carride";
-    case "ig_drift":
-    case "yt_drift":
-      return "enthusiast";
-    default:
-      return "default";
-  }
-}
+// UTM-driven hero variant + openCart query-param are now read CLIENT-SIDE
+// by Hero (uses useSearchParams) and HomeClientUi (same). This server page
+// no longer touches searchParams, which lets Next.js statically optimize the
+// route + lets Vercel edge-cache the HTML.
 
-export default async function Page({
-  searchParams,
-}: {
-  searchParams: Promise<{ openCart?: string; utm_source?: string | string[] }>;
-}) {
-  const sp = await searchParams;
-  const openCart = sp.openCart === "1" || sp.openCart === "true";
-  const utmSource = Array.isArray(sp.utm_source)
-    ? sp.utm_source[0] ?? null
-    : sp.utm_source ?? null;
-  const heroVariant = heroVariantFromSource(utmSource);
+export default function Page() {
   return (
     <>
       <HomeJsonLd faqs={HOME_FAQS} />
       <AnnouncementBar />
       <Header />
       <main className="flex-1 -mt-16 sm:-mt-20">
-        <Hero variant={heroVariant} />
+        {/* Suspense wrappers around useSearchParams consumers - Next.js
+            requires a Suspense boundary above any client component that
+            reads useSearchParams when the page is statically rendered. */}
+        <Suspense fallback={<Hero />}>
+          <Hero />
+        </Suspense>
         {/* StickyMobileCTA observes this sentinel — when it scrolls above the
             viewport (i.e. the user is past the hero), the sticky buy bar
             appears. */}
@@ -115,7 +101,9 @@ export default async function Page({
         </div>
       </main>
       <Footer />
-      <HomeClientUi openCart={openCart} />
+      <Suspense fallback={null}>
+        <HomeClientUi />
+      </Suspense>
     </>
   );
 }

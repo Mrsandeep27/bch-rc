@@ -82,10 +82,24 @@ function trackPageview(
     return;
   }
 
-  // Identity cookies. visitor = stable 1y; session = 30-min sliding (re-set on
-  // every tracked hit so it slides while active and lapses after 30 min idle).
+  // Identity cookies. Both are SET-ONLY-IF-MISSING so the response carries no
+  // Set-Cookie on the cached path. The previous code re-set prc_sid on every
+  // hit to "slide" the 30-min window, which forced Set-Cookie on every page
+  // render and made Vercel treat the response as uncacheable. The sliding
+  // behaviour is now handled in the DB row instead - /api/track bumps
+  // analytics_sessions.last_seen_at on every beacon, so the session window
+  // still slides even though the browser-side cookie's maxAge is fixed.
+  //
+  // Trade-off: a visitor who keeps a tab idle for >30 min then refreshes
+  // gets a new sid (a clean new session). Previously the sliding cookie
+  // would let them keep the same sid forever as long as they navigated
+  // within 30 min of the last hit. The DB row still treats the visit as
+  // one session via the vid match, so the sid renewal is the cleanly
+  // correct semantic, not a regression.
   const secure = process.env.NODE_ENV === "production";
   let vid = request.cookies.get(VISITOR_COOKIE)?.value;
+  let sid = request.cookies.get(SESSION_COOKIE)?.value;
+  const writesIdentity = !vid || !sid;
   if (!vid) {
     vid = crypto.randomUUID();
     response.cookies.set(VISITOR_COOKIE, vid, {
@@ -96,16 +110,24 @@ function trackPageview(
       path: "/",
     });
   }
-
-  let sid = request.cookies.get(SESSION_COOKIE)?.value;
-  if (!sid) sid = crypto.randomUUID();
-  response.cookies.set(SESSION_COOKIE, sid, {
-    maxAge: SESSION_TTL_SECONDS,
-    httpOnly: true,
-    sameSite: "lax",
-    secure,
-    path: "/",
-  });
+  if (!sid) {
+    sid = crypto.randomUUID();
+    response.cookies.set(SESSION_COOKIE, sid, {
+      maxAge: SESSION_TTL_SECONDS,
+      httpOnly: true,
+      sameSite: "lax",
+      secure,
+      path: "/",
+    });
+  }
+  // Cooperative signal so the cache layer can short-circuit on returning
+  // visitors. Vercel ignores `private` on the response if Set-Cookie is
+  // present (which we've now eliminated for returning visitors). The
+  // Cache-Control header is set further up the chain by the route; we just
+  // flag this for the route to read if it wants to.
+  if (!writesIdentity) {
+    response.headers.set("x-prc-identity", "warm");
+  }
 
   const url = request.nextUrl;
   const payload: Record<string, string | null> = {

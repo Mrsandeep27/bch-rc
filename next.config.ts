@@ -12,6 +12,43 @@ const nextConfig: NextConfig = {
     deviceSizes: [640, 750, 828, 1080, 1200, 1920],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
+  async headers() {
+    // B07 — long-immutable cache TTLs on the heaviest, never-versioned
+    // static media. Vercel's default for files in /public is `public,
+    // max-age=0, must-revalidate` (i.e. cache-busted on every request),
+    // which means og-image.jpg and product MP4s get re-fetched against
+    // origin under load. Pinning these to immutable / 1y stops a surge
+    // from hammering the origin. Hashed bundles in /_next/static already
+    // ship with `immutable` so they don't need a rule here.
+    //
+    // Trade-off: changing one of these files now requires renaming the
+    // file (or busting via a query param) since browsers + CDN cache
+    // it for a year. For og-image / hero / product MP4s this is the
+    // correct trade — we change them rarely and we want them sticky.
+    const immutableYear = "public, max-age=31536000, immutable";
+    return [
+      {
+        source: "/og-image.jpg",
+        headers: [{ key: "Cache-Control", value: immutableYear }],
+      },
+      {
+        source: "/hero/:path*",
+        headers: [{ key: "Cache-Control", value: immutableYear }],
+      },
+      {
+        source: "/products/:path*",
+        headers: [{ key: "Cache-Control", value: immutableYear }],
+      },
+      {
+        source: "/logo/:path*",
+        headers: [{ key: "Cache-Control", value: immutableYear }],
+      },
+      {
+        source: "/fonts/:path*",
+        headers: [{ key: "Cache-Control", value: immutableYear }],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

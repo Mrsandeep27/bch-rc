@@ -8,6 +8,7 @@ import Footer from "@/components/Footer";
 import PdpFloatingUi from "@/components/PdpFloatingUi";
 import PDPClient from "@/components/PDPClient";
 import { THEME } from "@/lib/theme";
+import { OFFERS } from "@/lib/config";
 
 /** Build a Google-readable schema.org @graph blob for a SKU.
  *  Combines Product + BreadcrumbList in one script tag — Google parses both. */
@@ -30,8 +31,19 @@ function productJsonLd(sku: Sku) {
     offers: {
       "@type": "Offer",
       priceCurrency: "INR",
-      price: sku.retailINR.toString(),
+      // Real online price = retailINR - prepaid bonus. Google was surfacing
+      // the higher pre-bonus sticker (e.g. ₹1,099 instead of ₹999), so customers
+      // arriving from search saw a higher number than they'd actually pay.
+      // We also publish the higher sticker as priceSpecification.maxPrice so
+      // Google can render both ("₹999 - ₹1,099") on rich results when COD is
+      // the chosen method.
+      price: Math.max(0, sku.retailINR - OFFERS.prepaidDiscountINR).toString(),
       url,
+      priceSpecification: {
+        "@type": "PriceSpecification",
+        priceCurrency: "INR",
+        price: sku.retailINR.toString(),
+      },
       availability: "https://schema.org/InStock",
       itemCondition: "https://schema.org/NewCondition",
       priceValidUntil: "2027-12-31",

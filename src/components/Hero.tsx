@@ -1,17 +1,51 @@
 "use client";
 
 import Image from "next/image";
+import { useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { Truck, PackageCheck, ShieldCheck } from "lucide-react";
 import { HERO_VARIANTS, type HeroVariant } from "@/lib/copy";
 import { THEME } from "@/lib/theme";
 import { defaultVariantSlug, getHeroSku } from "@/lib/products";
 import { useCart } from "@/lib/cart-store";
 
+/**
+ * Map the ad UTM source -> hero copy variant. Reads useSearchParams on the
+ * client so the home page can be static (no searchParams in the server
+ * render -> no per-request work -> edge-cacheable).
+ *
+ * Trade-off: the default variant SSRs and the IG-targeted variant swaps in
+ * on hydration. For SEO this is preferable (Google indexes the default H1);
+ * for paid traffic the swap happens before the user can read the H1.
+ */
+function heroVariantFromSource(source: string | null): HeroVariant {
+  switch (source) {
+    case "ig_gift":
+      return "gift";
+    case "ig_couple":
+      return "couple";
+    case "ig_parent":
+      return "parent";
+    case "ig_carride":
+      return "carride";
+    case "ig_drift":
+    case "yt_drift":
+      return "enthusiast";
+    default:
+      return "default";
+  }
+}
+
 export default function Hero({
-  variant = "default",
+  variant: forcedVariant,
 }: {
   variant?: HeroVariant;
 }) {
+  const sp = useSearchParams();
+  const variant = useMemo<HeroVariant>(() => {
+    if (forcedVariant && forcedVariant !== "default") return forcedVariant;
+    return heroVariantFromSource(sp?.get("utm_source") ?? null);
+  }, [forcedVariant, sp]);
   const { h1, sub, ctaLabel } = HERO_VARIANTS[variant];
 
   const handlePrimaryCta = () => {

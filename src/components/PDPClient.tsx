@@ -207,7 +207,14 @@ export default function PDPClient({ sku }: { sku: Sku }) {
         <p className="text-[10px] sm:text-xs font-mono uppercase tracking-widest text-brand-ink-soft">
           {sku.scale} · {sku.bodyShape}
         </p>
-        <h1 className="text-2xl sm:text-4xl font-bold text-brand-ink mt-1 leading-tight text-balance">
+        {/* H1 carries the scale + product class as a small kicker line so
+            Google indexes "1:64 die-cast RC drift car" against the product
+            page instead of just the brand name "Pocket BMW". Visually
+            hierarchical: scale chip, big SKU name, tagline. */}
+        <div className="text-[10px] sm:text-xs font-mono uppercase tracking-widest text-brand-red mt-1">
+          {sku.scale} die-cast RC drift car
+        </div>
+        <h1 className="text-2xl sm:text-4xl font-bold text-brand-ink mt-0.5 leading-tight text-balance">
           {sku.name}
         </h1>
         <p className="text-sm sm:text-lg text-brand-ink-soft mt-1 sm:mt-2">{sku.tagline}</p>
