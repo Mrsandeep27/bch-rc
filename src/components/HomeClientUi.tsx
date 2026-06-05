@@ -16,12 +16,14 @@ const CartDrawer = dynamic(() => import("@/components/CartDrawer"), {
 const StickyMobileCTA = dynamic(() => import("@/components/StickyMobileCTA"), {
   ssr: false,
 });
-const ExitIntentModal = dynamic(() => import("@/components/ExitIntentModal"), {
-  ssr: false,
-});
 const WhatsAppFab = dynamic(() => import("@/components/WhatsAppFab"), {
   ssr: false,
 });
+
+// ExitIntentModal (DRIFT100 "wait before you go" pop-up) removed 2026-06-05
+// — the prepaid -₹100 line is the only ₹100-off mechanism now, so DRIFT100
+// would have been a phantom code that 404'd at checkout. Component file
+// kept in the repo to make re-enabling trivial if a real promo lands later.
 
 export default function HomeClientUi({ openCart }: { openCart: boolean }) {
   return (
@@ -29,7 +31,6 @@ export default function HomeClientUi({ openCart }: { openCart: boolean }) {
       <WhatsAppFab />
       <CartDrawer initialOpen={openCart} />
       <StickyMobileCTA />
-      <ExitIntentModal />
     </>
   );
 }
