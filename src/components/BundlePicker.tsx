@@ -170,7 +170,7 @@ export default function BundlePicker() {
                           alt={car.alt}
                           fill
                           sizes="56px"
-                          className="object-cover"
+                          className="object-contain p-0.5"
                         />
                       </div>
                     </div>
