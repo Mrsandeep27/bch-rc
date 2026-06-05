@@ -252,28 +252,57 @@ export const productVariants = pgTable(
 // 6. REVIEWS
 // ============================================================
 
+export const reviewStatusEnum = pgEnum("review_status", [
+  "pending",
+  "approved",
+  "rejected",
+]);
+
+export const reviewSourceEnum = pgEnum("review_source", [
+  "post_purchase",
+  "admin_seed",
+  "import",
+]);
+
 export const reviews = pgTable(
   "reviews",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    productId: uuid("product_id")
-      .notNull()
-      .references(() => products.id, { onDelete: "cascade" }),
+    // Legacy uuid path — nullable. Storefront uses sku_id (string) instead.
+    productId: uuid("product_id").references(() => products.id, {
+      onDelete: "cascade",
+    }),
+    // Storefront key: site + SKU string from src/lib/products.ts.
+    siteId: text("site_id").references(() => sites.id),
+    skuId: text("sku_id"),
     customerId: uuid("customer_id").references(() => customers.id),
+    // Verified-purchase link — only buyers with a real order_id can review
+    // (R01 gate). Admin-seeded reviews leave this NULL.
+    orderId: text("order_id").references(() => orders.id),
     rating: integer("rating").notNull(), // 1-5
     title: text("title"),
     body: text("body"),
+    // Display fields (so PDP doesn't have to JOIN customers to render).
+    customerName: text("customer_name"),
+    customerCity: text("customer_city"),
     verifiedPurchase: boolean("verified_purchase").notNull().default(false),
     images: text("images")
       .array()
       .notNull()
       .default(sql`'{}'::text[]`),
+    /** Legacy boolean kept for back-compat. New code reads `status`. */
     approved: boolean("approved").notNull().default(false),
+    status: reviewStatusEnum("status").notNull().default("pending"),
+    source: reviewSourceEnum("source").notNull().default("post_purchase"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
-  (t) => [index("reviews_product_idx").on(t.productId)],
+  (t) => [
+    index("reviews_product_idx").on(t.productId),
+    index("reviews_site_sku_status_idx").on(t.siteId, t.skuId, t.status, t.createdAt),
+    unique("reviews_order_sku_unique").on(t.orderId, t.skuId),
+  ],
 );
 
 // ============================================================

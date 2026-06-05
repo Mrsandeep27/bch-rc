@@ -64,6 +64,13 @@
       "when": 1780779600000,
       "tag": "0008_seed_codeprc100",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1780866000000,
+      "tag": "0009_reviews_by_sku",
+      "breakpoints": true
     }
   ]
 }

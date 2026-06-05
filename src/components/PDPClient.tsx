@@ -317,28 +317,66 @@ export default function PDPClient({ sku }: { sku: Sku }) {
         )}
 
         {/* Rating row */}
-        <div className="flex items-center gap-1.5 sm:gap-2 mt-3 sm:mt-4 text-xs sm:text-sm">
-          <span className="text-gold">★★★★★</span>
-          <span className="font-semibold text-brand-ink">4.7</span>
-          <span className="text-brand-ink-soft">· 238 verified reviews</span>
-        </div>
+        {/* W09 - Removed the hardcoded "★★★★★ 4.7 · 238 verified reviews"
+            line. Those numbers were fabricated. Real reviews now render in
+            the PdpReviews block below the bullets; the aggregate header
+            there shows the actual count + average once R01 collects them. */}
 
-        {/* Price block */}
-        <div className="mt-2 sm:mt-4">
+        {/* Price block - W05 dual price (online / COD) consistent with the
+            home SkuLineup. Big number = online price (the "from" anchor);
+            sub-line names the COD ceiling so a COD buyer doesn't hit a
+            +₹100 surprise at checkout. */}
+        <div className="mt-3 sm:mt-4">
           <div className="flex items-baseline gap-2 sm:gap-3 flex-wrap">
             <span className="text-3xl sm:text-4xl font-bold text-brand-ink">
-              {formatINR(sku.retailINR)}
+              {formatINR(sku.retailINR - 100)}
+            </span>
+            <span className="text-[10px] sm:text-xs font-mono uppercase tracking-widest text-brand-ink-soft">
+              online
             </span>
             <span className="text-base sm:text-lg text-brand-ink-soft line-through">
               {formatINR(sku.mrpINR)}
             </span>
             <span className="text-xs sm:text-sm font-semibold bg-success/10 text-success px-2 py-0.5 rounded">
-              Save {formatINR(savings)} · {pct}% off
+              Save {formatINR(savings + 100)} · {pct}% off
             </span>
           </div>
-          <p className="text-[11px] sm:text-xs text-brand-ink-soft mt-1 sm:mt-2">
-            Inclusive of all taxes · Pay online → save ₹100
+          <p className="text-xs sm:text-sm text-brand-ink-soft mt-1">
+            or {formatINR(sku.retailINR)} cash on delivery · all taxes
+            included
           </p>
+
+          {/* X15 - Free-ship progress band. Free-ship threshold is ₹1,099;
+              the BMW lands right at it on COD, the F1/Monster clear it,
+              the cheaper SKUs sit just under. Visual progress so the
+              buyer SEES how close they are to FREE shipping rather than
+              reading static "Free over ₹1,099" boilerplate. */}
+          {(() => {
+            const cartTotalForCheck = sku.retailINR; // single-SKU PDP
+            const threshold = 1099;
+            const gap = Math.max(0, threshold - cartTotalForCheck);
+            const pctReached = Math.min(100, (cartTotalForCheck / threshold) * 100);
+            if (gap === 0) {
+              return (
+                <div className="mt-3 inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-success">
+                  ✓ Free shipping unlocked
+                </div>
+              );
+            }
+            return (
+              <div className="mt-3">
+                <div className="text-xs sm:text-sm text-brand-ink">
+                  Add {formatINR(gap)} more → FREE shipping
+                </div>
+                <div className="h-1 bg-brand-line rounded-full mt-1.5 overflow-hidden">
+                  <div
+                    className="h-full bg-brand-red transition-[width] duration-300"
+                    style={{ width: `${pctReached}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Bullets */}
@@ -350,6 +388,24 @@ export default function PDPClient({ sku }: { sku: Sku }) {
             </li>
           ))}
         </ul>
+
+        {/* X16 - "What's in the box" — substitutes for an in-hand/box-shot
+            until we shoot one. Lists the contents the OfferStack value
+            stack also names, so the buyer can confirm what arrives without
+            scrolling to value-stack. */}
+        <div className="mt-4 sm:mt-6 bg-brand-cream rounded-xl border border-brand-line p-4 sm:p-5">
+          <p className="text-[10px] sm:text-xs font-mono uppercase tracking-widest text-brand-red font-semibold">
+            What&apos;s in the box
+          </p>
+          <ul className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-xs sm:text-sm text-brand-ink">
+            <li>· Die-cast {sku.scale} drift car (assembled)</li>
+            <li>· 2.4 GHz remote</li>
+            <li>· USB-C cable + battery</li>
+            <li>· Spare drift wheel set</li>
+            <li>· Quick-start guide</li>
+            <li>· Premium gift-ready box</li>
+          </ul>
+        </div>
 
         {/* Qty + CTAs */}
         <div className="mt-4 sm:mt-7 flex items-stretch gap-3">
@@ -422,8 +478,15 @@ export default function PDPClient({ sku }: { sku: Sku }) {
           </div>
         </div>
 
-        {/* Specs */}
-        <details className="mt-6 border border-brand-line rounded-xl overflow-hidden">
+        {/* X16 - Spec table open by default. Reviewer flagged it as
+            invisible (the buyer never saw specs without expanding). Now
+            visible at first scroll so the "is this a real RC car?" doubt
+            is answered by the data. Still collapsible if buyers want to
+            close it. */}
+        <details
+          open
+          className="mt-6 border border-brand-line rounded-xl overflow-hidden"
+        >
           <summary className="px-5 py-4 font-semibold text-brand-ink cursor-pointer bg-brand-cream">
             Full specs
           </summary>

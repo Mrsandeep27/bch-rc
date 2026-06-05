@@ -357,6 +357,44 @@ export default async function OrderSuccessPage({
             </a>
           </div>
 
+          {/* R03 - Spares reorder lane. Most cars need replacement drift
+              wheels in ~2 weeks of tile use; battery degrades in ~6 months.
+              Surfaced HERE because the order success page is the only
+              moment the buyer is already on the brand site post-purchase.
+              Spares ship from the same Yelahanka warehouse - we add the
+              line item to their existing customer record + reuse the
+              shipping address. Returning-customer welcome-back code
+              PRC_RETURN10 (10% off spares) hidden until R01 / repeat-order
+              loop is wired; for now WhatsApp-to-reorder is the path since
+              the catalogue + Razorpay can take a phone order in 60s. */}
+          <div className="mt-6 bg-brand-cream border border-brand-line rounded-2xl p-5">
+            <div className="flex items-start gap-3">
+              <div className="shrink-0 w-9 h-9 rounded-lg bg-brand-red-soft text-brand-red flex items-center justify-center">
+                <Package size={18} aria-hidden />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-brand-ink text-sm sm:text-base">
+                  Need spares later?
+                </h3>
+                <p className="text-xs sm:text-sm text-brand-ink-soft mt-1 leading-snug">
+                  Spare drift wheels (₹99), batteries (₹199), shells (₹99)
+                  in stock. WhatsApp the part you need — we dispatch from
+                  Bangalore in 24 hrs to the same address.
+                </p>
+                <a
+                  href={waLink(
+                    `Hi, I'd like to reorder spares for order ${order.id}. Please send the list of available parts + prices.`,
+                  )}
+                  target="_blank"
+                  rel="noopener"
+                  className="mt-3 inline-flex items-center gap-2 bg-brand-ink text-white px-4 py-2 rounded-full text-xs sm:text-sm font-semibold hover:bg-brand-ink-soft transition-colors"
+                >
+                  <WhatsAppIcon size={14} /> Reorder spares on WhatsApp
+                </a>
+              </div>
+            </div>
+          </div>
+
           <div className="mt-8 text-center">
             <Link
               href="/"

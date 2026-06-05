@@ -60,10 +60,20 @@ export default function Hero({
           On mobile: shift the focus inward (65%) so we see the car body, not
           just the right edge. On desktop: object-right keeps the car on the
           right half so left text gets a clean dark backdrop. */}
-      {/* Empty alt was intentional when hero was decorative behind text -
-          but with the dark gradient now reduced (BMW visible), the image
-          carries information for sighted users so screen-reader users need
-          a description too. Also helps image SEO. */}
+      {/* X07 - Hero now has the BMW drift clip layered over the WebP. The
+          <Image> stays as the LCP element so first-paint is unaffected
+          (the WebP is still ~30KB and renders instantly). The <video>
+          plays muted/loop/playsInline on top with the same WebP as its
+          poster, so the visual is identical until the video buffers.
+          preload="metadata" so the bytes only start flowing AFTER the
+          page is interactive - the X12 lazy-load lever is the
+          intersection observer wrapping below-fold UGC videos, not this
+          one (hero IS the fold, no observer needed).
+
+          alt: empty alt was intentional when the BMW was decorative,
+          but with the new lighter gradient the car carries information
+          so screen-reader users get a description and image SEO gets
+          the keywords. */}
       <Image
         src={THEME.heroImageSrc}
         alt="Pocket BMW M-style 1:64 die-cast RC drift car, headlights lit, in front of a low-key red glow"
@@ -71,6 +81,17 @@ export default function Hero({
         fill
         sizes="100vw"
         className="object-cover select-none pointer-events-none [object-position:65%_center] sm:[object-position:right_center]"
+      />
+      <video
+        src="/products/PRC-bmw.mp4"
+        poster={THEME.heroImageSrc}
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        aria-hidden
+        className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none [object-position:65%_center] sm:[object-position:right_center]"
       />
 
       {/* Readability gradient.
