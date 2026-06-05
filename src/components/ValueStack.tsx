@@ -79,70 +79,66 @@ const SAVE = TOTAL_VALUE - ONLINE_PRICE;
 
 export default function ValueStack() {
   return (
-    <section className="py-8 sm:py-14 bg-brand-cream">
+    <section className="py-5 sm:py-8 bg-brand-cream">
       <div className="max-w-3xl mx-auto px-4">
         <div className="text-center">
-          <p className="text-[10px] sm:text-xs font-mono uppercase tracking-widest text-brand-red">
+          <p className="text-[10px] font-mono uppercase tracking-widest text-brand-red">
             What you actually get
           </p>
-          <h2 className="font-display text-2xl sm:text-4xl font-bold text-brand-ink mt-1.5 sm:mt-2 text-balance">
-            ₹{formatINR(TOTAL_VALUE).replace("₹", "")} of car. You pay ₹{ONLINE_PRICE}.
+          <h2 className="font-display text-lg sm:text-2xl font-bold text-brand-ink mt-1 text-balance">
+            {formatINR(TOTAL_VALUE)} of car. You pay {formatINR(ONLINE_PRICE)}.
           </h2>
         </div>
 
-        <ul className="mt-6 sm:mt-8 bg-white rounded-2xl border border-brand-line divide-y divide-brand-line overflow-hidden">
-          {STACK.map(({ icon: Icon, label, value, paid, note }) => (
+        {/* Compact two-column grid on sm+; one column on mobile. Each row is
+            a single line — icon + label + value/FREE — with the `note` only
+            shown on the paid hero row to keep the others crisp. */}
+        <ul className="mt-3 sm:mt-4 bg-white rounded-xl border border-brand-line divide-y divide-brand-line overflow-hidden text-sm sm:grid sm:grid-cols-2 sm:divide-y-0 sm:divide-x">
+          {STACK.map(({ icon: Icon, label, paid }) => (
             <li
               key={label}
-              className="flex items-center gap-3 sm:gap-4 px-4 sm:px-5 py-3 sm:py-4"
+              className="flex items-center gap-2.5 px-3 sm:px-4 py-2 sm:py-2.5 sm:border-b sm:border-brand-line sm:last:border-b-0"
             >
-              <span className="shrink-0 w-9 h-9 rounded-lg bg-brand-red-soft text-brand-red flex items-center justify-center">
-                <Icon size={18} aria-hidden />
+              <span className="shrink-0 w-6 h-6 rounded-md bg-brand-red-soft text-brand-red flex items-center justify-center">
+                <Icon size={13} aria-hidden />
               </span>
-              <div className="flex-1 min-w-0">
-                <div className="font-semibold text-brand-ink text-sm sm:text-base leading-tight">
-                  {label}
-                </div>
-                {note && (
-                  <div className="text-[11px] sm:text-xs text-brand-ink-soft mt-0.5">
-                    {note}
-                  </div>
-                )}
-              </div>
-              <div className="shrink-0 text-right">
-                {paid ? (
-                  <span className="font-semibold text-brand-ink text-sm sm:text-base">
-                    {formatINR(value)}
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 text-success font-bold text-sm sm:text-base">
-                    FREE
-                  </span>
-                )}
-              </div>
+              <span className="flex-1 min-w-0 text-brand-ink text-xs sm:text-sm leading-tight truncate">
+                {label}
+              </span>
+              {paid ? (
+                <span className="shrink-0 font-semibold text-brand-ink text-xs sm:text-sm tabular-nums">
+                  {formatINR(STACK.find((s) => s.label === label)!.value)}
+                </span>
+              ) : (
+                <span className="shrink-0 text-success font-bold text-[11px] sm:text-xs">
+                  FREE
+                </span>
+              )}
             </li>
           ))}
-          <li className="flex items-center justify-between px-4 sm:px-5 py-4 bg-brand-cream/70 font-bold">
-            <span className="text-brand-ink text-sm sm:text-base">
-              Total value if priced separately
-            </span>
-            <span className="text-brand-ink-soft line-through text-sm sm:text-base tabular-nums">
-              {formatINR(TOTAL_VALUE)}
-            </span>
-          </li>
-          <li className="flex items-center justify-between px-4 sm:px-5 py-4 bg-brand-red text-white font-bold">
-            <span className="text-sm sm:text-base">You pay online</span>
-            <span className="text-base sm:text-lg tabular-nums">
-              {formatINR(ONLINE_PRICE)}{" "}
-              <span className="text-white/80 font-normal text-xs">
-                (save {formatINR(SAVE)})
-              </span>
-            </span>
-          </li>
         </ul>
 
-        <p className="text-center text-[11px] sm:text-xs text-brand-ink-soft mt-4 font-mono uppercase tracking-widest">
-          Pay on delivery → {formatINR(HERO.retailINR)} · 7-day replacement
+        {/* Total + paid bar — single row, brand-red full-width strip so the
+            "you save ₹X" payoff is the loudest line in the section. */}
+        <div className="mt-3 bg-brand-red text-white rounded-xl px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-baseline gap-2">
+            <span className="font-bold text-sm sm:text-base">You pay</span>
+            <span className="text-white/70 text-xs line-through tabular-nums">
+              {formatINR(TOTAL_VALUE)}
+            </span>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="font-bold text-base sm:text-lg tabular-nums">
+              {formatINR(ONLINE_PRICE)}
+            </span>
+            <span className="text-white/85 text-[11px] sm:text-xs font-mono uppercase tracking-widest">
+              save {formatINR(SAVE)}
+            </span>
+          </div>
+        </div>
+
+        <p className="text-center text-[10px] sm:text-xs text-brand-ink-soft mt-2 font-mono uppercase tracking-widest">
+          COD → {formatINR(HERO.retailINR)} · 7-day replacement
         </p>
       </div>
     </section>
