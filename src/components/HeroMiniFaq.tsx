@@ -27,17 +27,20 @@ const ITEMS = [
   {
     icon: ShieldCheck,
     q: "COD?",
-    a: "Yes, pan-India. Pay courier on delivery.",
+    a: "Yes, pan-India",
+    aFull: "Yes, pan-India. Pay courier on delivery.",
   },
   {
     icon: Ruler,
-    q: "How small?",
-    a: "Palm-size (~7 cm). Drifts on tile + marble.",
+    q: "Size?",
+    a: "Palm · 7 cm",
+    aFull: "Palm-size (~7 cm). Drifts on tile + marble.",
   },
   {
     icon: Wrench,
-    q: "If it breaks?",
-    a: "7-day replacement. Spares ₹99–199. Real WhatsApp.",
+    q: "Breaks?",
+    a: "7-day swap",
+    aFull: "7-day replacement. Spares ₹99–199. Real WhatsApp.",
   },
 ] as const;
 
@@ -47,25 +50,28 @@ export default function HeroMiniFaq() {
       aria-label="Top questions before you buy"
       className="bg-brand-cream border-y border-brand-line"
     >
-      <div className="max-w-5xl mx-auto px-4 py-3 sm:py-4">
-        <p className="text-[10px] font-mono uppercase tracking-widest text-brand-red text-center">
+      <div className="max-w-5xl mx-auto px-4 py-2 sm:py-4">
+        <p className="hidden sm:block text-[10px] font-mono uppercase tracking-widest text-brand-red text-center">
           Before you tap order —
         </p>
-        <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
-          {ITEMS.map(({ icon: Icon, q, a }) => (
+        <div className="grid grid-cols-3 gap-1.5 sm:gap-2 sm:mt-2">
+          {ITEMS.map(({ icon: Icon, q, a, aFull }) => (
             <div
               key={q}
-              className="flex items-start gap-2 bg-white border border-brand-line rounded-lg p-2 sm:p-2.5"
+              className="flex sm:items-start gap-1.5 sm:gap-2 bg-white border border-brand-line rounded-md sm:rounded-lg px-1.5 py-1.5 sm:p-2.5"
             >
-              <span className="shrink-0 w-6 h-6 rounded bg-brand-red-soft text-brand-red flex items-center justify-center">
-                <Icon size={12} aria-hidden />
+              <span className="shrink-0 w-5 h-5 sm:w-6 sm:h-6 rounded bg-brand-red-soft text-brand-red flex items-center justify-center self-center sm:self-start">
+                <Icon size={11} aria-hidden />
               </span>
-              <div className="min-w-0 flex-1">
-                <div className="font-semibold text-brand-ink text-xs sm:text-sm leading-snug">
+              <div className="min-w-0 flex-1 leading-tight">
+                <div className="font-semibold text-brand-ink text-[11px] sm:text-sm">
                   {q}
                 </div>
-                <div className="text-[11px] sm:text-xs text-brand-ink-soft mt-0.5 leading-snug">
+                <div className="text-[10px] sm:text-xs text-brand-ink-soft sm:mt-0.5 sm:hidden">
                   {a}
+                </div>
+                <div className="hidden sm:block text-xs text-brand-ink-soft mt-0.5">
+                  {aFull}
                 </div>
               </div>
             </div>
