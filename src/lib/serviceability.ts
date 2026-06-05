@@ -1,16 +1,28 @@
 /**
- * Pincode serviceability + delivery ETA — single source of truth shared by:
- *   - the checkout UI (live check as the customer types the pincode)
- *   - /api/serviceability (the route the UI calls)
- *   - /api/orders/create (the HARD server-side gate that blocks orders we
- *     can't actually fulfil, so the customer never gets a surprise cancellation)
+ * Pincode serviceability + delivery ETA.
  *
- * This is a deterministic heuristic, not a live courier call — same pincode
- * always yields the same answer (no flicker, no per-request cost). When the
- * Shiprocket serviceability API is wired in, swap the body of
- * `resolveServiceability` and keep this signature so every call site keeps
- * working.
+ * Two entry points:
+ *
+ * 1. `resolveServiceability(pincode)` — SYNC, deterministic heuristic.
+ *    Same input always yields same answer, no API cost. Used for ETA-text
+ *    rendering in places that can't await (e.g. the order success page,
+ *    notification templates) and as the fallback when the live call fails.
+ *
+ * 2. `verifyServiceabilityLive(pincode, needsCod)` — ASYNC, calls Shiprocket
+ *    to confirm a courier actually serves the PIN with the requested payment
+ *    method. Used by /api/serviceability (UI gate) and /api/orders/create
+ *    (hard gate). Falls back to the heuristic if Shiprocket is unreachable.
+ *
+ * Why both: a live call is the only honest answer (a PIN like 999999 passes
+ * regex but isn't a real delivery destination), but a hard dependency on
+ * Shiprocket would break checkout for everyone the moment their API hiccups.
+ * The split keeps live truth on the path that matters (gating orders) and
+ * deterministic safety on the path that doesn't (rendering ETA).
  */
+import {
+  getShiprocketServiceability,
+  type ShiprocketServiceability,
+} from "./shiprocket";
 
 // Metro prefixes (first 2 digits) — 2-3 day delivery. Everything else 3-5.
 const METRO_PREFIXES = new Set([
@@ -114,6 +126,72 @@ export function resolveServiceability(
     etaMaxDays,
     etaText: `${deliveryDate(etaMinDays, now)}–${deliveryDate(etaMaxDays, now)}`,
     reason: codAvailable
+      ? null
+      : "COD isn't available for this pincode — pay online to order (you save ₹100).",
+  };
+}
+
+/**
+ * Live serviceability check, with fallback. Use this on the order-gate path
+ * (/api/serviceability and /api/orders/create) so the heuristic's optimistic
+ * "any well-formed 6 digits is fine" can't ship orders to PINs Shiprocket
+ * has no courier for.
+ *
+ * Behaviour:
+ *   1. If pincode is malformed → return the heuristic's structured rejection.
+ *   2. Ask Shiprocket. If they return a definitive answer (serviceable or
+ *      not, with available couriers and COD support), trust it.
+ *   3. If Shiprocket times out / errors / returns malformed JSON, fall back
+ *      to the heuristic so checkout never breaks because of a courier-API
+ *      outage. The heuristic is permissive but never returns "serviceable"
+ *      for malformed PINs.
+ *
+ * @param needsCod true if the buyer has selected COD as the payment method.
+ *                 Affects which couriers count as "available".
+ */
+export async function verifyServiceabilityLive(
+  rawPincode: string,
+  needsCod: boolean,
+  now: Date = new Date(),
+): Promise<Serviceability> {
+  const heuristic = resolveServiceability(rawPincode, now);
+  // Malformed / non-serviceable per the static rules → don't even hit the API.
+  if (!heuristic.serviceable) return heuristic;
+
+  const live: ShiprocketServiceability | null = await getShiprocketServiceability(
+    heuristic.pincode,
+    needsCod,
+  );
+  if (live === null) {
+    // Shiprocket unreachable — degrade gracefully to heuristic so the buyer
+    // doesn't see a hard error mid-checkout. The /api/orders/create gate
+    // will run the live check again at submit time; transient API blips
+    // resolve themselves by then.
+    return heuristic;
+  }
+
+  if (!live.serviceable) {
+    return {
+      ...heuristic,
+      serviceable: false,
+      codAvailable: false,
+      reason:
+        "Sorry — no courier serves this pincode right now. WhatsApp us to confirm.",
+    };
+  }
+
+  // Live ETA wins if Shiprocket gave us numbers; otherwise keep the heuristic
+  // dates (so the UI always has something to show).
+  const etaMinDays = live.etaMinDays ?? heuristic.etaMinDays;
+  const etaMaxDays = live.etaMaxDays ?? heuristic.etaMaxDays;
+  return {
+    pincode: heuristic.pincode,
+    serviceable: true,
+    codAvailable: live.codAvailable,
+    etaMinDays,
+    etaMaxDays,
+    etaText: `${deliveryDate(etaMinDays, now)}–${deliveryDate(etaMaxDays, now)}`,
+    reason: live.codAvailable
       ? null
       : "COD isn't available for this pincode — pay online to order (you save ₹100).",
   };

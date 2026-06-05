@@ -35,7 +35,7 @@ import { generateOrderId } from "@/lib/order-id";
 import { redeemCoupon, CouponError } from "@/lib/coupons";
 import { sendOutboxRow } from "@/lib/notifications/drain";
 import { notifyOrderEvent, whatsappEnabled } from "@/lib/notifications/notify";
-import { resolveServiceability } from "@/lib/serviceability";
+import { verifyServiceabilityLive } from "@/lib/serviceability";
 import { logError } from "@/lib/logger";
 
 const PaymentMethod = z.enum(["UPI", "CARD", "NETBANKING", "WALLET", "COD"]);
@@ -158,8 +158,12 @@ export async function POST(req: Request) {
   // we can't deliver to, or COD where COD isn't available. This is the
   // authoritative check (the checkout UI previews the same result). Placed
   // after the idempotency short-circuit so replays of already-valid orders
-  // always succeed.
-  const svc = resolveServiceability(body.address.pincode);
+  // always succeed. Live Shiprocket call - falls back to the heuristic on
+  // API outage so a courier-side blip can't kill checkout.
+  const svc = await verifyServiceabilityLive(
+    body.address.pincode,
+    body.paymentMethod === "COD",
+  );
   if (!svc.serviceable) {
     return NextResponse.json(
       { error: svc.reason ?? "We don't deliver to this pincode yet. WhatsApp us to check." },

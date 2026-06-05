@@ -71,6 +71,96 @@ async function srFetch<T>(
 }
 
 // ============================================================
+// Serviceability — live courier lookup
+// ============================================================
+
+/**
+ * Shape returned by Shiprocket's GET /courier/serviceability/.
+ * Only the fields we actually read are typed; the rest is `unknown`.
+ */
+type ServiceabilityResp = {
+  status: number;
+  data?: {
+    available_courier_companies?: Array<{
+      courier_company_id: number;
+      courier_name?: string;
+      cod: number; // 0 or 1
+      estimated_delivery_days?: string | number;
+      etd?: string;
+    }>;
+    recommended_courier_company_id?: number;
+  };
+};
+
+export type ShiprocketServiceability = {
+  /** At least one courier covers this pickup→delivery route. */
+  serviceable: boolean;
+  /** At least one courier covers it AND supports COD. */
+  codAvailable: boolean;
+  /** Min ETA across available couriers, in business days. null if unknown. */
+  etaMinDays: number | null;
+  /** Max ETA across available couriers, in business days. null if unknown. */
+  etaMaxDays: number | null;
+};
+
+/**
+ * Live serviceability check against Shiprocket. Returns null on API failure
+ * so callers can fall back to a deterministic heuristic — we never want a
+ * Shiprocket outage to break checkout for everyone.
+ *
+ * NOTE: weight = 0.5 kg (one car + box). Adjust if cart-size logic moves
+ * the package weight beyond what a single courier slab covers.
+ */
+export async function getShiprocketServiceability(
+  deliveryPincode: string,
+  needsCod: boolean,
+): Promise<ShiprocketServiceability | null> {
+  if (!/^[1-9][0-9]{5}$/.test(deliveryPincode)) return null;
+
+  const pickupPincode = process.env.SHIPROCKET_PICKUP_PINCODE ?? "560064";
+  const url =
+    `${API}/courier/serviceability/` +
+    `?pickup_postcode=${pickupPincode}` +
+    `&delivery_postcode=${deliveryPincode}` +
+    `&cod=${needsCod ? 1 : 0}` +
+    `&weight=0.5`;
+
+  try {
+    const token = await getToken();
+    const res = await fetch(url, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+      // Tight timeout — the checkout form blocks on this; better to fall
+      // back to the heuristic than make the buyer wait.
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!res.ok) {
+      logError("shiprocket:serviceability", new Error(`${res.status} ${await res.text()}`));
+      return null;
+    }
+    const json = (await res.json()) as ServiceabilityResp;
+    const couriers = json.data?.available_courier_companies ?? [];
+    if (couriers.length === 0) {
+      // Shiprocket genuinely doesn't serve this PIN — fail closed.
+      return { serviceable: false, codAvailable: false, etaMinDays: null, etaMaxDays: null };
+    }
+    const codCouriers = couriers.filter((c) => c.cod === 1);
+    const etas = couriers
+      .map((c) => Number(c.estimated_delivery_days))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    return {
+      serviceable: true,
+      codAvailable: codCouriers.length > 0,
+      etaMinDays: etas.length ? Math.min(...etas) : null,
+      etaMaxDays: etas.length ? Math.max(...etas) : null,
+    };
+  } catch (err) {
+    logError("shiprocket:serviceability", err);
+    return null;
+  }
+}
+
+// ============================================================
 // Types
 // ============================================================
 
