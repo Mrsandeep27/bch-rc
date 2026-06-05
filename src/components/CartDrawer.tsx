@@ -4,7 +4,16 @@ import { useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
-import { X, Trash2, Minus, Plus, ShoppingBag } from "lucide-react";
+import {
+  X,
+  Trash2,
+  Minus,
+  Plus,
+  ShoppingBag,
+  Gift,
+  PartyPopper,
+  Sparkles,
+} from "lucide-react";
 import {
   useCart,
   getCartLines,
@@ -16,7 +25,6 @@ import {
   OFFERS,
   BUNDLE_TIERS,
   bundleDiscountInr,
-  waLink,
 } from "@/lib/config";
 import { formatINR } from "@/lib/utils";
 
@@ -45,17 +53,6 @@ export default function CartDrawer({
   const nextTier = BUNDLE_TIERS.find((t) => t.minQty > count);
   const bundleGap = nextTier ? nextTier.minQty - count : 0;
   const bundleNextExtra = nextTier ? nextTier.bonusInr - currentBundleBonus : 0;
-
-  const waMessage =
-    "Hi, I want to order:\n" +
-    lines
-      .map(
-        (l) =>
-          `- ${l.qty}× ${l.sku.name}${l.variantName ? ` (${l.variantName})` : ""} (${l.sku.scale}) — ${formatINR(
-            l.lineTotalINR,
-          )}`,
-      )
-      .join("\n");
 
   // Open from ?openCart=1 query param on first mount.
   const initialOpenAppliedRef = useRef(false);
@@ -170,7 +167,12 @@ export default function CartDrawer({
               >
                 {delta > 0 ? (
                   <>
-                    <div>Add {formatINR(delta)} more for FREE shipping</div>
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={14} className="shrink-0" aria-hidden />
+                      <span>
+                        Add {formatINR(delta)} more for FREE shipping
+                      </span>
+                    </div>
                     <div className="h-1 bg-white/60 rounded-full mt-2 overflow-hidden">
                       <div
                         className="h-full bg-brand-red"
@@ -179,7 +181,10 @@ export default function CartDrawer({
                     </div>
                   </>
                 ) : (
-                  <>🎉 Free shipping unlocked!</>
+                  <div className="flex items-center gap-2">
+                    <PartyPopper size={14} className="shrink-0" aria-hidden />
+                    <span>Free shipping unlocked!</span>
+                  </div>
                 )}
               </div>
             )}
@@ -199,15 +204,29 @@ export default function CartDrawer({
                 }
               >
                 {currentBundleBonus > 0 && (
-                  <div>
-                    🎁 Bundle bonus active — {formatINR(currentBundleBonus)} off
-                    auto-applied
+                  <div className="flex items-center gap-2">
+                    <Gift size={14} className="shrink-0" aria-hidden />
+                    <span>
+                      Bundle bonus active — {formatINR(currentBundleBonus)} off
+                      auto-applied
+                    </span>
                   </div>
                 )}
                 {bundleGap > 0 && bundleNextExtra > 0 && (
-                  <div className={currentBundleBonus > 0 ? "mt-1 text-brand-ink-soft" : ""}>
-                    Add {bundleGap} more car{bundleGap > 1 ? "s" : ""} → unlock{" "}
-                    {formatINR(bundleNextExtra)} extra bonus
+                  <div
+                    className={
+                      currentBundleBonus > 0
+                        ? "mt-1 text-brand-ink-soft flex items-center gap-2"
+                        : "flex items-center gap-2"
+                    }
+                  >
+                    {currentBundleBonus === 0 && (
+                      <Gift size={14} className="shrink-0" aria-hidden />
+                    )}
+                    <span>
+                      Add {bundleGap} more car{bundleGap > 1 ? "s" : ""} → unlock{" "}
+                      {formatINR(bundleNextExtra)} extra bonus
+                    </span>
                   </div>
                 )}
               </div>
@@ -330,14 +349,6 @@ export default function CartDrawer({
                 >
                   Checkout · {formatINR(Math.max(0, subtotal - currentBundleBonus))}
                 </Link>
-                <a
-                  href={waLink(waMessage)}
-                  target="_blank"
-                  rel="noopener"
-                  className="block text-center py-3 rounded-xl border border-brand-line text-brand-ink hover:bg-brand-cream font-medium text-sm"
-                >
-                  or order on WhatsApp →
-                </a>
               </div>
             )}
           </motion.aside>
