@@ -29,42 +29,39 @@ const OFFERS_LIST: Offer[] = [
   {
     icon: Gift,
     title: "Free drift wheels",
-    sub: "Extra wheels FREE · worth ₹199",
-    because: "Because tile drift wears the grip wheels in ~2 weeks.",
+    sub: "Worth ₹199",
   },
   {
     icon: CreditCard,
-    title: `Pay online → ₹${OFFERS.prepaidDiscountINR} bonus`,
-    sub: `UPI / card → ${formatINR(HERO_RETAIL - OFFERS.prepaidDiscountINR)} + same-day dispatch`,
-    because: "Because cash on delivery costs us ~₹100 per box to handle.",
+    title: `Pay online → ₹${OFFERS.prepaidDiscountINR} off`,
+    sub: `${formatINR(HERO_RETAIL - OFFERS.prepaidDiscountINR)} + same-day dispatch`,
   },
   {
     icon: Package,
-    title: "Buy-2 bundle",
-    sub: `Mix 2 → save ${formatINR(OFFERS.bundle2SaveINR)} automatically`,
-    because: "Because packing 2 boxes is the same labour as 1.",
+    title: "Mix 2 cars",
+    sub: `Auto-save ${formatINR(OFFERS.bundle2SaveINR)}`,
   },
   {
     icon: Zap,
     title: "Festival drop",
-    sub: "Launch price · 24-hr dispatch",
+    sub: "Launch price",
   },
   {
     icon: Sparkles,
-    title: `LED upgrade +${formatINR(OFFERS.ledSmokeUpgradeINR)}`,
-    sub: "Full-body LED + driver figurine",
+    title: `LED +${formatINR(OFFERS.ledSmokeUpgradeINR)}`,
+    sub: "Full-body LED",
   },
 ];
 
 export default function OfferStack() {
   return (
-    <section className="py-8 sm:py-14 bg-brand-cream">
+    <section className="py-5 sm:py-10 bg-brand-cream">
       <div className="max-w-5xl mx-auto px-4">
         <div className="text-center">
-          <p className="text-xs font-mono font-bold uppercase tracking-widest text-brand-red">
+          <p className="text-[10px] sm:text-xs font-mono font-bold uppercase tracking-widest text-brand-red">
             Stack &apos;em up
           </p>
-          <h2 className="text-2xl sm:text-3xl font-bold text-brand-ink mt-1">
+          <h2 className="text-xl sm:text-2xl font-bold text-brand-ink mt-1">
             Five offers. One cart.
           </h2>
         </div>

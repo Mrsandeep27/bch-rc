@@ -82,17 +82,17 @@ export default function BundlePicker() {
   const handleOpenCart = () => useCart.getState().open();
 
   return (
-    <section id="bundles" className="py-6 sm:py-14 bg-brand-cream">
+    <section id="bundles" className="py-5 sm:py-10 bg-brand-cream">
       <div className="max-w-5xl mx-auto px-4">
         <div className="text-center">
-          <span className="font-mono text-[11px] sm:text-xs uppercase tracking-widest text-brand-red">
+          <span className="font-mono text-[10px] sm:text-xs uppercase tracking-widest text-brand-red">
             Bundle &amp; save
           </span>
-          <h2 className="font-display text-2xl sm:text-5xl font-bold text-brand-ink mt-1.5 sm:mt-2 text-balance">
+          <h2 className="font-display text-xl sm:text-3xl font-bold text-brand-ink mt-1 text-balance">
             More cars. Bigger savings.
           </h2>
-          <p className="text-brand-ink-soft text-sm sm:text-lg mt-2 sm:mt-3 max-w-xl mx-auto">
-            Mix any cars. Discount auto-applies in cart — no code needed.
+          <p className="text-brand-ink-soft text-xs sm:text-sm mt-1">
+            Auto-applied in cart.
           </p>
         </div>
 
@@ -192,16 +192,8 @@ export default function BundlePicker() {
                   )}
                 </div>
 
-                <div className="mt-1 text-xs sm:text-sm text-brand-ink-soft font-mono font-medium">
-                  {opt.qty === 1
-                    ? "Just one car"
-                    : `Mix any ${opt.qty}${opt.qty === 3 ? "+" : ""} cars`}
-                </div>
-
-                <div className="mt-2.5 sm:mt-3 inline-block bg-success/10 text-success text-xs font-bold px-2.5 py-1 rounded-full">
-                  {opt.saveINR > 0
-                    ? `${formatINR(opt.saveINR)} BONUS`
-                    : "FREE SHIPPING"}
+                <div className="mt-2 inline-block bg-success/10 text-success text-[11px] sm:text-xs font-bold px-2.5 py-1 rounded-full">
+                  {opt.saveINR > 0 ? "BONUS" : "FREE SHIPPING"}
                 </div>
               </motion.button>
             );
@@ -220,8 +212,8 @@ export default function BundlePicker() {
               ? "Pick your car"
               : `Pick any ${selectedQty}${selectedQty === 3 ? "+" : ""} cars`}
           </button>
-          <p className="text-brand-ink text-[11px] sm:text-sm mt-1 font-mono font-medium text-center">
-            Free shipping · COD pan-India · 24-hr dispatch
+          <p className="text-brand-ink text-[10px] sm:text-xs mt-1 font-mono font-medium text-center">
+            Free shipping · COD · 24-hr dispatch
           </p>
         </div>
       </div>
