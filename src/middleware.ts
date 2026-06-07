@@ -29,7 +29,14 @@ import { NextRequest, NextResponse } from "next/server";
 const BYPASS_COOKIE = "prc_maint_bypass";
 
 export function middleware(req: NextRequest) {
-  if (process.env.MAINTENANCE_MODE !== "true") {
+  // Tolerate BOM/CRLF/whitespace that PowerShell's `"true" | vercel env add`
+  // pipeline silently adds. process.env.MAINTENANCE_MODE === "true" is a
+  // fragile equality on Windows hosts; trim + strip BOM first.
+  const maintRaw = (process.env.MAINTENANCE_MODE ?? "")
+    .replace(/^﻿/, "")
+    .trim()
+    .toLowerCase();
+  if (maintRaw !== "true" && maintRaw !== "1" && maintRaw !== "on") {
     return NextResponse.next();
   }
 
