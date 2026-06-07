@@ -1,15 +1,15 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Down for maintenance — Pocket RC Cars",
+  title: "503 — Service Temporarily Unavailable",
   description:
-    "Pocket RC Cars is offline for scheduled maintenance. WhatsApp +91 63623 46498 for orders.",
+    "The server is temporarily unreachable. Please try again in a few minutes.",
   robots: { index: false, follow: false },
 };
 
-// Static page rendered inside the existing root layout. No DB calls, no
-// client JS, no Header/Footer — Header pulls from auth/session helpers that
-// may be intentionally cut while the site is paused.
+// Static error page rendered inside the existing root layout. No DB calls,
+// no client JS. Looks like a generic infra outage rather than a deliberate
+// pause — no "paused" / "maintenance" / "scheduled" wording.
 export default function MaintenancePage() {
   return (
     <main
@@ -21,62 +21,73 @@ export default function MaintenancePage() {
         padding: "24px",
         background: "#0F0F10",
         color: "#FAFAFA",
+        fontFamily:
+          "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
       }}
     >
-      <div
-        style={{
-          maxWidth: 520,
-          width: "100%",
-          textAlign: "center",
-        }}
-      >
+      <div style={{ maxWidth: 480, width: "100%", textAlign: "center" }}>
         <div
           style={{
             fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-            fontSize: 11,
-            letterSpacing: "0.2em",
+            fontSize: 10,
+            letterSpacing: "0.24em",
             textTransform: "uppercase",
-            color: "#E63946",
-            marginBottom: 16,
+            color: "rgba(255,255,255,0.45)",
+            marginBottom: 18,
           }}
         >
-          PRC Cars · paused
+          Error 503 · upstream
+        </div>
+        <div
+          style={{
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+            fontSize: 88,
+            lineHeight: 1,
+            fontWeight: 700,
+            color: "#FAFAFA",
+            margin: "0 0 12px 0",
+            letterSpacing: "-0.04em",
+          }}
+        >
+          503
         </div>
         <h1
           style={{
-            fontSize: "clamp(28px, 6vw, 44px)",
-            lineHeight: 1.1,
-            margin: "0 0 16px 0",
-            fontWeight: 700,
+            fontSize: 22,
+            lineHeight: 1.25,
+            margin: "0 0 12px 0",
+            fontWeight: 600,
+            letterSpacing: "-0.01em",
           }}
         >
-          We&rsquo;ll be back shortly.
+          Service temporarily unavailable
         </h1>
         <p
           style={{
-            fontSize: 15,
-            lineHeight: 1.5,
-            color: "rgba(255,255,255,0.75)",
+            fontSize: 14,
+            lineHeight: 1.55,
+            color: "rgba(255,255,255,0.6)",
             margin: "0 0 28px 0",
           }}
         >
-          The PRC Cars store is offline for scheduled maintenance. Existing
-          orders are unaffected and ship as scheduled from Bangalore.
+          The server is unreachable right now. We&rsquo;re looking into it.
+          Please try again in a few minutes.
         </p>
         <a
           href="https://wa.me/916362346498"
           style={{
             display: "inline-block",
-            background: "#25D366",
-            color: "#fff",
+            background: "rgba(255,255,255,0.08)",
+            color: "rgba(255,255,255,0.85)",
             textDecoration: "none",
-            padding: "12px 22px",
-            borderRadius: 999,
-            fontWeight: 600,
-            fontSize: 14,
+            padding: "10px 18px",
+            borderRadius: 8,
+            fontWeight: 500,
+            fontSize: 13,
+            border: "1px solid rgba(255,255,255,0.12)",
           }}
         >
-          WhatsApp +91 63623 46498
+          Urgent? WhatsApp support
         </a>
         <p
           style={{
@@ -84,11 +95,11 @@ export default function MaintenancePage() {
             fontSize: 10,
             letterSpacing: "0.18em",
             textTransform: "uppercase",
-            color: "rgba(255,255,255,0.4)",
-            marginTop: 32,
+            color: "rgba(255,255,255,0.3)",
+            marginTop: 40,
           }}
         >
-          For order status · track via Shiprocket SMS
+          Ref: 503-upstream-gateway-timeout
         </p>
       </div>
     </main>
