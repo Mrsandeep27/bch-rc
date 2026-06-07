@@ -67,28 +67,12 @@ export default function MaintenancePage() {
             fontSize: 14,
             lineHeight: 1.55,
             color: "rgba(255,255,255,0.6)",
-            margin: "0 0 28px 0",
+            margin: "0",
           }}
         >
-          The server is unreachable right now. We&rsquo;re looking into it.
-          Please try again in a few minutes.
+          The server is unreachable right now. Please try again in a few
+          minutes.
         </p>
-        <a
-          href="https://wa.me/916362346498"
-          style={{
-            display: "inline-block",
-            background: "rgba(255,255,255,0.08)",
-            color: "rgba(255,255,255,0.85)",
-            textDecoration: "none",
-            padding: "10px 18px",
-            borderRadius: 8,
-            fontWeight: 500,
-            fontSize: 13,
-            border: "1px solid rgba(255,255,255,0.12)",
-          }}
-        >
-          Urgent? WhatsApp support
-        </a>
         <p
           style={{
             fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
