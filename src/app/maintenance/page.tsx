@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Down for maintenance — Pocket RC Cars",
   description:
-    "Pocket RC Cars is offline for scheduled maintenance. WhatsApp +91 90080 09390 for orders.",
+    "Pocket RC Cars is offline for scheduled maintenance. WhatsApp +91 63623 46498 for orders.",
   robots: { index: false, follow: false },
 };
 
@@ -64,7 +64,7 @@ export default function MaintenancePage() {
           orders are unaffected and ship as scheduled from Bangalore.
         </p>
         <a
-          href="https://wa.me/919008009390"
+          href="https://wa.me/916362346498"
           style={{
             display: "inline-block",
             background: "#25D366",
@@ -76,7 +76,7 @@ export default function MaintenancePage() {
             fontSize: 14,
           }}
         >
-          WhatsApp +91 90080 09390
+          WhatsApp +91 63623 46498
         </a>
         <p
           style={{
