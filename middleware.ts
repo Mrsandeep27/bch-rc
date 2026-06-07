@@ -27,7 +27,74 @@ import {
   shouldTrackPath,
 } from "@/lib/analytics";
 
+// MAINTENANCE MODE — gated by env var. Runs BEFORE Supabase/analytics so a
+// paused site doesn't waste a DB round-trip on every request. Toggle via
+// Vercel dashboard: set MAINTENANCE_MODE=true → site rewrites every route
+// to /maintenance with HTTP 503 (Google reads 503 + Retry-After as
+// "temporary, do not de-index"). Set it back to false (or delete) → live.
+//
+// Tolerant of BOM/CRLF/whitespace/case because PowerShell's
+// `"true" | vercel env add` pipeline silently mangles the value.
+//
+// Operator bypass: set MAINTENANCE_BYPASS_TOKEN in Vercel, visit
+// /?unlock=<token> once — a 7-day cookie lets you preview the live site
+// while it stays down for everyone else.
+const MAINT_BYPASS_COOKIE = "prc_maint_bypass";
+
+function maintenanceCheck(request: NextRequest): NextResponse | null {
+  const raw = (process.env.MAINTENANCE_MODE ?? "")
+    .replace(/^﻿/, "")
+    .trim()
+    .toLowerCase();
+  if (raw !== "true" && raw !== "1" && raw !== "on") return null;
+
+  const { pathname, searchParams } = request.nextUrl;
+
+  // Allow the maintenance page itself + Next plumbing + crawler files so
+  // Google can still see robots.txt / sitemap.xml correctly.
+  if (
+    pathname === "/maintenance" ||
+    pathname.startsWith("/_next/") ||
+    pathname === "/favicon.ico" ||
+    pathname === "/robots.txt" ||
+    pathname === "/sitemap.xml" ||
+    pathname.startsWith("/logo/")
+  ) {
+    return null;
+  }
+
+  // Operator bypass: ?unlock=<token> sets a cookie, then every request from
+  // this browser sees the live site for 7 days.
+  const bypassToken = process.env.MAINTENANCE_BYPASS_TOKEN;
+  if (bypassToken) {
+    if (searchParams.get("unlock") === bypassToken) {
+      const res = NextResponse.next();
+      res.cookies.set(MAINT_BYPASS_COOKIE, bypassToken, {
+        maxAge: 60 * 60 * 24 * 7,
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+      });
+      return res;
+    }
+    if (request.cookies.get(MAINT_BYPASS_COOKIE)?.value === bypassToken) {
+      return null;
+    }
+  }
+
+  const url = request.nextUrl.clone();
+  url.pathname = "/maintenance";
+  url.search = "";
+  return NextResponse.rewrite(url, {
+    status: 503,
+    headers: { "Retry-After": "3600" },
+  });
+}
+
 export async function middleware(request: NextRequest, event: NextFetchEvent) {
+  const maintResponse = maintenanceCheck(request);
+  if (maintResponse) return maintResponse;
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
