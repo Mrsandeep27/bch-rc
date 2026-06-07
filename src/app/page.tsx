@@ -86,24 +86,20 @@ export default function Page() {
             relievers also live in the hero. */}
         <TrustMarquee />
 
-        {/* F02 — three proofs (UGC, founder guarantee via Our Story,
-            scale shot via OurStorySection's MapPin card) lifted ABOVE
-            the SkuLineup first-buy decision. Previously the buyer hit
-            "Add to cart" before seeing any social proof or founder
-            promise. New order: hero -> mini-FAQ -> spec marquee ->
-            Our Story (founder + warehouse proof) -> UGC (social proof)
-            -> SkuLineup (first buy) -> FeatureCarousel ->
-            BundlePicker -> OfferStack -> FAQ -> FinalCta.
+        {/* Order: hero -> mini-FAQ -> spec marquee -> SkuLineup (PRODUCTS
+            high so the buyer can shop immediately) -> Our Story (founder
+            + warehouse proof) -> UGC (social proof) -> FeatureCarousel
+            -> BundlePicker -> ValueStack -> FAQ -> FinalCta.
             Each below-fold section is wrapped with .cv-auto so the
             browser skips paint/layout for off-screen content. */}
+        <div className="cv-auto">
+          <SkuLineup />
+        </div>
         <div className="cv-auto">
           <OurStorySection />
         </div>
         <div className="cv-auto">
           <UgcGrid />
-        </div>
-        <div className="cv-auto">
-          <SkuLineup />
         </div>
         <div className="cv-auto">
           <FeatureCarousel />
