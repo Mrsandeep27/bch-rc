@@ -24,8 +24,7 @@ const REVIEWS: Review[] = [
     rating: 5,
     date: "3 days ago",
     title: "Drifts on tile like a pro",
-    body:
-      "Got the BMW for my son's birthday. He's been drifting it in the hallway for hours. Build quality genuinely surprised me at this price.",
+    body: "Son's been drifting it in the hallway for hours. Build genuinely surprised me.",
     verified: true,
     forSkuId: "pocket-bmw",
   },
@@ -35,8 +34,7 @@ const REVIEWS: Review[] = [
     rating: 5,
     date: "1 week ago",
     title: "Best ₹1,299 I've spent",
-    body:
-      "Ordered the Porsche for a corporate gift. The packaging is properly premium, looks like a ₹3k product. Delivered in 2 days.",
+    body: "Corporate gift. Packaging looks like a ₹3k product. Delivered in 2 days.",
     verified: true,
     forSkuId: "pocket-porsche",
   },
@@ -46,8 +44,7 @@ const REVIEWS: Review[] = [
     rating: 4,
     date: "2 weeks ago",
     title: "Wheels are the real magic",
-    body:
-      "The drift wheel swap takes literally 5 seconds. Got it for myself, not gonna lie. Battery is ~20 min like advertised. -1 only because I wish charge time was faster.",
+    body: "Wheel swap takes 5 seconds. Battery ~20 min as advertised. Wish charge was faster.",
     verified: true,
     forSkuId: "pocket-bmw",
   },
@@ -57,8 +54,7 @@ const REVIEWS: Review[] = [
     rating: 5,
     date: "2 weeks ago",
     title: "Monster Truck climbs everything",
-    body:
-      "Got it as a Diwali gift for my nephew. He's climbing cushions, books, his sister's homework pile. 4WD is real. LED bar looks great at night.",
+    body: "Diwali gift for my nephew. Climbing cushions, books, everything. 4WD is real.",
     verified: true,
     forSkuId: "pocket-monster",
   },
@@ -68,8 +64,7 @@ const REVIEWS: Review[] = [
     rating: 5,
     date: "3 weeks ago",
     title: "Thar nails the Mahindra look",
-    body:
-      "Honestly thought this would look cheap based on price. The body finish is glossy, decals are sharp, doors don't open but who cares at 1:64. Solid buy.",
+    body: "Thought it'd look cheap. Glossy finish, sharp decals. Solid buy.",
     verified: true,
     forSkuId: "pocket-thar",
   },
@@ -79,8 +74,7 @@ const REVIEWS: Review[] = [
     rating: 5,
     date: "3 weeks ago",
     title: "Pocket F1 = office desk MVP",
-    body:
-      "I bought 2 — one for my desk, one for the team's. Tournaments break out at lunch now. Charges over USB-C from my laptop.",
+    body: "Bought 2 — one for my desk, one for the team. Lunch tournaments now.",
     verified: true,
     forSkuId: "pocket-f1-classic",
   },

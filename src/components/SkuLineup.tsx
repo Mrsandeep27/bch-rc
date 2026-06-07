@@ -235,12 +235,9 @@ function SkuCard({ sku, index, stockMap }: SkuCardProps) {
           </button>
         </div>
 
-        {/* P15 - Voss accusation-audit. Name the IG-scam fear out loud at
-            the tap so it doesn't sit unspoken between brain and button.
-            Sits below the buy lane so the reassurance is the last text
-            before the click. */}
+        {/* P15 - Voss accusation-audit kept to a 5-word reliever. */}
         <div className="text-[10px] text-brand-ink-soft -mt-0.5 leading-snug pointer-events-none">
-          Worried it&apos;s an IG scam? Pay nothing now — COD, on delivery.
+          Pay nothing now · COD on delivery
         </div>
       </div>
     </motion.div>
@@ -271,9 +268,8 @@ export default function SkuLineup() {
         <h2 className="text-3xl sm:text-4xl font-bold text-brand-ink text-center text-balance">
           Pick your RC car.
         </h2>
-        <p className="text-brand-ink-soft text-center mt-2 text-base sm:text-lg">
-          5 die-cast 1:64 RC cars built for drift · from ₹999 online · ships in
-          24&nbsp;hrs from Bangalore.
+        <p className="text-brand-ink-soft text-center mt-2 text-sm sm:text-base">
+          5 cars · from ₹999 · ships from Bangalore
         </p>
       </div>
 
@@ -288,7 +284,7 @@ export default function SkuLineup() {
         <div className="mt-5 sm:mt-8 flex justify-center">
           <span className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-brand-ink text-white text-xs sm:text-sm font-mono font-semibold uppercase tracking-widest">
             <span className="w-2 h-2 rounded-full bg-brand-red animate-pulse" />
-            More drift cars dropping soon · stay tuned
+            More dropping soon
           </span>
         </div>
       </div>
