@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Image from "next/image";
 import {
   Printer,
   FileText,
@@ -9,11 +8,14 @@ import {
   Loader2,
   MapPin,
   AlertCircle,
+  Package,
+  X,
 } from "lucide-react";
 import {
   printLabelAction,
   printInvoiceAction,
   markDispatchedAction,
+  cancelOrderFromPackAction,
 } from "./actions";
 
 type Props = {
@@ -61,7 +63,9 @@ export function PackOrderRow({
   showActions,
 }: Props) {
   const [busy, startTransition] = useTransition();
-  const [busyKind, setBusyKind] = useState<"label" | "invoice" | "dispatch" | null>(null);
+  const [busyKind, setBusyKind] = useState<
+    "label" | "invoice" | "dispatch" | "cancel" | null
+  >(null);
   const [error, setError] = useState<string | null>(null);
 
   function handlePrintLabel() {
@@ -104,6 +108,23 @@ export function PackOrderRow({
     });
   }
 
+  function handleCancel() {
+    // Browser confirm avoids accidental cancels — packing employee may
+    // tap this by mistake in a busy queue.
+    const reason = window.prompt(
+      `Cancel order ${orderId}?\n\nType a short reason (e.g. "test order", "wrong address"). Cancelling here also cancels the Shiprocket shipment.`,
+      "test order",
+    );
+    if (!reason || reason.trim().length < 2) return;
+    setError(null);
+    setBusyKind("cancel");
+    startTransition(async () => {
+      const result = await cancelOrderFromPackAction(orderId, reason.trim());
+      setBusyKind(null);
+      if (!result.ok) setError(result.error);
+    });
+  }
+
   const isCod = paymentMethod === "COD";
   const itemCount = items.reduce((s, i) => s + i.qty, 0);
 
@@ -138,29 +159,7 @@ export function PackOrderRow({
       <div className="mt-3 grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3">
         <div className="space-y-2">
           {items.map((it, idx) => (
-            <div key={idx} className="flex items-center gap-2.5">
-              {it.image ? (
-                <div className="relative w-9 h-9 rounded bg-brand-cream overflow-hidden shrink-0">
-                  <Image
-                    src={it.image}
-                    alt={it.name}
-                    fill
-                    sizes="36px"
-                    className="object-contain p-0.5"
-                  />
-                </div>
-              ) : (
-                <div className="w-9 h-9 rounded bg-brand-cream shrink-0" />
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium leading-tight truncate">
-                  {it.name}
-                </div>
-                <div className="text-[11px] text-brand-ink-soft">
-                  Qty {it.qty}
-                </div>
-              </div>
-            </div>
+            <PackOrderItem key={idx} item={it} />
           ))}
         </div>
 
@@ -224,6 +223,19 @@ export function PackOrderRow({
             Invoice
           </button>
           <button
+            onClick={handleCancel}
+            disabled={busy}
+            title="Cancel order (test / wrong address)"
+            className="inline-flex items-center gap-1.5 bg-white border border-brand-line hover:border-brand-red hover:text-brand-red text-brand-ink-soft text-xs font-semibold px-3 py-2 rounded-lg disabled:opacity-50 transition-colors"
+          >
+            {busyKind === "cancel" ? (
+              <Loader2 size={13} className="animate-spin" />
+            ) : (
+              <X size={13} />
+            )}
+            Cancel
+          </button>
+          <button
             onClick={handleMarkDispatched}
             disabled={busy}
             className="inline-flex items-center gap-1.5 bg-success hover:bg-success/90 text-white text-xs font-semibold px-3 py-2 rounded-lg disabled:opacity-50 transition-colors ml-auto"
@@ -252,6 +264,51 @@ export function PackOrderRow({
           {error}
         </p>
       )}
+    </div>
+  );
+}
+
+/**
+ * One line-item row inside an order card. Bigger 56x56 thumbnail than the
+ * old 36x36 so the packer can identify the SKU/colour at a glance from
+ * across the table.
+ *
+ * Uses a plain <img> instead of next/image: the items snapshot's image
+ * field is sometimes null (older orders) or a path that the Next image
+ * optimizer chokes on; the optimizer failure was the bug Syed saw. The
+ * onError fallback swaps in a Package icon so a broken-image glyph never
+ * appears in the packing list.
+ */
+function PackOrderItem({
+  item,
+}: {
+  item: { name: string; qty: number; image?: string | null };
+}) {
+  const [failed, setFailed] = useState(false);
+  const showImg = !!item.image && !failed;
+  return (
+    <div className="flex items-center gap-3">
+      <div className="relative w-14 h-14 rounded-md bg-brand-cream overflow-hidden shrink-0 flex items-center justify-center">
+        {showImg ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={item.image ?? ""}
+            alt={item.name}
+            className="w-full h-full object-contain p-1"
+            loading="lazy"
+            decoding="async"
+            onError={() => setFailed(true)}
+          />
+        ) : (
+          <Package size={22} className="text-brand-ink-soft" />
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-semibold leading-tight">{item.name}</div>
+        <div className="text-[11px] text-brand-ink-soft font-mono uppercase tracking-widest mt-0.5">
+          Qty {item.qty}
+        </div>
+      </div>
     </div>
   );
 }

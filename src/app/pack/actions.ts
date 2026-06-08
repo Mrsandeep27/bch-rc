@@ -236,6 +236,68 @@ export async function markDispatchedAction(
 }
 
 // ============================================================
+// Cancel an order from /pack (test / smoke / wrong-address cleanup)
+//
+// Moves the order to CANCELLED and cancels the corresponding Shiprocket
+// order so we aren't billed for an AWB we won't ship. Refund of any
+// captured prepaid payment is NOT triggered here — that stays an admin
+// action so the packer can't accidentally trigger a refund.
+// ============================================================
+export async function cancelOrderFromPackAction(
+  orderId: string,
+  reason: string,
+): Promise<ActionResult<{ status: "CANCELLED" }>> {
+  const denied = await gate();
+  if (denied) return denied;
+
+  const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
+  if (!order) return { ok: false, error: "Order not found." };
+  if (
+    order.status === "SHIPPED" ||
+    order.status === "DELIVERED" ||
+    order.status === "RETURNED"
+  ) {
+    return {
+      ok: false,
+      error: `Order is ${order.status} - too late to cancel from here. Use /admin.`,
+    };
+  }
+  if (order.status === "CANCELLED" || order.status === "REFUNDED") {
+    return { ok: false, error: `Order is already ${order.status}.` };
+  }
+
+  // Best-effort cancel on Shiprocket so we don't pay for an AWB we won't use.
+  // Errors are logged but do not block the local DB cancel - admin can clean
+  // up Shiprocket separately if needed.
+  if (order.shiprocketOrderId) {
+    try {
+      const { cancelShiprocketOrder } = await import("@/lib/shiprocket");
+      await cancelShiprocketOrder(order.shiprocketOrderId);
+    } catch (err) {
+      logError("pack:cancel-shiprocket", err, { orderId });
+    }
+  }
+
+  const now = new Date();
+  await db
+    .update(orders)
+    .set({ status: "CANCELLED", cancelledAt: now, updatedAt: now })
+    .where(eq(orders.id, orderId));
+
+  await db.insert(events).values({
+    siteId: order.siteId,
+    orderId: order.id,
+    customerId: order.customerId,
+    type: "CANCELLED_FROM_PACK",
+    payload: { reason: reason.slice(0, 200), cancelledBy: "pack-console" },
+    source: "operator",
+  });
+
+  revalidatePath("/pack");
+  return { ok: true, status: "CANCELLED" };
+}
+
+// ============================================================
 // Bulk mark dispatched — used when the courier picks up a whole batch
 // ============================================================
 export async function markBulkDispatchedAction(
