@@ -195,33 +195,43 @@ export function PackOrderRow({
         </div>
       )}
 
-      {/* Actions */}
-      {showActions && awbCode && (
+      {/* Actions
+          Cancel is available whenever the order is still cancellable
+          (PAID or PACKED, AWB or not), so the packer can kill a test
+          order that's stuck in AWB-pending. Print label / Invoice /
+          Mark dispatched only appear after the AWB lands, since they
+          all need the Shiprocket shipment_id. The whole block is gated
+          on showActions which the page sets to false on Dispatched. */}
+      {showActions && (
         <div className="mt-3 flex flex-wrap gap-2">
-          <button
-            onClick={handlePrintLabel}
-            disabled={busy}
-            className="inline-flex items-center gap-1.5 bg-brand-ink hover:bg-brand-ink-soft text-white text-xs font-semibold px-3 py-2 rounded-lg disabled:opacity-50 transition-colors"
-          >
-            {busyKind === "label" ? (
-              <Loader2 size={13} className="animate-spin" />
-            ) : (
-              <Printer size={13} />
-            )}
-            Print label
-          </button>
-          <button
-            onClick={handlePrintInvoice}
-            disabled={busy}
-            className="inline-flex items-center gap-1.5 bg-white border border-brand-line hover:border-brand-ink text-brand-ink text-xs font-semibold px-3 py-2 rounded-lg disabled:opacity-50 transition-colors"
-          >
-            {busyKind === "invoice" ? (
-              <Loader2 size={13} className="animate-spin" />
-            ) : (
-              <FileText size={13} />
-            )}
-            Invoice
-          </button>
+          {awbCode && (
+            <>
+              <button
+                onClick={handlePrintLabel}
+                disabled={busy}
+                className="inline-flex items-center gap-1.5 bg-brand-ink hover:bg-brand-ink-soft text-white text-xs font-semibold px-3 py-2 rounded-lg disabled:opacity-50 transition-colors"
+              >
+                {busyKind === "label" ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : (
+                  <Printer size={13} />
+                )}
+                Print label
+              </button>
+              <button
+                onClick={handlePrintInvoice}
+                disabled={busy}
+                className="inline-flex items-center gap-1.5 bg-white border border-brand-line hover:border-brand-ink text-brand-ink text-xs font-semibold px-3 py-2 rounded-lg disabled:opacity-50 transition-colors"
+              >
+                {busyKind === "invoice" ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : (
+                  <FileText size={13} />
+                )}
+                Invoice
+              </button>
+            </>
+          )}
           <button
             onClick={handleCancel}
             disabled={busy}
@@ -235,23 +245,25 @@ export function PackOrderRow({
             )}
             Cancel
           </button>
-          <button
-            onClick={handleMarkDispatched}
-            disabled={busy}
-            className="inline-flex items-center gap-1.5 bg-success hover:bg-success/90 text-white text-xs font-semibold px-3 py-2 rounded-lg disabled:opacity-50 transition-colors ml-auto"
-          >
-            {busyKind === "dispatch" ? (
-              <Loader2 size={13} className="animate-spin" />
-            ) : (
-              <Check size={13} />
-            )}
-            Mark dispatched
-          </button>
+          {awbCode && (
+            <button
+              onClick={handleMarkDispatched}
+              disabled={busy}
+              className="inline-flex items-center gap-1.5 bg-success hover:bg-success/90 text-white text-xs font-semibold px-3 py-2 rounded-lg disabled:opacity-50 transition-colors ml-auto"
+            >
+              {busyKind === "dispatch" ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <Check size={13} />
+              )}
+              Mark dispatched
+            </button>
+          )}
         </div>
       )}
 
-      {/* Empty AWB state for the AWB-pending tab */}
-      {showActions === false && !awbCode && (
+      {/* AWB-still-being-assigned hint, shown on the AWB-pending tab */}
+      {!awbCode && status !== "SHIPPED" && (
         <div className="mt-3 text-xs text-brand-ink-soft inline-flex items-center gap-1.5">
           <Loader2 size={12} className="animate-spin" />
           Shiprocket assigning AWB… usually ~30 sec.

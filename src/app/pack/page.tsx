@@ -253,7 +253,7 @@ export default async function PackPage({
               totalInr={order.totalInr}
               packedAt={order.packedAt}
               shippedAt={order.shippedAt}
-              showActions={tab === "topack"}
+              showActions={tab !== "dispatched"}
             />
           ))
         )}
