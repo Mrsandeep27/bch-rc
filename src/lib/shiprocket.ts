@@ -369,6 +369,118 @@ export async function getShipmentStatus(shipmentId: string): Promise<{
   };
 }
 
+// ============================================================
+// Document generation — label / manifest / invoice / pickup
+//
+// Used by /pack so the packing employee never has to open the
+// Shiprocket dashboard. Each helper hits a Shiprocket "generate"
+// endpoint and returns a URL to a PDF Shiprocket hosts. The PDF
+// link is short-lived (~hours) so we always re-fetch fresh on
+// click rather than caching it on the order row.
+// ============================================================
+
+/**
+ * Generate (or retrieve) the printable shipping label PDF for one or more
+ * shipments. Shiprocket returns `label_url` — a direct link to the PDF.
+ *
+ * @param shipmentIds — Shiprocket shipment IDs (we store one per order
+ *                     as orders.shiprocket_shipment_id).
+ */
+export async function generateShippingLabel(shipmentIds: string[]): Promise<{
+  labelUrl: string | null;
+  notCreated: number[];
+}> {
+  if (shipmentIds.length === 0) return { labelUrl: null, notCreated: [] };
+  type Resp = {
+    label_created: number;
+    response: string;
+    label_url?: string;
+    not_created?: number[];
+  };
+  const data = await srFetch<Resp>("/courier/generate/label", {
+    method: "POST",
+    body: JSON.stringify({
+      shipment_id: shipmentIds.map((s) => Number(s)),
+    }),
+  });
+  return {
+    labelUrl: data.label_url ?? null,
+    notCreated: data.not_created ?? [],
+  };
+}
+
+/**
+ * Generate the daily pickup manifest PDF (courier signs this on collection).
+ */
+export async function generateManifest(shipmentIds: string[]): Promise<{
+  manifestUrl: string | null;
+}> {
+  if (shipmentIds.length === 0) return { manifestUrl: null };
+  type Resp = { manifest_url?: string; status?: number };
+  const data = await srFetch<Resp>("/manifests/generate", {
+    method: "POST",
+    body: JSON.stringify({
+      shipment_id: shipmentIds.map((s) => Number(s)),
+    }),
+  });
+  return { manifestUrl: data.manifest_url ?? null };
+}
+
+/**
+ * Schedule a courier pickup for the given shipments. Returns a
+ * pickup_scheduled_date Shiprocket commits to.
+ */
+export async function schedulePickup(shipmentIds: string[]): Promise<{
+  ok: boolean;
+  pickupScheduledDate: string | null;
+  message: string;
+}> {
+  if (shipmentIds.length === 0)
+    return { ok: false, pickupScheduledDate: null, message: "no shipments" };
+  type Resp = {
+    pickup_status?: number;
+    response?: { pickup_scheduled_date?: string; pickup_token_number?: number };
+    message?: string;
+  };
+  try {
+    const data = await srFetch<Resp>("/courier/generate/pickup", {
+      method: "POST",
+      body: JSON.stringify({
+        shipment_id: shipmentIds.map((s) => Number(s)),
+      }),
+    });
+    return {
+      ok: data.pickup_status === 1,
+      pickupScheduledDate: data.response?.pickup_scheduled_date ?? null,
+      message: data.message ?? "ok",
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      pickupScheduledDate: null,
+      message: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+/**
+ * Generate the printable tax invoice PDF for one or more Shiprocket orders.
+ * NOTE: this uses Shiprocket's ORDER ids (not shipment ids).
+ */
+export async function generateInvoice(shiprocketOrderIds: string[]): Promise<{
+  invoiceUrl: string | null;
+}> {
+  if (shiprocketOrderIds.length === 0) return { invoiceUrl: null };
+  type Resp = { invoice_url?: string; not_created?: number[] };
+  const data = await srFetch<Resp>("/orders/print/invoice", {
+    method: "POST",
+    body: JSON.stringify({
+      ids: shiprocketOrderIds.map((s) => Number(s)),
+    }),
+  });
+  return { invoiceUrl: data.invoice_url ?? null };
+}
+
 /**
  * Maps Shiprocket's status text to our order_status enum.
  * Reference: Shiprocket status codes 1-19+ for various states.
