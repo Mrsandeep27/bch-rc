@@ -17,7 +17,7 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { orders, events } from "@/db/schema";
+import { orders, events, shipmentJobs } from "@/db/schema";
 import { isPackAuthenticated } from "@/lib/pack-auth";
 import {
   generateShippingLabel,
@@ -25,7 +25,22 @@ import {
   schedulePickup,
   generateInvoice,
 } from "@/lib/shiprocket";
+import { releaseOrderHoldsBestEffort } from "@/lib/inventory/release";
 import { logError } from "@/lib/logger";
+
+/**
+ * Touch every server route that displays this order's state. A single
+ * /pack revalidate would have left /admin/orders and the customer-facing
+ * /orders/[id] page showing the order as live even after cancellation.
+ */
+function revalidateOrderEverywhere(orderId: string): void {
+  revalidatePath("/pack");
+  revalidatePath("/cod");
+  revalidatePath("/admin/orders");
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath("/track");
+}
 
 type ActionResult<T = unknown> =
   | ({ ok: true } & T)
@@ -231,7 +246,7 @@ export async function markDispatchedAction(
     source: "operator",
   });
 
-  revalidatePath("/pack");
+  revalidateOrderEverywhere(orderId);
   return { ok: true, status: "SHIPPED" };
 }
 
@@ -278,6 +293,24 @@ export async function cancelOrderFromPackAction(
     }
   }
 
+  // Park any pending shipment job for this order so the queue worker stops
+  // retrying. Without this, a still-PENDING job keeps calling the Shiprocket
+  // create-order API every retry-backoff window and failing with
+  // NotShippableError until max_attempts. The order is gone — the job is too.
+  await db
+    .update(shipmentJobs)
+    .set({
+      status: "FAILED",
+      lastError: `Order cancelled from pack: ${reason.slice(0, 100)}`,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(shipmentJobs.orderId, orderId),
+        inArray(shipmentJobs.status, ["PENDING", "PROCESSING"]),
+      ),
+    );
+
   const now = new Date();
   await db
     .update(orders)
@@ -293,7 +326,13 @@ export async function cancelOrderFromPackAction(
     source: "operator",
   });
 
-  revalidatePath("/pack");
+  // Return the reserved stock + any redeemed coupon back to the pool. This
+  // is the same exactly-once release the COD reject path and the failed-
+  // payment webhook use — without it, the SKU shows the same depleted
+  // stock on the storefront even though the test order is dead.
+  await releaseOrderHoldsBestEffort(orderId, "CANCELLED");
+
+  revalidateOrderEverywhere(orderId);
   return { ok: true, status: "CANCELLED" };
 }
 
@@ -330,5 +369,6 @@ export async function markBulkDispatchedAction(
     .where(inArray(orders.id, dispatchable));
 
   revalidatePath("/pack");
+  revalidatePath("/admin/orders");
   return { ok: true, count: dispatchable.length };
 }
