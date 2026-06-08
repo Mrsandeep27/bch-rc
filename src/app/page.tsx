@@ -26,6 +26,9 @@ export const revalidate = 3600;
 const FeatureCarousel = dynamic(() => import("@/components/FeatureCarousel"), {
   loading: () => <Skeleton className="h-80 w-full max-w-7xl mx-auto my-12" />,
 });
+const HowToUse = dynamic(() => import("@/components/HowToUse"), {
+  loading: () => <Skeleton className="h-64 w-full max-w-6xl mx-auto my-12" />,
+});
 const OurStorySection = dynamic(() => import("@/components/OurStorySection"), {
   loading: () => <Skeleton className="h-96 w-full max-w-7xl mx-auto my-12" />,
 });
@@ -103,6 +106,9 @@ export default function Page() {
         </div>
         <div className="cv-auto">
           <FeatureCarousel />
+        </div>
+        <div className="cv-auto">
+          <HowToUse />
         </div>
         <div className="cv-auto">
           <BundlePicker />
