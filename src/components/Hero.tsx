@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Truck, ShieldCheck } from "lucide-react";
 import { HERO_VARIANTS, type HeroVariant } from "@/lib/copy";
@@ -54,24 +54,62 @@ export default function Hero({
     useCart.getState().open();
   };
 
+  // Hero video — autoplay muted loop with a poster for instant first paint.
+  // Respects prefers-reduced-motion by pausing the video (poster stays visible),
+  // so users with vestibular sensitivities get the still frame instead of motion.
+  // The mobile source ships ~half the bytes of the desktop rendition; the
+  // browser picks based on `media` at load time.
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [videoFailed, setVideoFailed] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const apply = () => {
+      const v = videoRef.current;
+      if (!v) return;
+      if (mq.matches) v.pause();
+      else void v.play().catch(() => {});
+    };
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
   return (
     <section className="relative overflow-hidden min-h-[100svh] bg-black isolate">
-      {/* Background hero image — full-bleed.
-          On mobile: shift the focus inward (65%) so we see the car body, not
-          just the right edge. On desktop: object-right keeps the car on the
-          right half so left text gets a clean dark backdrop. */}
-      {/* Empty alt was intentional when hero was decorative behind text -
-          but with the dark gradient now reduced (BMW visible), the image
-          carries information for sighted users so screen-reader users need
-          a description too. Also helps image SEO. */}
-      <Image
-        src={THEME.heroImageSrc}
-        alt="Pocket BMW M-style 1:64 die-cast RC drift car, headlights lit, in front of a low-key red glow"
-        priority
-        fill
-        sizes="100vw"
-        className="object-cover select-none pointer-events-none [object-position:65%_center] sm:[object-position:right_center]"
-      />
+      {/* Background hero — drift video on capable clients, still BMW image as
+          fallback if the video fails or the browser can't play either source.
+          The poster is shown instantly while the video buffers, so first paint
+          is identical to the still-image hero on slow connections. */}
+      {videoFailed ? (
+        <Image
+          src={THEME.heroImageSrc}
+          alt="Pocket BMW M-style 1:64 die-cast RC drift car, headlights lit, in front of a low-key red glow"
+          priority
+          fill
+          sizes="100vw"
+          className="object-cover select-none pointer-events-none [object-position:65%_center] sm:[object-position:right_center]"
+        />
+      ) : (
+        <video
+          ref={videoRef}
+          poster="/hero/drift-poster.jpg"
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          aria-label="Pocket BMW M-style 1:64 die-cast RC drift car drifting on a smooth floor"
+          onError={() => setVideoFailed(true)}
+          className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none [object-position:50%_center] sm:[object-position:50%_center]"
+        >
+          <source
+            src="/hero/drift-mobile.mp4"
+            type="video/mp4"
+            media="(max-width: 768px)"
+          />
+          <source src="/hero/drift.mp4" type="video/mp4" />
+        </video>
+      )}
 
       {/* Readability gradient.
           Mobile: dark only at the very top (so H1 + body copy stay readable)

@@ -69,6 +69,12 @@ public/WhatsApp*.ogg
 public/ugc/_orig/
 public/ugc/*.raw.*
 
+# Hero video source masters — kept at repo root for re-encoding, the optimized
+# renditions ship from public/hero/. Originals are too big for git.
+/Rc Cars Driving.mp4
+/*.MOV
+/*.mov
+
 # vercel
 .vercel
 
