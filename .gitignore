@@ -75,6 +75,10 @@ public/ugc/*.raw.*
 /*.MOV
 /*.mov
 
+# Scratch directory for raw source media + one-off optimization scripts.
+# Outputs land under public/ and ARE committed; the raw inputs are not.
+/.scratch/
+
 # vercel
 .vercel
 

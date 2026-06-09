@@ -29,6 +29,12 @@ const FeatureCarousel = dynamic(() => import("@/components/FeatureCarousel"), {
 const HowToUse = dynamic(() => import("@/components/HowToUse"), {
   loading: () => <Skeleton className="h-64 w-full max-w-6xl mx-auto my-12" />,
 });
+const CustomerReviewsSlider = dynamic(
+  () => import("@/components/CustomerReviewsSlider"),
+  {
+    loading: () => <Skeleton className="h-96 w-full mx-auto my-12" />,
+  },
+);
 const OurStorySection = dynamic(() => import("@/components/OurStorySection"), {
   loading: () => <Skeleton className="h-96 w-full max-w-7xl mx-auto my-12" />,
 });
@@ -90,13 +96,17 @@ export default function Page() {
         <TrustMarquee />
 
         {/* Order: hero -> mini-FAQ -> spec marquee -> SkuLineup (PRODUCTS
-            high so the buyer can shop immediately) -> Our Story (founder
-            + warehouse proof) -> UGC (social proof) -> FeatureCarousel
-            -> BundlePicker -> ValueStack -> FAQ -> FinalCta.
+            high so the buyer can shop immediately) -> CustomerReviews
+            slider (real buyer photos, immediate social proof after the
+            shop) -> Our Story (founder + warehouse) -> UGC -> Features
+            -> HowToUse -> BundlePicker -> ValueStack -> FAQ -> FinalCta.
             Each below-fold section is wrapped with .cv-auto so the
             browser skips paint/layout for off-screen content. */}
         <div className="cv-auto">
           <SkuLineup />
+        </div>
+        <div className="cv-auto">
+          <CustomerReviewsSlider />
         </div>
         <div className="cv-auto">
           <OurStorySection />
