@@ -10,12 +10,11 @@ import { waLink } from "@/lib/config";
 import { THEME } from "@/lib/theme";
 
 const QUICK_LINKS = [
-  { label: "Home", href: "/" },
-  { label: "Shop the lineup", href: "/#sku" },
+  { label: "Shop", href: "/#sku" },
   { label: "Track order", href: "/track" },
-  { label: "Privacy Policy", href: "/policies/privacy" },
-  { label: "Terms of Service", href: "/policies/terms" },
-  { label: "Shipping & Replacement", href: "/policies/shipping" },
+  { label: "Privacy", href: "/policies/privacy" },
+  { label: "Terms", href: "/policies/terms" },
+  { label: "Shipping", href: "/policies/shipping" },
 ] as const;
 
 // Google Maps embed for Yelahanka 1st Stage HQ (Bharath Cycle Hub registered
@@ -27,12 +26,13 @@ const MAP_LINK = "https://maps.google.com/?q=" + encodeURIComponent(
 
 export default function Footer() {
   return (
-    <footer className="bg-brand-ink text-white pt-10 sm:pt-12 pb-6">
+    <footer className="bg-brand-ink text-white pt-6 sm:pt-12 pb-5 sm:pb-6">
       <div className="max-w-6xl mx-auto px-4">
-        {/* Top grid — mobile: logo full-width, then 2-col contact/links,
-            then map full-width. Desktop: standard 4 columns. */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-8 sm:gap-y-10">
-          {/* 1. Logo + pitch + socials — spans both cols on mobile, centered */}
+        {/* Top grid - tighter mobile spacing. Map block hides under lg so
+            the mobile footer stays compact; the same info reappears as a
+            single inline link inside Contact Us. */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-5 sm:gap-y-10">
+          {/* 1. Logo + pitch + socials */}
           <div className="col-span-2 lg:col-span-1 flex flex-col items-center text-center lg:items-start lg:text-left">
             <Link href="/" aria-label={`${THEME.brandName} home`}>
               <Image
@@ -40,62 +40,57 @@ export default function Footer() {
                 alt={THEME.brandName}
                 width={826}
                 height={304}
-                className="h-12 sm:h-14 w-auto"
+                className="h-9 sm:h-14 w-auto"
               />
             </Link>
-            <p className="text-sm text-neutral-400 mt-3 sm:mt-4 leading-relaxed max-w-xs">
-              India&apos;s most-gifted mini RC cars — 1:64 RC drift cars.
-              Pan-India COD, ships in 24 hrs from Bangalore.
+            <p className="text-xs sm:text-sm text-neutral-400 mt-2 sm:mt-4 leading-snug sm:leading-relaxed max-w-xs">
+              <span className="sm:hidden">
+                Mini 1:64 RC drift cars · Made in Bangalore
+              </span>
+              <span className="hidden sm:inline">
+                India&apos;s most-gifted mini RC cars — 1:64 RC drift cars.
+                Pan-India COD, ships in 24 hrs from Bangalore.
+              </span>
             </p>
-            {/* Socials - Instagram first (it's the traffic source); WhatsApp
-                second (operator contact); YouTube last. All open in a new
-                tab with `noopener noreferrer` so the buy session is preserved
-                and the destination can't read window.opener. */}
-            <div className="flex items-center gap-3 mt-4 sm:mt-5">
+            <div className="flex items-center gap-3 mt-3 sm:mt-5">
               <a
                 href={`https://instagram.com/${THEME.instagramHandle}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="Instagram"
-                className="w-11 h-11 sm:w-10 sm:h-10 rounded-full bg-white/5 hover:bg-brand-red flex items-center justify-center transition-colors"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/5 hover:bg-brand-red flex items-center justify-center transition-colors"
               >
-                <InstagramIcon size={18} />
+                <InstagramIcon size={16} />
               </a>
               <a
                 href={waLink()}
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="WhatsApp"
-                className="w-11 h-11 sm:w-10 sm:h-10 rounded-full bg-white/5 hover:bg-whatsapp-green flex items-center justify-center transition-colors"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/5 hover:bg-whatsapp-green flex items-center justify-center transition-colors"
               >
-                <WhatsAppIcon size={18} />
+                <WhatsAppIcon size={16} />
               </a>
               <a
                 href="https://youtube.com/@pocketrccars"
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="YouTube"
-                className="w-11 h-11 sm:w-10 sm:h-10 rounded-full bg-white/5 hover:bg-brand-red flex items-center justify-center transition-colors"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/5 hover:bg-brand-red flex items-center justify-center transition-colors"
               >
-                <YoutubeIcon size={18} />
+                <YoutubeIcon size={16} />
               </a>
             </div>
           </div>
 
           {/* 2. Contact us */}
           <div>
-            <h3 className="font-display font-bold tracking-wider text-white text-xs sm:text-sm uppercase mb-3 sm:mb-4">
-              Contact Us
+            <h3 className="font-display font-bold tracking-wider text-white text-[11px] sm:text-sm uppercase mb-2 sm:mb-4">
+              Contact
             </h3>
-            <ul className="space-y-2.5 sm:space-y-3 text-xs sm:text-sm text-neutral-300">
-              <li className="flex items-start gap-2.5">
-                <MapPin size={16} className="text-brand-red shrink-0 mt-0.5" />
-                <span className="leading-snug">
-                  Yelahanka 1st Stage, Bengaluru 560064
-                </span>
-              </li>
-              <li className="flex items-start gap-2.5">
-                <Phone size={16} className="text-brand-red shrink-0 mt-0.5" />
+            <ul className="space-y-1.5 sm:space-y-3 text-xs sm:text-sm text-neutral-300">
+              <li className="flex items-start gap-2 sm:gap-2.5">
+                <Phone size={14} className="text-brand-red shrink-0 mt-0.5" />
                 <span className="leading-snug">
                   <a
                     href={`tel:+${THEME.whatsappNumber}`}
@@ -114,8 +109,8 @@ export default function Footer() {
                   </a>
                 </span>
               </li>
-              <li className="flex items-start gap-2.5">
-                <Mail size={16} className="text-brand-red shrink-0 mt-0.5" />
+              <li className="flex items-start gap-2 sm:gap-2.5">
+                <Mail size={14} className="text-brand-red shrink-0 mt-0.5" />
                 <a
                   href={`mailto:${THEME.email}`}
                   className="hover:text-white break-all"
@@ -123,15 +118,28 @@ export default function Footer() {
                   {THEME.email}
                 </a>
               </li>
+              {/* Compact ships-from row - replaces the dedicated map block
+                  on mobile so we save ~200 px of footer height. */}
+              <li className="flex items-start gap-2 sm:gap-2.5 lg:hidden">
+                <MapPin size={14} className="text-brand-red shrink-0 mt-0.5" />
+                <a
+                  href={MAP_LINK}
+                  target="_blank"
+                  rel="noopener"
+                  className="leading-snug hover:text-white"
+                >
+                  Yelahanka 1st Stage, Bengaluru
+                </a>
+              </li>
             </ul>
           </div>
 
-          {/* 3. Quick links */}
+          {/* 3. Quick links - 2-col grid on mobile to halve the height */}
           <div>
-            <h3 className="font-display font-bold tracking-wider text-white text-xs sm:text-sm uppercase mb-3 sm:mb-4">
-              Quick Links
+            <h3 className="font-display font-bold tracking-wider text-white text-[11px] sm:text-sm uppercase mb-2 sm:mb-4">
+              Links
             </h3>
-            <ul className="space-y-2 sm:space-y-2.5">
+            <ul className="grid grid-cols-2 gap-y-1.5 gap-x-3 sm:grid-cols-1 sm:gap-y-2.5">
               {QUICK_LINKS.map((l) => (
                 <li key={l.href}>
                   <Link
@@ -145,9 +153,10 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* 4. Ships from (Map) — spans both cols on mobile */}
-          <div className="col-span-2 lg:col-span-1">
-            <h3 className="font-display font-bold tracking-wider text-white text-xs sm:text-sm uppercase mb-3 sm:mb-4">
+          {/* 4. Ships from (Map) - DESKTOP ONLY. Mobile uses the compact
+              MapPin link inside Contact Us above. */}
+          <div className="hidden lg:block">
+            <h3 className="font-display font-bold tracking-wider text-white text-sm uppercase mb-4">
               Ships From
             </h3>
             <a
@@ -177,23 +186,18 @@ export default function Footer() {
           </div>
         </div>
 
-        {/* Bottom strip */}
-        <div className="mt-10 pt-6 border-t border-white/10 text-center">
-          <p className="text-sm text-neutral-300">
-            © 2026 {THEME.brandName}. All rights reserved.
-          </p>
-          <p className="text-xs text-brand-red mt-1">
-            Pocket-priced 1:64 drift cars · Made for India
-          </p>
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-neutral-500">
-            <span>Registered Business</span>
-            <span className="text-neutral-700">|</span>
+        {/* Bottom strip - condensed to 2 lines on mobile. */}
+        <div className="mt-5 pt-4 sm:mt-10 sm:pt-6 border-t border-white/10 text-center">
+          <p className="text-[11px] sm:text-sm text-neutral-300">
+            © 2026 {THEME.brandName}
+            <span className="text-neutral-600"> · </span>
             <span className="font-mono">GSTIN {THEME.legal.gstin}</span>
-            <span className="text-neutral-700">|</span>
-            <span>Yelahanka, Bengaluru, Karnataka</span>
-            <span className="text-neutral-700">|</span>
-            <span>Open Mon–Sun: 10AM – 8:30PM</span>
-          </div>
+          </p>
+          <p className="text-[10px] sm:text-[11px] text-neutral-500 mt-1 sm:mt-2">
+            Yelahanka, Bengaluru
+            <span className="text-neutral-700"> · </span>
+            Open Mon–Sun 10AM – 8:30PM
+          </p>
         </div>
       </div>
     </footer>
