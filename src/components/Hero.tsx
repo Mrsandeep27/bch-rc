@@ -92,7 +92,7 @@ export default function Hero({
       ) : (
         <video
           ref={videoRef}
-          poster="/hero/drift-poster.jpg"
+          poster="/hero/drift-poster.webp"
           autoPlay
           muted
           loop
@@ -176,7 +176,11 @@ export default function Hero({
             ships in 24&nbsp;hrs from Bangalore.
           </h2>
 
-          <div className="hero-anim hero-anim-delay-4 mt-7 sm:mt-9 flex flex-col items-start gap-3">
+          {/* On mobile, mt-auto absorbs the gap so the headline stays high
+              and the CTA hugs the bottom of the hero — leaves the middle
+              third of the screen open for the drift video. Desktop keeps
+              the existing centered layout via sm:mt-9. */}
+          <div className="hero-anim hero-anim-delay-4 mt-auto sm:mt-9 flex flex-col items-start gap-3">
             <button
               type="button"
               onClick={handlePrimaryCta}
