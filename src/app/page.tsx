@@ -23,9 +23,13 @@ export const revalidate = 3600;
 // is split into separate chunks that browsers fetch in parallel after the
 // hero finishes painting. Skeletons act as the suspense placeholder during
 // the brief streaming gap.
-const FeatureCarousel = dynamic(() => import("@/components/FeatureCarousel"), {
-  loading: () => <Skeleton className="h-80 w-full max-w-7xl mx-auto my-12" />,
-});
+// FeatureCarousel hidden 2026-06-09 - the 4-card grid (Drift / Pocket /
+// Charge / Race) duplicated what HowToUse already covers + the hero
+// micro-copy. Bring back by uncommenting the import and the JSX below
+// if A/B testing shows the long page benefits from the extra block.
+// const FeatureCarousel = dynamic(() => import("@/components/FeatureCarousel"), {
+//   loading: () => <Skeleton className="h-80 w-full max-w-7xl mx-auto my-12" />,
+// });
 const HowToUse = dynamic(() => import("@/components/HowToUse"), {
   loading: () => <Skeleton className="h-64 w-full max-w-6xl mx-auto my-12" />,
 });
@@ -114,9 +118,10 @@ export default function Page() {
         <div className="cv-auto">
           <UgcGrid />
         </div>
-        <div className="cv-auto">
+        {/* FeatureCarousel hidden 2026-06-09 — see import comment above */}
+        {/* <div className="cv-auto">
           <FeatureCarousel />
-        </div>
+        </div> */}
         <div className="cv-auto">
           <HowToUse />
         </div>
