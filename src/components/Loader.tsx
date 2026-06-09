@@ -15,7 +15,7 @@ export default function Loader({
       role="status"
       aria-live="polite"
     >
-      <div className="relative w-[200px] h-[100px] flex flex-col items-center justify-end overflow-x-hidden">
+      <div className="relative w-[200px] h-[100px] flex flex-col items-center justify-end overflow-hidden">
         {/* Truck body — bobbing animation */}
         <div className="w-[130px] mb-1.5 animate-truck-motion">
           <svg

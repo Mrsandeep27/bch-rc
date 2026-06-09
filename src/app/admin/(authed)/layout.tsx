@@ -63,7 +63,7 @@ export default async function AdminLayout({
         </div>
         {/* Mobile nav */}
         <div className="md:hidden border-t border-brand-ink-soft">
-          <div className="max-w-7xl mx-auto px-2 flex items-center gap-1 text-sm overflow-x-auto no-scrollbar">
+          <div className="max-w-7xl mx-auto px-2 flex items-center gap-1 text-sm overflow-x-auto overflow-y-hidden no-scrollbar">
             <NavLink href="/admin" icon={LayoutDashboard}>
               Overview
             </NavLink>

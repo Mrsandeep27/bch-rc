@@ -35,7 +35,7 @@ export default async function AdminCustomers() {
         Showing top {list.length} customers by lifetime spend across your sites.
       </p>
 
-      <div className="bg-white rounded-2xl border border-brand-line overflow-x-auto">
+      <div className="bg-white rounded-2xl border border-brand-line overflow-x-auto overflow-y-hidden">
         {list.length === 0 ? (
           <p className="px-5 py-10 text-center text-sm text-brand-ink-soft">
             No customers yet.

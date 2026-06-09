@@ -180,7 +180,7 @@ export default async function CodConsole({
           </p>
         </div>
 
-        <div className="flex gap-2 mb-5 border-b border-brand-line overflow-x-auto no-scrollbar">
+        <div className="flex gap-2 mb-5 border-b border-brand-line overflow-x-auto overflow-y-hidden no-scrollbar">
           <TabLink href="/cod" active={tab === "pending"} count={pendingCount}>
             Pending
           </TabLink>

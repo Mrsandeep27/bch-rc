@@ -110,7 +110,7 @@ export default async function AdminActivity({
       </div>
 
       {/* Type filter chips */}
-      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+      <div className="flex items-center gap-2 overflow-x-auto overflow-y-hidden no-scrollbar">
         <Chip
           href="/admin/activity"
           label="All types"
