@@ -85,7 +85,7 @@ export const PRODUCTS: Sku[] = [
     ],
     badge: "NEW",
     bodyShape: "BMW M-style sport coupe",
-    heroImage: "/products/PRC-bmw.webp",
+    heroImage: "/products/PRC-bmw-v2.webp",
     heroVideo: "/products/PRC-bmw.mp4",
     altImages: [
       "/products/PRC-bmw-2.webp",
@@ -137,9 +137,9 @@ export const PRODUCTS: Sku[] = [
     ],
     colors: [
       { name: "Dark Blue",    slug: "dark-blue",    swatch: "#1e3a8a", stock: 18, image: "/products/colors/PRC-porsche-dark-blue.webp",
-        altImages: ["/products/colors/PRC-porsche-dark-blue-2.webp","/products/colors/PRC-porsche-dark-blue-3.webp","/products/colors/PRC-porsche-dark-blue-4.webp"] },
-      { name: "Green",        slug: "green",        swatch: "#16a34a", stock: 18, image: "/products/colors/PRC-porsche-green.webp",
-        altImages: ["/products/colors/PRC-porsche-green-2.webp","/products/colors/PRC-porsche-green-3.webp","/products/colors/PRC-porsche-green-4.webp"] },
+        altImages: ["/products/colors/PRC-porsche-dark-blue-2.webp","/products/colors/PRC-porsche-dark-blue-3-v2.webp","/products/colors/PRC-porsche-dark-blue-4.webp"] },
+      { name: "Green",        slug: "green",        swatch: "#16a34a", stock: 18, image: "/products/colors/PRC-porsche-green-v2.webp",
+        altImages: ["/products/colors/PRC-porsche-green-2-v2.webp","/products/colors/PRC-porsche-green-3-v2.webp","/products/colors/PRC-porsche-green-4-v2.webp"] },
       { name: "Yellow",       slug: "yellow",       swatch: "#facc15", stock: 18, image: "/products/colors/PRC-porsche-yellow.webp",
         altImages: ["/products/colors/PRC-porsche-yellow-2.webp","/products/colors/PRC-porsche-yellow-3.webp","/products/colors/PRC-porsche-yellow-4.webp"] },
       { name: "Multi Colour", slug: "multi",        swatch: "gradient:#f97316,#facc15,#16a34a,#2563eb", stock: 18, image: "/products/colors/PRC-porsche-multi.webp",
