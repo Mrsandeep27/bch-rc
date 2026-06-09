@@ -1,11 +1,9 @@
 "use client";
 
-import Image from "next/image";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { Truck, ShieldCheck } from "lucide-react";
 import { HERO_VARIANTS, type HeroVariant } from "@/lib/copy";
-import { THEME } from "@/lib/theme";
 import { defaultVariantSlug, getHeroSku } from "@/lib/products";
 import { useCart } from "@/lib/cart-store";
 
@@ -54,13 +52,25 @@ export default function Hero({
     useCart.getState().open();
   };
 
-  // Hero video — autoplay muted loop with a poster for instant first paint.
-  // Respects prefers-reduced-motion by pausing the video (poster stays visible),
-  // so users with vestibular sensitivities get the still frame instead of motion.
-  // The mobile source ships ~half the bytes of the desktop rendition; the
-  // browser picks based on `media` at load time.
+  // Hero video — autoplay muted loop. The WebP poster shows instantly on
+  // first paint, then becomes the implicit fallback if the video stalls or
+  // can't decode: it IS the drift video's first frame, so the user always
+  // sees an on-brand still even when bytes are still arriving.
+  //
+  // preload="auto" because the file is small enough (3.16 MB mobile / 6.29 MB
+  // desktop) that proactive buffering wins the smoothness vs the bandwidth
+  // cost - and the bandwidth ISN'T saved by "metadata" since autoplay is on.
+  //
+  // Respects prefers-reduced-motion by pausing the video (poster stays
+  // visible), so users with vestibular sensitivities get the still frame
+  // instead of motion.
+  //
+  // No JS-side error fallback: the prior implementation latched a "failed"
+  // state on any transient network error and never recovered, so a single
+  // packet hiccup permanently swapped in an unrelated BMW still for the
+  // whole session. Letting the video element manage its own poster/retry is
+  // both simpler and more resilient.
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [videoFailed, setVideoFailed] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
     const apply = () => {
@@ -76,40 +86,24 @@ export default function Hero({
 
   return (
     <section className="relative overflow-hidden min-h-[100svh] bg-black isolate">
-      {/* Background hero — drift video on capable clients, still BMW image as
-          fallback if the video fails or the browser can't play either source.
-          The poster is shown instantly while the video buffers, so first paint
-          is identical to the still-image hero on slow connections. */}
-      {videoFailed ? (
-        <Image
-          src={THEME.heroImageSrc}
-          alt="Pocket BMW M-style 1:64 die-cast RC drift car, headlights lit, in front of a low-key red glow"
-          priority
-          fill
-          sizes="100vw"
-          className="object-cover select-none pointer-events-none [object-position:65%_center] sm:[object-position:right_center]"
+      <video
+        ref={videoRef}
+        poster="/hero/drift-poster.webp"
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="auto"
+        aria-label="Pocket BMW M-style 1:64 die-cast RC drift car drifting on a smooth floor"
+        className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none [object-position:50%_center] sm:[object-position:50%_center]"
+      >
+        <source
+          src="/hero/drift-mobile.mp4"
+          type="video/mp4"
+          media="(max-width: 768px)"
         />
-      ) : (
-        <video
-          ref={videoRef}
-          poster="/hero/drift-poster.webp"
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="metadata"
-          aria-label="Pocket BMW M-style 1:64 die-cast RC drift car drifting on a smooth floor"
-          onError={() => setVideoFailed(true)}
-          className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none [object-position:50%_center] sm:[object-position:50%_center]"
-        >
-          <source
-            src="/hero/drift-mobile.mp4"
-            type="video/mp4"
-            media="(max-width: 768px)"
-          />
-          <source src="/hero/drift.mp4" type="video/mp4" />
-        </video>
-      )}
+        <source src="/hero/drift.mp4" type="video/mp4" />
+      </video>
 
       {/* Readability gradient.
           Mobile: dark only at the very top (so H1 + body copy stay readable)
