@@ -112,13 +112,49 @@ export default function CustomerReviewsSlider() {
     track.addEventListener("touchstart", pauseTemporarily, { passive: true });
     track.addEventListener("touchmove", pauseTemporarily, { passive: true });
     track.addEventListener("wheel", pauseTemporarily, { passive: true });
-    track.addEventListener("pointerdown", pauseTemporarily);
     track.addEventListener("mouseenter", pauseIndefinitely);
     track.addEventListener("mouseleave", resume);
+
+    // Desktop click-and-drag horizontal scroll. Native overflow-x scroll
+    // doesn't expose drag-to-scroll on a mouse - only via the scrollbar
+    // (which we hide) or shift+wheel (which most users don't know). So we
+    // wire mousedown/move/up to push scrollLeft proportional to drag
+    // distance. Touch is already handled natively by the browser's momentum
+    // scrolling - this only fires for mouse pointers.
+    let isDragging = false;
+    let dragStartX = 0;
+    let dragStartScroll = 0;
+
+    const onMouseDown = (e: MouseEvent) => {
+      isDragging = true;
+      dragStartX = e.pageX;
+      dragStartScroll = track.scrollLeft;
+      track.style.cursor = "grabbing";
+      // Prevent text/image selection from kicking in during the drag.
+      e.preventDefault();
+    };
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return;
+      track.scrollLeft = dragStartScroll - (e.pageX - dragStartX);
+    };
+    const endDrag = () => {
+      if (!isDragging) return;
+      isDragging = false;
+      track.style.cursor = "grab";
+    };
+
+    track.addEventListener("mousedown", onMouseDown);
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", endDrag);
+    // If the mouse leaves the viewport while dragging, release.
+    window.addEventListener("blur", endDrag);
 
     return () => {
       cancelAnimationFrame(rafId);
       mq.removeEventListener("change", onMqChange);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", endDrag);
+      window.removeEventListener("blur", endDrag);
     };
   }, []);
 
@@ -146,7 +182,7 @@ export default function CustomerReviewsSlider() {
         ref={trackRef}
         role="region"
         aria-label="Customer photo gallery — auto-scrolling, drag or swipe to browse"
-        className="overflow-x-auto overflow-y-hidden no-scrollbar"
+        className="overflow-x-auto overflow-y-hidden no-scrollbar select-none cursor-grab"
       >
         <ul className="flex gap-3 sm:gap-4 px-4 w-max">
           {[...REVIEWS, ...REVIEWS].map((r, i) => (
