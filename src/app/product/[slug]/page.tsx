@@ -7,17 +7,13 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import PdpFloatingUi from "@/components/PdpFloatingUi";
 import PDPClient from "@/components/PDPClient";
-import PdpReviews from "@/components/PdpReviews";
 import { THEME } from "@/lib/theme";
 import { OFFERS } from "@/lib/config";
 import { getReviewAggregateForSku } from "@/lib/reviews";
 
 /** Build a Google-readable schema.org @graph blob for a SKU.
  *  Combines Product + BreadcrumbList in one script tag — Google parses both. */
-function productJsonLd(
-  sku: Sku,
-  agg?: { count: number; averageRating: number },
-) {
+function productJsonLd(sku: Sku) {
   const url = `https://${THEME.domain}/product/${sku.slug}`;
   const images = [sku.heroImage, ...sku.altImages]
     .filter(Boolean)
@@ -76,21 +72,6 @@ function productJsonLd(
         },
       },
     },
-    // X06 - AggregateRating included ONLY when there are real moderated
-    // reviews for this SKU. Empty -> field omitted -> Google won't show a
-    // fake-looking star rating. Once R01 starts collecting we'll naturally
-    // light up here.
-    ...(agg && agg.count > 0
-      ? {
-          aggregateRating: {
-            "@type": "AggregateRating",
-            ratingValue: agg.averageRating,
-            reviewCount: agg.count,
-            bestRating: 5,
-            worstRating: 1,
-          },
-        }
-      : {}),
   };
 
   const breadcrumb = {
@@ -169,10 +150,6 @@ export default async function ProductPage({
   // can place a ₹1 COD order that burns ₹180-240 in two-way RTO logistics.
   if (!sku || sku.hidden || sku.internal) notFound();
 
-  // Single review aggregate query - reused for both the AggregateRating
-  // schema and the PdpReviews summary block below.
-  const reviewAgg = await getReviewAggregateForSku("prc", sku.id);
-
   return (
     <>
       {/* schema.org Product + BreadcrumbList @graph — Google rich results,
@@ -182,7 +159,7 @@ export default async function ProductPage({
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(productJsonLd(sku, reviewAgg)).replace(/</g, "\\u003c"),
+          __html: JSON.stringify(productJsonLd(sku)).replace(/</g, "\\u003c"),
         }}
       />
       <AnnouncementBar />
@@ -201,10 +178,6 @@ export default async function ProductPage({
       </nav>
       <main className="flex-1 bg-white">
         <PDPClient sku={sku} />
-        {/* X06 reviews block - reads approved reviews + aggregate from the
-            DB and renders them under the PDP. Empty state nudges DELIVERED
-            buyers to /review/[orderId] via their order email. */}
-        <PdpReviews siteId="prc" skuId={sku.id} />
       </main>
       <Footer />
       <PdpFloatingUi />

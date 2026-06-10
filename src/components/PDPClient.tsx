@@ -29,9 +29,6 @@ import {
 const PDPBundleUpsell = dynamic(() => import("@/components/PDPBundleUpsell"), {
   loading: () => <Skeleton className="h-72 w-full my-8" />,
 });
-const ReviewsBlock = dynamic(() => import("@/components/ReviewsBlock"), {
-  loading: () => <Skeleton className="h-96 w-full my-8" />,
-});
 const RecentlyViewed = dynamic(() => import("@/components/RecentlyViewed"), {
   loading: () => <Skeleton className="h-72 w-full my-8" />,
   ssr: false,
@@ -316,11 +313,9 @@ export default function PDPClient({ sku }: { sku: Sku }) {
           </div>
         )}
 
-        {/* Rating row */}
-        {/* W09 - Removed the hardcoded "★★★★★ 4.7 · 238 verified reviews"
-            line. Those numbers were fabricated. Real reviews now render in
-            the PdpReviews block below the bullets; the aggregate header
-            there shows the actual count + average once R01 collects them. */}
+        {/* Rating row removed — the PDP no longer surfaces reviews or a
+            rating summary (both the hand-curated ReviewsBlock and the
+            DB-backed PdpReviews block were pulled). */}
 
         {/* Price block - W05 dual price (online / COD) consistent with the
             home SkuLineup. Big number = online price (the "from" anchor);
@@ -515,10 +510,6 @@ export default function PDPClient({ sku }: { sku: Sku }) {
             </dl>
           </div>
         </details>
-
-        {/* Reviews — sits inside the right column on mobile/lg, full-width
-            visually thanks to mt + border-t inside ReviewsBlock */}
-        <ReviewsBlock skuId={sku.id} />
       </div>
     </div>
 

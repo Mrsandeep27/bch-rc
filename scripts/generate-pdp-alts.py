@@ -4,14 +4,17 @@ generate-pdp-alts.py
 Generates 3 additional gallery images per SKU for the PDP, matching the hero
 shot's studio-white style. Outputs:
 
-  /public/products/PRC-<slug>-2.jpg  -- top-down overhead
-  /public/products/PRC-<slug>-3.jpg  -- in-hand / scale-comparison
-  /public/products/PRC-<slug>-4.jpg  -- detail close-up (LED / wheels / livery)
+  /public/products/PRC-<slug>-2.webp  -- top-down overhead
+  /public/products/PRC-<slug>-3.webp  -- in-hand / scale-comparison
+  /public/products/PRC-<slug>-4.webp  -- detail close-up (LED / wheels / livery)
 
-Inputs the existing PRC-<slug>.jpg hero so Gemini stays consistent on the
+Inputs the existing PRC-<slug>.webp hero so Gemini stays consistent on the
 specific car body & colors instead of inventing a new one.
 
-Requires: GEMINI_API_KEY in .env.local or env.
+Key rotation: reads GEMINI_API_KEYS (comma-separated, 1-N keys) from
+.env.local and round-robins through them per call so we don't hit the
+per-key free-tier RPM ceiling. Falls back to single GEMINI_API_KEY if
+GEMINI_API_KEYS isn't set.
 """
 
 import io
@@ -46,13 +49,36 @@ def load_env_file(p: Path):
 
 
 load_env_file(REPO / ".env.local")
-API_KEY = os.environ.get("GEMINI_API_KEY")
-if not API_KEY:
-    print("ERROR: GEMINI_API_KEY missing", file=sys.stderr)
+
+# Prefer single GEMINI_API_KEY (image-gen confirmed working on it).
+# The 6 keys in GEMINI_API_KEYS proved to have free_tier image limit: 0
+# in the 2026-06-09 diag — only the original project key has image gen
+# enabled. Set USE_KEY_POOL=1 to opt back in if billing gets enabled.
+KEYS: list[str] = []
+if os.environ.get("USE_KEY_POOL") == "1":
+    _pool_raw = os.environ.get("GEMINI_API_KEYS", "")
+    KEYS = [k.strip() for k in _pool_raw.split(",") if k.strip()]
+if not KEYS:
+    single = os.environ.get("GEMINI_API_KEY", "")
+    if single:
+        KEYS = [single]
+if not KEYS:
+    print("ERROR: no Gemini API key (set GEMINI_API_KEY)", file=sys.stderr)
     sys.exit(1)
 
-client = genai.Client(api_key=API_KEY)
-MODEL = "gemini-3-pro-image-preview"
+_key_idx = 0
+
+
+def next_client() -> genai.Client:
+    """Round-robin a fresh client per call so consecutive requests use
+    different keys (and therefore different free-tier RPM buckets)."""
+    global _key_idx
+    k = KEYS[_key_idx % len(KEYS)]
+    _key_idx += 1
+    return genai.Client(api_key=k)
+
+
+MODEL = "gemini-2.5-flash-image"  # free-tier accessible; 3-pro-image-preview needs billing
 
 # Slug -> (hero path, friendly product description)
 SKUS = [
@@ -99,17 +125,21 @@ BASE_PROMPT_PREFIX = (
 
 
 def call_gemini(prompt: str, input_image: Path) -> bytes | None:
-    """Edit the existing hero so the new shot is the SAME car body, not a different one."""
+    """Edit the existing hero so the new shot is the SAME car body, not a different one.
+    Round-robins keys per attempt so a 429 on one key falls through to a
+    fresh quota bucket instead of just sleeping and re-hitting the same wall."""
     contents = [Image.open(input_image), prompt]
     for attempt in range(3):
+        client = next_client()
         try:
             resp = client.models.generate_content(model=MODEL, contents=contents)
             for part in resp.candidates[0].content.parts:
                 if getattr(part, "inline_data", None) and part.inline_data.data:
                     return part.inline_data.data
-            print(f"    no image in response (attempt {attempt+1})")
+            print(f"    no image in response (attempt {attempt+1}, key #{(_key_idx-1)%len(KEYS)+1})", flush=True)
         except Exception as e:
-            print(f"    error (attempt {attempt+1}): {e}")
+            msg = str(e).replace("\n", " ")[:120]
+            print(f"    error (attempt {attempt+1}, key #{(_key_idx-1)%len(KEYS)+1}): {msg}", flush=True)
             time.sleep(2 * (attempt + 1))
     return None
 
@@ -118,21 +148,23 @@ def save_image(raw: bytes, output: Path):
     img = Image.open(io.BytesIO(raw)).convert("RGB")
     img.thumbnail((1024, 1024), Image.LANCZOS)
     output.parent.mkdir(parents=True, exist_ok=True)
-    img.save(output, "JPEG", quality=88, optimize=True)
-    print(f"    OK {output.name} ({output.stat().st_size // 1024}KB)")
+    # WebP quality 85 matches the other product webps committed to the repo.
+    img.save(output, "WEBP", quality=85, method=6)
+    print(f"    OK {output.name} ({output.stat().st_size // 1024} KB)", flush=True)
 
 
 if __name__ == "__main__":
-    print(f"Gemini: {API_KEY[:8]}...{API_KEY[-4:]} | Model: {MODEL}")
+    masked = [f"{k[:8]}...{k[-4:]}" for k in KEYS]
+    print(f"Gemini keys ({len(KEYS)}): {', '.join(masked)} | Model: {MODEL}", flush=True)
     for slug, desc in SKUS:
-        hero = OUT / f"PRC-{slug}.jpg"
+        hero = OUT / f"PRC-{slug}.webp"
         if not hero.exists():
-            print(f"\n[{slug}] SKIP (hero missing: {hero.name})")
+            print(f"\n[{slug}] SKIP (hero missing: {hero.name})", flush=True)
             continue
-        print(f"\n[{slug}] hero -> {hero.name}")
+        print(f"\n[{slug}] hero -> {hero.name}", flush=True)
         for suffix, angle_prompt in ANGLES:
-            out_path = OUT / f"PRC-{slug}-{suffix}.jpg"
-            print(f"  [{suffix}] generating...")
+            out_path = OUT / f"PRC-{slug}-{suffix}.webp"
+            print(f"  [{suffix}] generating...", flush=True)
             prompt = BASE_PROMPT_PREFIX.format(desc=desc) + (
                 "Generate a new angle of THIS SAME EXACT CAR (do not change its color, "
                 "decals, or body shape). " + angle_prompt + " The output must visually "
@@ -142,5 +174,5 @@ if __name__ == "__main__":
             if raw:
                 save_image(raw, out_path)
             else:
-                print(f"    SKIPPED")
-    print("\nDone.")
+                print(f"    SKIPPED", flush=True)
+    print("\nDone.", flush=True)

@@ -337,8 +337,7 @@ def call_gemini(client: genai.Client, img: Image.Image, prompt: str, label: str)
             msg = str(e).replace("\n", " ")[:160]
             print(f"  {label} attempt {attempt+1}: {msg}", flush=True)
             if attempt < 2:
-                wait = 30 if "503" in msg or "UNAVAILABLE" in msg else 5
-                time.sleep(wait)
+                time.sleep(5)  # short backoff regardless of error type — keep queue moving
     return None
 
 
