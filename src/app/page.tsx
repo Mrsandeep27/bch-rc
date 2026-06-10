@@ -39,9 +39,11 @@ const CustomerReviewsSlider = dynamic(
     loading: () => <Skeleton className="h-96 w-full mx-auto my-12" />,
   },
 );
-const OurStorySection = dynamic(() => import("@/components/OurStorySection"), {
-  loading: () => <Skeleton className="h-96 w-full max-w-7xl mx-auto my-12" />,
-});
+// OurStorySection hidden 2026-06-10 — bring back by uncommenting the import
+// and the JSX below.
+// const OurStorySection = dynamic(() => import("@/components/OurStorySection"), {
+//   loading: () => <Skeleton className="h-96 w-full max-w-7xl mx-auto my-12" />,
+// });
 const UgcGrid = dynamic(() => import("@/components/UgcGrid"), {
   loading: () => (
     <div className="max-w-7xl mx-auto my-12 px-4">
@@ -112,9 +114,7 @@ export default function Page() {
         <div className="cv-auto">
           <CustomerReviewsSlider />
         </div>
-        <div className="cv-auto">
-          <OurStorySection />
-        </div>
+        {/* OurStorySection hidden 2026-06-10 */}
         <div className="cv-auto">
           <UgcGrid />
         </div>

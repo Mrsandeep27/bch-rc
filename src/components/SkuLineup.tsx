@@ -129,17 +129,6 @@ function SkuCard({ sku, index, stockMap }: SkuCardProps) {
           </span>
         )}
 
-        {/* Diagonal corner ribbon — top-right, clean cut design */}
-        {pct >= 5 && (
-          <div
-            aria-label={`${pct} percent off`}
-            className="absolute top-0 right-0 z-10 w-[88px] h-[88px] overflow-hidden pointer-events-none select-none"
-          >
-            <div className="absolute top-[18px] -right-[26px] w-[120px] bg-brand-red text-white text-center py-1 shadow-lg font-display font-bold text-sm sm:text-base tracking-tight rotate-45">
-              {pct}% OFF
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Minimal card body — name + price + Add. Tagline + bullets live on
