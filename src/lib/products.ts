@@ -128,7 +128,7 @@ export const PRODUCTS: Sku[] = [
     ],
     badge: "MOST GIFTED",
     bodyShape: "Porsche 911 GT3-style",
-    heroImage: "/products/PRC-porsche.webp",
+    heroImage: "/products/colors/PRC-porsche-green-v2.webp",
     heroVideo: "/products/PRC-porsche.mp4",
     altImages: [
       "/products/PRC-porsche-2.webp",
@@ -173,7 +173,7 @@ export const PRODUCTS: Sku[] = [
     ],
     badge: "BESTSELLER",
     bodyShape: "Mahindra Thar-style SUV",
-    heroImage: "/products/PRC-thar.webp",
+    heroImage: "/products/colors/PRC-thar-blue-v2.webp",
     altImages: [
       "/products/PRC-thar-2.webp",
       "/products/PRC-thar-3.webp",
@@ -217,7 +217,7 @@ export const PRODUCTS: Sku[] = [
     ],
     badge: "PRO",
     bodyShape: "Monster Truck oversize chassis",
-    heroImage: "/products/PRC-monster.webp",
+    heroImage: "/products/colors/PRC-monster-blue-v2.webp",
     heroVideo: "/products/PRC-monster.mp4",
     altImages: [
       "/products/PRC-monster-2.webp",
@@ -268,7 +268,7 @@ export const PRODUCTS: Sku[] = [
       "LED headlights · drift wheels included",
     ],
     bodyShape: "F1 generic open-wheel",
-    heroImage: "/products/PRC-f1-classic.webp",
+    heroImage: "/products/colors/PRC-f1-classic-white-v2.webp",
     altImages: [
       "/products/PRC-f1-classic-2.webp",
       "/products/PRC-f1-classic-3.webp",
