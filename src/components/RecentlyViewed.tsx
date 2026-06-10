@@ -17,7 +17,7 @@ export default function RecentlyViewed({ excludeId }: { excludeId?: string }) {
       const skus = ids
         .filter((id) => id !== excludeId)
         .map((id) => getProductById(id))
-        .filter((s): s is Sku => Boolean(s) && !s!.hidden);
+        .filter((s): s is Sku => Boolean(s) && !s!.hidden && !s!.internal);
 
       // Pad with other visible products if list is short
       if (skus.length < 4) {
