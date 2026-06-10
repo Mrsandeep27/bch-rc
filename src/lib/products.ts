@@ -277,8 +277,8 @@ export const PRODUCTS: Sku[] = [
     colors: [
       { name: "White", slug: "white", swatch: "#f1f1ef", stock: 36, image: "/products/colors/PRC-f1-classic-white-v2.webp",
         altImages: ["/products/colors/PRC-f1-classic-white-2-v2.webp","/products/colors/PRC-f1-classic-white-3-v2.webp","/products/colors/PRC-f1-classic-white-4-v2.webp"] },
-      { name: "Red",   slug: "red",   swatch: "#dc2626", stock: 36, image: "/products/colors/PRC-f1-classic-red.webp",
-        altImages: ["/products/colors/PRC-f1-classic-red-2.webp","/products/colors/PRC-f1-classic-red-3.webp","/products/colors/PRC-f1-classic-red-4.webp"] },
+      { name: "Red",   slug: "red",   swatch: "#dc2626", stock: 36, image: "/products/colors/PRC-f1-classic-red-v2.webp",
+        altImages: ["/products/colors/PRC-f1-classic-red-2-v2.webp","/products/colors/PRC-f1-classic-red-3-v2.webp","/products/colors/PRC-f1-classic-red-4-v2.webp"] },
     ],
     specs: {
       lengthMM: 70,
