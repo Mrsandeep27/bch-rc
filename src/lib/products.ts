@@ -85,7 +85,7 @@ export const PRODUCTS: Sku[] = [
     ],
     badge: "NEW",
     bodyShape: "BMW M-style sport coupe",
-    heroImage: "/products/PRC-bmw-v2.webp",
+    heroImage: "/products/colors/PRC-bmw-white.webp",
     heroVideo: "/products/PRC-bmw.mp4",
     altImages: [
       "/products/PRC-bmw-2.webp",
