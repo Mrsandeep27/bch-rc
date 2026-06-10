@@ -1153,7 +1153,9 @@ export default function CheckoutPage() {
                   <div className="text-sm text-brand-ink-soft mt-1">
                     {codDisabled
                       ? "Not available for this pincode — pay online to order."
-                      : `Pay when delivered (₹${OFFERS.codFeeINR} fee on orders below ₹${OFFERS.codFeeAppliesBelowINR})`}
+                      : subtotal < OFFERS.codFeeAppliesBelowINR
+                        ? `Pay when delivered (+ ₹${OFFERS.codFeeINR} COD handling fee)`
+                        : "Pay when delivered."}
                   </div>
                 </div>
               </label>
