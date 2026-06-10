@@ -124,7 +124,7 @@ export default function Hero({
           <span
             className="hero-anim hero-anim-delay-1 block font-mono text-[10px] sm:text-xs uppercase tracking-[0.2em] text-white/80 mb-4 sm:mb-5 drop-shadow"
           >
-            Made in Bangalore · 1:64 scale
+            Sold from Bangalore · 1:64 scale
           </span>
 
           <h1

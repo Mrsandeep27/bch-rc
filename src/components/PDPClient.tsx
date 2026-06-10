@@ -65,6 +65,7 @@ function GalleryImage({
       alt={alt}
       fill
       sizes="(min-width: 1024px) 600px, 100vw"
+      quality={92}
       className="object-contain object-center"
       priority={priority}
       onError={() => setFailed(true)}

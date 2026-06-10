@@ -67,6 +67,7 @@ export function ProductImage({
         alt={sku.name}
         fill
         sizes="(max-width: 768px) 85vw, (max-width: 1280px) 50vw, 25vw"
+        quality={90}
         className={`object-contain object-center transition-opacity duration-300 ${
           playing ? "opacity-0" : "opacity-100"
         }`}

@@ -45,7 +45,7 @@ export default function Footer() {
             </Link>
             <p className="text-xs sm:text-sm text-neutral-400 mt-2 sm:mt-4 leading-snug sm:leading-relaxed max-w-xs">
               <span className="sm:hidden">
-                Mini 1:64 RC drift cars · Made in Bangalore
+                Mini 1:64 RC drift cars · Sold from Bangalore
               </span>
               <span className="hidden sm:inline">
                 India&apos;s most-gifted mini RC cars — 1:64 RC drift cars.
