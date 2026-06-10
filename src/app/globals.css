@@ -96,10 +96,17 @@ body {
      iOS 13+ but harmless. */
 html {
   scroll-behavior: smooth;
+  /* Prevent any descendant element (Hero, marquee, off-canvas drawer) from
+     creating a horizontal scrollbar that clips content on narrow viewports
+     (iPhone XR/SE/13 mini). `overflow-x: clip` is preferred over `hidden`
+     because it does NOT establish a new containing block, so the bottom
+     sticky CTA bar and Hero overlay positioning keep working. */
+  overflow-x: clip;
 }
 body {
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
+  overflow-x: clip;
 }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
