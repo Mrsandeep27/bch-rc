@@ -67,7 +67,7 @@ export function ProductImage({
         alt={sku.name}
         fill
         sizes="(max-width: 768px) 85vw, (max-width: 1280px) 50vw, 25vw"
-        quality={90}
+        quality={85}
         className={`object-contain object-center transition-opacity duration-300 ${
           playing ? "opacity-0" : "opacity-100"
         }`}
@@ -82,10 +82,11 @@ export function ProductImage({
         <video
           ref={videoRef}
           src={sku.heroVideo}
+          poster={sku.heroImage}
           muted
           loop
           playsInline
-          preload="metadata"
+          preload="none"
           className={`absolute inset-0 w-full h-full object-cover transform-gpu will-change-transform transition-opacity duration-300 ${
             playing ? "opacity-100" : "opacity-0"
           }`}
