@@ -91,6 +91,16 @@ export async function POST(req: Request) {
           .from(orders)
           .where(eq(orders.razorpayOrderId, payment.order_id));
         if (order && order.paymentStatus !== "CAPTURED" && order.paymentStatus !== "FAILED" && order.paymentStatus !== "REFUNDED") {
+          // Partial-prepaid COD (Pay X now + rest on delivery) captures only
+          // the upfront confirmation fee, not the total. Pure prepaid (UPI/
+          // CARD/etc.) captures the full total. Legacy COD orders (created
+          // before 2026-06-13) have confirmationFeeInr === 0 and never hit
+          // this code path because they never have a Razorpay order_id.
+          const isPartialPrepaidCod =
+            order.paymentMethod === "COD" && order.confirmationFeeInr > 0;
+          const expectedAmountPaise = isPartialPrepaidCod
+            ? order.confirmationFeeInr * 100
+            : order.totalInr * 100;
           // Even though the webhook payload is signed, an attacker who
           // captures a real webhook body + signature could replay it against
           // a different order with the same total. Belt-and-suspenders: hit
@@ -99,7 +109,7 @@ export async function POST(req: Request) {
           const confirm = await fetchAndConfirmCapture({
             paymentId: payment.id,
             expectedRazorpayOrderId: order.razorpayOrderId!,
-            expectedAmountPaise: order.totalInr * 100,
+            expectedAmountPaise,
           });
           if (!confirm.ok) {
             await db.insert(events).values({

@@ -76,6 +76,7 @@ function buildPayload(order: OrderRow): EmailPayload {
     subtotalInr: order.subtotalInr,
     shippingInr: order.shippingInr,
     codFeeInr: order.codFeeInr,
+    confirmationFeeInr: order.confirmationFeeInr,
     discountInr: order.discountInr,
     couponCode: order.couponCode,
     shippingAddress: addr.fullName && addr.line1 && addr.city && addr.state && addr.pincode

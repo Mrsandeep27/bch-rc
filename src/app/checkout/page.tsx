@@ -31,6 +31,7 @@ import {
   OFFERS,
   bundleDiscountInr,
   bundleTierLabel,
+  computeCodConfirmationFee,
 } from "@/lib/config";
 import { formatINR } from "@/lib/utils";
 
@@ -53,6 +54,13 @@ type CreateOrderResponse = {
   razorpayOrderId?: string;
   razorpayKeyId?: string;
   amountInr: number;
+  /** Partial-prepaid CoD only — what the courier collects at the door
+   *  (totalInr − confirmationFeeInr). 0 for full prepaid. */
+  codBalanceInr?: number;
+  /** Partial-prepaid CoD only — the upfront Razorpay-captured amount. */
+  confirmationFeeInr?: number;
+  /** Echo of the order total — both UPI and CoD see this. */
+  totalInr?: number;
   customerName?: string;
   customerEmail?: string;
   customerPhone?: string;
@@ -397,6 +405,9 @@ export default function CheckoutPage() {
     payment === "cod" && subtotal < OFFERS.codFeeAppliesBelowINR
       ? OFFERS.codFeeINR
       : 0;
+  // Partial-prepaid CoD upfront amount (10 % of subtotal, ₹100-300, ₹50 step).
+  // Shown in the CoD option's right-side number + subtitle copy.
+  const codConfirmation = computeCodConfirmationFee(subtotal);
   const prepaidDiscount = payment === "upi" ? OFFERS.prepaidDiscountINR : 0;
   // Bundle bonus — mix ANY 2 cars = ₹298 off, ANY 3+ cars = ₹698 off.
   // Driven by TOTAL cart quantity, not distinct SKUs.
@@ -737,7 +748,12 @@ export default function CheckoutPage() {
         throw new Error(data.error || "Failed to create order");
       }
 
-      if (data.paymentMethod === "COD") {
+      // Both UPI (full prepaid) and CoD (partial-prepaid confirmation fee)
+      // now hand off to Razorpay. The CoD flow charges the upfront
+      // confirmation fee; courier collects the rest at the door. Only the
+      // legacy zero-confirmation-fee fallback skips Razorpay and lands at
+      // the order page — that branch fires only on a server-side misconfig.
+      if (data.paymentMethod === "COD" && !data.razorpayOrderId) {
         useCart.getState().clear();
         router.push(`/orders/${data.orderId}`);
         return;
@@ -758,7 +774,7 @@ export default function CheckoutPage() {
     ? `Retry payment · ${formatINR(total)}`
     : payment === "upi"
       ? `Pay ${formatINR(total)} via UPI`
-      : `Confirm COD order · ${formatINR(total)}`;
+      : `Pay ${formatINR(codConfirmation)} now · ${formatINR(total - codConfirmation)} on delivery`;
 
   const freeShipGap = Math.max(0, OFFERS.freeShippingMinINR - subtotal);
   // COD is offered unless we've confirmed this pincode can't do COD.
@@ -1146,17 +1162,35 @@ export default function CheckoutPage() {
                   disabled={codDisabled}
                   className="mt-1 accent-brand-red"
                 />
-                <div className="flex-1">
-                  <div className="font-semibold text-brand-ink">
-                    Cash on Delivery
+                {/* HGT-mirror psychology:
+                    - Title leads with the SMALL number (low-commitment anchor).
+                    - Subtitle shows the split math plainly (₹150 + ₹1,249 = ₹1,399)
+                      so the customer feels in control, no surprise fees.
+                    - Right-side number shows the upfront ₹150, making CoD feel
+                      LIGHTER than UPI — inverts the usual "CoD = scary commit". */}
+                <div className="flex-1 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-brand-ink">
+                      {codDisabled
+                        ? "Cash on Delivery"
+                        : `Pay ₹${codConfirmation} now and rest Cash on Delivery`}
+                    </div>
+                    <div className="text-sm text-brand-ink-soft mt-1">
+                      {codDisabled
+                        ? "Not available for this pincode — pay online to order."
+                        : `Pay ₹${codConfirmation} now and ₹${total - codConfirmation} on delivery.`}
+                    </div>
                   </div>
-                  <div className="text-sm text-brand-ink-soft mt-1">
-                    {codDisabled
-                      ? "Not available for this pincode — pay online to order."
-                      : subtotal < OFFERS.codFeeAppliesBelowINR
-                        ? `Pay when delivered (+ ₹${OFFERS.codFeeINR} COD handling fee)`
-                        : "Pay when delivered."}
-                  </div>
+                  {!codDisabled && (
+                    <div className="text-right shrink-0">
+                      <div className="font-bold text-brand-ink tabular-nums">
+                        ₹{codConfirmation}
+                      </div>
+                      <div className="text-[10px] font-mono uppercase tracking-wider text-brand-ink-soft mt-0.5">
+                        now
+                      </div>
+                    </div>
+                  )}
                 </div>
               </label>
             </div>

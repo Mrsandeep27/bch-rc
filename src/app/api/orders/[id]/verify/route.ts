@@ -101,10 +101,17 @@ export async function POST(
   // committing PAID. Otherwise the customer thinks they paid but we never
   // received the money — and the auto-fulfilment trigger would ship goods
   // for free.
+  // Partial-prepaid CoD captures only the upfront confirmation fee, not
+  // the full total. Same discriminator as the webhook handler.
+  const isPartialPrepaidCod =
+    order.paymentMethod === "COD" && order.confirmationFeeInr > 0;
+  const expectedAmountPaise = isPartialPrepaidCod
+    ? order.confirmationFeeInr * 100
+    : order.totalInr * 100;
   const confirm = await fetchAndConfirmCapture({
     paymentId: body.razorpayPaymentId,
     expectedRazorpayOrderId: order.razorpayOrderId,
-    expectedAmountPaise: order.totalInr * 100,
+    expectedAmountPaise,
   });
   if (!confirm.ok) {
     await db.insert(events).values({
@@ -143,7 +150,15 @@ export async function POST(
     type: "PAYMENT_CAPTURED",
     payload: {
       razorpayPaymentId: body.razorpayPaymentId,
-      amountInr: order.totalInr,
+      // Record what Razorpay ACTUALLY captured — confirmation fee for
+      // partial-prepaid CoD, full total for prepaid. Lets audit
+      // reconciliation tell the two apart from the event log alone.
+      amountInr: isPartialPrepaidCod
+        ? order.confirmationFeeInr
+        : order.totalInr,
+      codBalanceInr: isPartialPrepaidCod
+        ? order.totalInr - order.confirmationFeeInr
+        : 0,
     },
     source: "user",
   });

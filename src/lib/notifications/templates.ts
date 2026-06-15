@@ -51,6 +51,10 @@ export type EmailPayload = {
   subtotalInr?: number;
   shippingInr?: number;
   codFeeInr?: number;
+  /** Partial-prepaid CoD upfront amount captured via Razorpay. When > 0
+   *  the email shows "₹X paid + ₹Y due on delivery" instead of "₹total
+   *  due on delivery". 0 for full prepaid and legacy CoD. */
+  confirmationFeeInr?: number;
   discountInr?: number;
   couponCode?: string | null;
   /** Shipping address — shown so the customer catches typos BEFORE dispatch.
@@ -287,13 +291,22 @@ ${policyLineText()}
     case "ORDER_CONFIRMED": {
       const trackUrl = `${BASE_URL}/orders/${p.orderId}`;
       const subject = `Order ${p.orderId} confirmed — ${BRAND}`;
+      // Partial-prepaid CoD ("Pay X now, rest at door"): show what was paid
+      // up-front AND what's due at the door, so the customer knows exactly
+      // how much cash to keep ready. confirmationFeeInr > 0 is the discriminator.
+      const codFee = p.confirmationFeeInr ?? 0;
+      const codDoorDue = p.totalInr - codFee;
       const payLine =
         p.paymentMethod === "COD"
-          ? `<p><b>Cash on Delivery</b> — keep <b>${formatINR(p.totalInr)}</b> ready when the courier arrives.</p>`
+          ? codFee > 0
+            ? `<p><b>${formatINR(codFee)} paid</b> via UPI · <b>${formatINR(codDoorDue)} due on delivery</b> — keep cash ready for the courier.</p>`
+            : `<p><b>Cash on Delivery</b> — keep <b>${formatINR(p.totalInr)}</b> ready when the courier arrives.</p>`
           : `<p>Payment of <b>${formatINR(p.totalInr)}</b> received via <b>${PAYMENT_METHOD_LABEL[p.paymentMethod]}</b>.</p>`;
       const payLineText =
         p.paymentMethod === "COD"
-          ? `Payment method: Cash on Delivery — keep ${formatINR(p.totalInr)} ready.`
+          ? codFee > 0
+            ? `${formatINR(codFee)} paid via UPI · ${formatINR(codDoorDue)} due on delivery — keep cash ready for the courier.`
+            : `Payment method: Cash on Delivery — keep ${formatINR(p.totalInr)} ready.`
           : `Payment method: ${PAYMENT_METHOD_LABEL[p.paymentMethod]} — ${formatINR(p.totalInr)} received.`;
       const body = `
 <h1 style="font-size:24px;margin:14px 0 4px">Hi ${escapeHtml(p.customerName)}, we got your order.</h1>
@@ -392,9 +405,21 @@ ${p.awbCode ? `AWB: ${p.awbCode}${p.courierName ? ` via ${p.courierName}` : ""}\
 <h1 style="font-size:24px;margin:14px 0 4px">Out for delivery today</h1>
 <p>${p.courierName ? `${escapeHtml(p.courierName)} is delivering` : "Your courier is delivering"} order <b style="font-family:monospace">${escapeHtml(p.orderId)}</b> today.</p>
 ${itemsBlock}
-${p.paymentMethod === "COD" ? `<p>Have <b>${formatINR(p.totalInr)}</b> ready for cash on delivery.</p>` : ""}`;
+${
+  p.paymentMethod === "COD"
+    ? (p.confirmationFeeInr ?? 0) > 0
+      ? `<p>Have <b>${formatINR(p.totalInr - (p.confirmationFeeInr ?? 0))}</b> ready for the courier (you already paid ${formatINR(p.confirmationFeeInr ?? 0)} up-front).</p>`
+      : `<p>Have <b>${formatINR(p.totalInr)}</b> ready for cash on delivery.</p>`
+    : ""
+}`;
       const text = `Your ${BRAND} order ${p.orderId} is out for delivery today.
-${lineItemsText(p.items)}${p.paymentMethod === "COD" ? `\nCash on delivery: ${formatINR(p.totalInr)}.` : ""}`;
+${lineItemsText(p.items)}${
+  p.paymentMethod === "COD"
+    ? (p.confirmationFeeInr ?? 0) > 0
+      ? `\nDue on delivery: ${formatINR(p.totalInr - (p.confirmationFeeInr ?? 0))} (${formatINR(p.confirmationFeeInr ?? 0)} already paid).`
+      : `\nCash on delivery: ${formatINR(p.totalInr)}.`
+    : ""
+}`;
       return { subject, html: shell(subject, body), text };
     }
     case "DELIVERED": {
@@ -431,20 +456,31 @@ export function renderWhatsApp(
       return {
         text: `📥 *${BRAND}* — order *${p.orderId}* received.\nOur team will call you within 24 hrs to confirm before dispatch (Cash on Delivery: ${formatINR(p.totalInr)}).\nDidn't place this? Reply STOP — no questions asked.`,
       };
-    case "ORDER_CONFIRMED":
+    case "ORDER_CONFIRMED": {
+      const codFee = p.confirmationFeeInr ?? 0;
+      const codDoor = p.totalInr - codFee;
       return {
         text: `✅ *${BRAND}* — order *${p.orderId}* confirmed.\n${
           p.paymentMethod === "COD"
-            ? `Pay ${formatINR(p.totalInr)} cash on delivery.`
+            ? codFee > 0
+              ? `${formatINR(codFee)} paid · ${formatINR(codDoor)} due on delivery.`
+              : `Pay ${formatINR(p.totalInr)} cash on delivery.`
             : `Payment of ${formatINR(p.totalInr)} received.`
         }${p.etaText ? `\nEstimated delivery: ${p.etaText}` : ""}\nTrack: ${track}`,
       };
+    }
     case "PAYMENT_CAPTURED": {
       const itemsLine = p.items.length
         ? `\nItems:\n${p.items.map((i) => `• ${i.name} × ${i.qty}`).join("\n")}`
         : "";
+      const codFee = p.confirmationFeeInr ?? 0;
+      const codDoor = p.totalInr - codFee;
+      const amountLine =
+        p.paymentMethod === "COD" && codFee > 0
+          ? `${formatINR(codFee)} paid · ${formatINR(codDoor)} due on delivery`
+          : `payment of ${formatINR(p.totalInr)} received`;
       return {
-        text: `✅ *${BRAND}* — payment of ${formatINR(p.totalInr)} received for order *${p.orderId}*.${itemsLine}${
+        text: `✅ *${BRAND}* — ${amountLine} for order *${p.orderId}*.${itemsLine}${
           p.paymentReference ? `\nTxn ref: ${p.paymentReference}` : ""
         }\nDispatching within 24 hrs. Track: ${track}`,
       };
@@ -463,10 +499,16 @@ export function renderWhatsApp(
       const itemsLine = p.items.length
         ? `\nDelivering: ${p.items.map((i) => `${i.name} × ${i.qty}`).join(", ")}`
         : "";
+      const codFee = p.confirmationFeeInr ?? 0;
+      const codDoor = p.totalInr - codFee;
+      const codReady =
+        p.paymentMethod === "COD"
+          ? codFee > 0
+            ? `\nKeep ${formatINR(codDoor)} cash ready (${formatINR(codFee)} already paid).`
+            : `\nKeep ${formatINR(p.totalInr)} cash ready.`
+          : "";
       return {
-        text: `🚚 *${BRAND}* — order *${p.orderId}* is out for delivery today!${itemsLine}${
-          p.paymentMethod === "COD" ? `\nKeep ${formatINR(p.totalInr)} cash ready.` : ""
-        }`,
+        text: `🚚 *${BRAND}* — order *${p.orderId}* is out for delivery today!${itemsLine}${codReady}`,
       };
     }
     case "DELIVERED":

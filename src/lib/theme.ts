@@ -57,6 +57,15 @@ export const THEME = {
   freeShippingMinINR: 1099,
   codFeeINR: 49,
   codFeeAppliesBelowINR: 999,
+  // Partial-prepaid COD ("Pay X now, balance on delivery") — replaces the
+  // old manual /cod phone-verification flow. Fee = 10 % of subtotal, rounded
+  // up to nearest ₹50, clamped between ₹100 and ₹300. Money paid up-front
+  // counts toward the final price (customer's total stays the same), so
+  // for a ₹1,399 order they pay ₹150 now via Razorpay and ₹1,249 on delivery.
+  codConfirmationPct: 10,
+  codConfirmationMinINR: 100,
+  codConfirmationMaxINR: 300,
+  codConfirmationRoundToINR: 50,
   bundle2PriceINR: 2299,       // Buy 2 = ₹2,299 (save ₹299)
   bundle2SaveINR: 299,
   bundle3PriceINR: 3199,       // Buy 3 = ₹3,199 (save ₹698)

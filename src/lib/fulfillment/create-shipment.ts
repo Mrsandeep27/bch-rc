@@ -123,7 +123,17 @@ export async function createShipmentForOrder(orderId: string): Promise<ShipmentR
       units: i.qty,
       selling_price: i.unitPriceInr,
     })),
-    subtotalInr: order.subtotalInr,
+    // For partial-prepaid COD ("Pay X now and rest Cash on Delivery"),
+    // tell Shiprocket to collect (totalInr − confirmationFeeInr) at the
+    // door — what's actually owed after the Razorpay-captured upfront
+    // amount. Using `totalInr` (not `subtotalInr`) is deliberate: the
+    // door-due amount must include shipping + any CoD surcharge, otherwise
+    // PRC under-collects. For pure prepaid + legacy full-CoD orders the
+    // existing `subtotalInr` invoice value is preserved.
+    subtotalInr:
+      order.paymentMethod === "COD" && order.confirmationFeeInr > 0
+        ? order.totalInr - order.confirmationFeeInr
+        : order.subtotalInr,
     paymentMethod: order.paymentMethod === "COD" ? "COD" : "Prepaid",
   });
 

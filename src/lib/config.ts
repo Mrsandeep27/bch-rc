@@ -23,10 +23,39 @@ export const OFFERS = {
   freeShippingMinINR: THEME.freeShippingMinINR,
   codFeeINR: THEME.codFeeINR,
   codFeeAppliesBelowINR: THEME.codFeeAppliesBelowINR,
+  codConfirmationPct: THEME.codConfirmationPct,
+  codConfirmationMinINR: THEME.codConfirmationMinINR,
+  codConfirmationMaxINR: THEME.codConfirmationMaxINR,
+  codConfirmationRoundToINR: THEME.codConfirmationRoundToINR,
   bundle2PriceINR: THEME.bundle2PriceINR,
   bundle2SaveINR: THEME.bundle2SaveINR,
   ledSmokeUpgradeINR: THEME.ledSmokeUpgradeINR,
 } as const;
+
+/**
+ * Partial-prepaid COD confirmation fee — what the customer pays upfront via
+ * Razorpay when they pick "Pay X now and rest Cash on Delivery". The rest
+ * (total - confirmation fee) is collected by the courier at the door.
+ *
+ * Single source of truth used by:
+ *   - checkout UI                    (src/app/checkout/page.tsx)
+ *   - server order creator           (src/app/api/orders/create/route.ts)
+ *   - Razorpay webhook + shipment    (src/app/api/webhooks/razorpay/route.ts)
+ *   - admin manual order builder     (src/app/admin/(authed)/orders/new)
+ *
+ * Formula: ceil( subtotal * pct / round-to ) * round-to, clamped [min, max].
+ * Result rounds UP to the nearest ₹50 so customers see clean numbers
+ * (₹100 / ₹150 / ₹200 / ₹250 / ₹300) instead of ₹139.90.
+ */
+export function computeCodConfirmationFee(subtotalInr: number): number {
+  const pct = (subtotalInr * OFFERS.codConfirmationPct) / 100;
+  const round = OFFERS.codConfirmationRoundToINR;
+  const rounded = Math.ceil(pct / round) * round;
+  return Math.min(
+    OFFERS.codConfirmationMaxINR,
+    Math.max(OFFERS.codConfirmationMinINR, rounded),
+  );
+}
 
 /**
  * Bundle-bonus tiers — auto-apply at checkout based on TOTAL cart quantity

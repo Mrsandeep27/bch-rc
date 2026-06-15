@@ -354,6 +354,14 @@ export const orders = pgTable(
     subtotalInr: integer("subtotal_inr").notNull(),
     shippingInr: integer("shipping_inr").notNull().default(0),
     codFeeInr: integer("cod_fee_inr").notNull().default(0),
+    /**
+     * Partial-prepaid COD confirmation fee — Razorpay-captured upfront amount
+     * for "Pay X now and rest Cash on Delivery". Zero for full-prepaid orders
+     * and legacy pre-2026-06-13 COD orders. For new COD orders this equals
+     * computeCodConfirmationFee(subtotalInr); the courier's COD-due value
+     * sent to Shiprocket is `totalInr - confirmationFeeInr`.
+     */
+    confirmationFeeInr: integer("confirmation_fee_inr").notNull().default(0),
     discountInr: integer("discount_inr").notNull().default(0),
     totalInr: integer("total_inr").notNull(),
     couponCode: text("coupon_code"),

@@ -29,7 +29,7 @@ import {
 } from "@/db/schema";
 import { sql, eq, and } from "drizzle-orm";
 import { PRODUCTS } from "@/lib/products";
-import { OFFERS, bundleDiscountInr } from "@/lib/config";
+import { OFFERS, bundleDiscountInr, computeCodConfirmationFee } from "@/lib/config";
 import { razorpay } from "@/lib/razorpay";
 import { generateOrderId } from "@/lib/order-id";
 import { redeemCoupon, CouponError } from "@/lib/coupons";
@@ -251,6 +251,16 @@ export async function POST(req: Request) {
       : 0;
   const prepaidDiscount =
     body.paymentMethod !== "COD" ? OFFERS.prepaidDiscountINR : 0;
+  // Partial-prepaid COD confirmation fee — the Razorpay-captured upfront
+  // amount for "Pay X now and rest Cash on Delivery". 10 % of subtotal,
+  // rounded up to ₹50, clamped ₹100-₹300.
+  //
+  // Refund policy (locked with Syed 2026-06-13 over WhatsApp):
+  //   • Before shipment dispatch  → REFUNDABLE (Razorpay refund on cancel)
+  //   • After shipment dispatch   → NON-REFUNDABLE (anti-flake fee)
+  //   • Exception                 → defective product = refundable post-ship
+  const confirmationFee =
+    body.paymentMethod === "COD" ? computeCodConfirmationFee(subtotal) : 0;
   // Bundle bonus — auto-applied when the customer adds any 2+ cars.
   // Driven by TOTAL cart quantity so 2-of-the-same and 1-each-of-two both
   // qualify. Server-side authoritative so a client can't spoof the discount.
@@ -372,6 +382,7 @@ export async function POST(req: Request) {
           subtotalInr: subtotal,
           shippingInr: shipping,
           codFeeInr: codFee,
+          confirmationFeeInr: confirmationFee,
           discountInr: prepaidDiscount + bundleDiscount,
           totalInr: totalBeforeCoupon,
           couponCode: null,
@@ -447,16 +458,15 @@ export async function POST(req: Request) {
           source: "user",
         });
 
-        // 3f. Enqueue the COD placeholder email INSIDE the transaction. COD
-        //     orders no longer auto-confirm — they sit at
-        //     PENDING_COD_VERIFICATION until the operator at /cod rings the
-        //     customer and clicks Confirm. So the email at create-time is
-        //     ORDER_RECEIVED ("we'll call to confirm within 24h"), not the
-        //     full ORDER_CONFIRMED. The full confirmation fires from the
-        //     /cod confirm action. Prepaid flow is unchanged (verify route
-        //     sends PAYMENT_CAPTURED on capture).
+        // 3f. Enqueue the legacy COD ORDER_RECEIVED placeholder email INSIDE
+        //     the transaction. This branch is now effectively dead — all new
+        //     COD orders carry a non-zero confirmationFeeInr and follow the
+        //     partial-prepaid Razorpay flow (webhook fires ORDER_CONFIRMED on
+        //     capture, same as full prepaid). Kept as a defensive fallback
+        //     for the unlikely case where computeCodConfirmationFee returns 0
+        //     (e.g. config misedit) — old /cod manual-verify queue still works.
         let notificationId: string | null = null;
-        if (body.paymentMethod === "COD") {
+        if (body.paymentMethod === "COD" && confirmationFee === 0) {
           const [n] = await tx
             .insert(notificationsOutbox)
             .values({
@@ -584,18 +594,35 @@ export async function POST(req: Request) {
   const { customerId, customerName, customerEmail, customerPhone, total } = txnResult;
   orderId = txnResult.orderId;
 
-  // ── 4. For prepaid orders, create the Razorpay order ─────────────
-  if (body.paymentMethod !== "COD") {
+  // ── 4. Create the Razorpay order ─────────────────────────────────
+  //
+  // Both prepaid and partial-prepaid COD go through Razorpay now. The
+  // amount differs:
+  //   • prepaid (UPI / CARD / NETBANKING / WALLET) → full total
+  //   • partial-prepaid COD ("Pay X now and rest CoD") → confirmationFee
+  //     (10 % of subtotal, clamped ₹100-300). The remaining balance is
+  //     collected at the door by Shiprocket's courier.
+  //
+  // Legacy CoD (confirmationFee === 0) falls through to step 5 below.
+  if (body.paymentMethod !== "COD" || confirmationFee > 0) {
+    const razorpayAmountInr =
+      body.paymentMethod === "COD" ? confirmationFee : total;
     let rzpOrder;
     try {
       rzpOrder = await razorpay.orders.create({
-        amount: total * 100,
+        amount: razorpayAmountInr * 100,
         currency: "INR",
         receipt: orderId,
         notes: {
           site: body.siteId,
           customerId,
           phone: body.address.phone,
+          // Capture the intent so admins can tell from the Razorpay dashboard
+          // whether a ₹150 payment was a full prepaid (impossible at PRC
+          // pricing — confirms it's a CoD confirmation fee).
+          flow: body.paymentMethod === "COD" ? "cod_confirmation" : "prepaid",
+          totalInr: total,
+          confirmationFeeInr: confirmationFee,
         },
       });
     } catch (err) {
@@ -609,7 +636,7 @@ export async function POST(req: Request) {
         source: "system",
       }).catch(() => {});
       return NextResponse.json(
-        { error: "Payment provider unavailable — try COD or retry in a minute." },
+        { error: "Payment provider unavailable — retry in a minute." },
         { status: 503 },
       );
     }
@@ -625,21 +652,28 @@ export async function POST(req: Request) {
       paymentMethod: body.paymentMethod,
       razorpayOrderId: rzpOrder.id,
       razorpayKeyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-      amountInr: total,
+      // For prepaid: full total. For partial-prepaid CoD: just the
+      // confirmation fee — what the customer pays NOW. Checkout.tsx reads
+      // this to set the Razorpay modal amount.
+      amountInr: razorpayAmountInr,
+      // New: tell the client the door amount so the receipt can show
+      // "₹150 paid · ₹1,249 on delivery" without re-computing client-side.
+      codBalanceInr:
+        body.paymentMethod === "COD" ? total - razorpayAmountInr : 0,
+      confirmationFeeInr: confirmationFee,
+      totalInr: total,
       customerName,
       customerEmail: customerEmail || undefined,
       customerPhone,
     });
   }
 
-  // ── 5. COD path: mark PENDING_COD_VERIFICATION, send placeholder email ──
+  // ── 5. Legacy CoD fallback: defensive only — code never reaches here ──
   //
-  // COD orders DO NOT auto-confirm. They land in a manual-verify queue at
-  // /cod where the operator rings the customer to confirm — kills prank/kid
-  // orders before any shipment cost is incurred. No Shiprocket order is
-  // created at this point. The /cod confirm action transitions to PAID and
-  // enqueues the shipment job; the 48h auto-reject sweeper releases stock
-  // for anything left hanging.
+  // With computeCodConfirmationFee floor of ₹100, every new CoD order goes
+  // through step 4 above. This branch only runs if a misconfig (e.g.
+  // codConfirmationMinINR set to 0) disables the partial-prepaid flow —
+  // in which case we fall back to the original manual /cod verification.
   await db
     .update(orders)
     .set({

@@ -87,3 +87,4 @@ public/ugc/*.raw.*
 next-env.d.ts
 
 .vercel
+prc-all-images/
