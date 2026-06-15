@@ -220,7 +220,7 @@ export default function Hero({
         <div className="max-w-7xl mx-auto px-4 sm:px-10 py-3 sm:py-4 flex flex-wrap items-center justify-center gap-x-4 sm:gap-x-6 gap-y-1 text-[11px] sm:text-xs font-mono uppercase tracking-widest text-white/85 text-center">
           <span className="flex items-center gap-1.5">
             <ShieldCheck className="w-3.5 h-3.5 text-brand-red shrink-0" aria-hidden />
-            COD pan-India · nothing now
+            COD available pan-India
           </span>
           <span className="flex items-center gap-1.5">
             <ShieldCheck className="w-3.5 h-3.5 text-brand-red shrink-0" aria-hidden />

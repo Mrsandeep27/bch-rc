@@ -223,11 +223,6 @@ function SkuCard({ sku, index, stockMap }: SkuCardProps) {
             Add to cart
           </button>
         </div>
-
-        {/* P15 - Voss accusation-audit kept to a 5-word reliever. */}
-        <div className="text-[10px] text-brand-ink-soft -mt-0.5 leading-snug pointer-events-none">
-          Pay nothing now · COD on delivery
-        </div>
       </div>
     </motion.div>
   );
