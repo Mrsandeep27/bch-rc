@@ -18,6 +18,10 @@ import { THEME } from "@/lib/theme";
 
 export type InvoiceLine = {
   description: string;
+  /** Product thumbnail (order snapshot image), or null. */
+  image: string | null;
+  /** "skuId · variant" reference, or null. */
+  sku: string | null;
   hsn: string;
   qty: number;
   /** GST-inclusive unit price (what the customer saw). */
@@ -31,6 +35,9 @@ export type InvoiceOrderItem = {
   qty: number;
   unitPriceInr?: number;
   lineTotalInr?: number;
+  image?: string | null;
+  skuId?: string;
+  variantSlug?: string | null;
 };
 
 export type InvoiceInput = {
@@ -152,8 +159,15 @@ export function computeInvoice(order: InvoiceInput): ComputedInvoice {
     const lineIncl =
       it.lineTotalInr ?? (it.unitPriceInr ?? 0) * it.qty;
     const unitIncl = it.unitPriceInr ?? r(lineIncl / Math.max(1, it.qty));
+    const sku = it.skuId
+      ? it.variantSlug
+        ? `${it.skuId} · ${it.variantSlug}`
+        : it.skuId
+      : null;
     return {
       description: it.name,
+      image: it.image ?? null,
+      sku,
       hsn,
       qty: it.qty,
       unitInclInr: r(unitIncl),

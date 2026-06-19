@@ -171,7 +171,26 @@ export default async function InvoicePage({
             {inv.lines.map((l, i) => (
               <tr key={i} className="border-b border-neutral-200">
                 <td className="py-2 pr-2 align-top">{i + 1}</td>
-                <td className="py-2 pr-2 align-top">{l.description}</td>
+                <td className="py-2 pr-2 align-top">
+                  <div className="flex items-center gap-2.5">
+                    {l.image && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={l.image}
+                        alt={l.description}
+                        className="h-11 w-11 flex-none rounded-md border border-neutral-200 object-cover"
+                      />
+                    )}
+                    <div>
+                      <div className="font-semibold">{l.description}</div>
+                      {l.sku && (
+                        <div className="text-[11px] text-neutral-500">
+                          SKU: {l.sku}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </td>
                 <td className="py-2 pr-2 text-center align-top">{l.hsn}</td>
                 <td className="py-2 pr-2 text-center align-top">{l.qty}</td>
                 <td className="py-2 pr-2 text-right align-top tabular-nums">
