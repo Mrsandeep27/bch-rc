@@ -45,6 +45,9 @@ export default async function OrderSuccessPage({
   if (!order) notFound();
 
   const isCod = order.paymentMethod === "COD";
+  // Partial-prepaid COD: customer paid the confirmation fee online and owes
+  // the balance at the door. Drives the split receipt UI.
+  const codPartial = isCod && order.confirmationFeeInr > 0;
   // Prepaid order whose capture hasn't landed yet (webhook lag). Don't claim
   // "Payment successful!" until the money is actually confirmed.
   const awaitingCapture = !isCod && order.paymentStatus !== "CAPTURED";
@@ -261,9 +264,30 @@ export default async function OrderSuccessPage({
                 );
               })()}
               <div className="flex justify-between font-bold text-base text-brand-ink pt-2 border-t border-brand-line mt-2">
-                <span>Total {isCod ? "(pay on delivery)" : "paid"}</span>
+                <span>Total</span>
                 <span>{formatINR(order.totalInr)}</span>
               </div>
+
+              {/* Partial-prepaid COD split — reassure the buyer they paid the
+                  small confirmation amount now and owe the balance at the door.
+                  Mirrors the admin panel so customer + operator see the same
+                  numbers. */}
+              {isCod && order.confirmationFeeInr > 0 && (
+                <div className="mt-3 pt-3 border-t border-dashed border-brand-line space-y-1.5">
+                  <div className="flex justify-between text-success">
+                    <span>Paid now (online)</span>
+                    <span className="tabular-nums font-semibold">
+                      {formatINR(order.confirmationFeeInr)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-brand-ink font-semibold">
+                    <span>Pay on delivery (cash)</span>
+                    <span className="tabular-nums">
+                      {formatINR(order.totalInr - order.confirmationFeeInr)}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -289,14 +313,19 @@ export default async function OrderSuccessPage({
                       : "text-success font-medium"
                   }
                 >
-                  {isCod
-                    ? "To be collected on delivery"
-                    : awaitingCapture
-                      ? "Confirming…"
-                      : "Paid"}
+                  {codPartial
+                    ? "Confirmed — balance on delivery"
+                    : isCod
+                      ? "To be collected on delivery"
+                      : awaitingCapture
+                        ? "Confirming…"
+                        : "Paid"}
                 </dd>
               </div>
-              {!isCod && order.razorpayPaymentId && (
+              {/* Show the Razorpay ref + paid-on for full-prepaid AND for
+                  partial-prepaid COD (the confirmation fee is a real online
+                  payment with a reconcilable transaction id). */}
+              {(!isCod || codPartial) && order.razorpayPaymentId && (
                 <div className="flex justify-between gap-3">
                   <dt className="text-brand-ink-soft">Transaction ref</dt>
                   <dd className="text-brand-ink font-mono text-xs break-all text-right">
@@ -304,18 +333,35 @@ export default async function OrderSuccessPage({
                   </dd>
                 </div>
               )}
-              {paidAtText && !isCod && (
+              {paidAtText && (!isCod || codPartial) && (
                 <div className="flex justify-between gap-3">
                   <dt className="text-brand-ink-soft">Paid on</dt>
                   <dd className="text-brand-ink">{paidAtText}</dd>
                 </div>
               )}
-              <div className="flex justify-between gap-3 border-t border-brand-line pt-2 mt-2 font-semibold">
-                <dt className="text-brand-ink">
-                  {isCod ? "Amount due" : "Amount paid"}
-                </dt>
-                <dd className="text-brand-ink">{formatINR(order.totalInr)}</dd>
-              </div>
+              {codPartial ? (
+                <>
+                  <div className="flex justify-between gap-3 border-t border-brand-line pt-2 mt-2 font-semibold text-success">
+                    <dt>Paid online</dt>
+                    <dd className="tabular-nums">
+                      {formatINR(order.confirmationFeeInr)}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3 font-semibold">
+                    <dt className="text-brand-ink">Due on delivery</dt>
+                    <dd className="text-brand-ink tabular-nums">
+                      {formatINR(order.totalInr - order.confirmationFeeInr)}
+                    </dd>
+                  </div>
+                </>
+              ) : (
+                <div className="flex justify-between gap-3 border-t border-brand-line pt-2 mt-2 font-semibold">
+                  <dt className="text-brand-ink">
+                    {isCod ? "Amount due" : "Amount paid"}
+                  </dt>
+                  <dd className="text-brand-ink">{formatINR(order.totalInr)}</dd>
+                </div>
+              )}
             </dl>
           </div>
 

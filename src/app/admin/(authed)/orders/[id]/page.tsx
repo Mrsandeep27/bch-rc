@@ -140,6 +140,47 @@ export default async function AdminOrderDetail({
                 <span>{formatINR(order.totalInr)}</span>
               </div>
             </div>
+
+            {/* COD payment split — for partial-prepaid COD orders, show what
+                the customer ALREADY paid online vs what the courier must
+                collect at the door. This is the panel Syed asked for: the
+                order total alone (₹1,099) hid that ₹150 was paid up-front and
+                only ₹949 is due on delivery. */}
+            {order.paymentMethod === "COD" && order.confirmationFeeInr > 0 && (
+              <div className="mt-4 rounded-xl border border-brand-line bg-brand-cream p-4">
+                <div className="text-xs font-mono uppercase tracking-widest text-brand-ink-soft mb-3">
+                  COD payment split
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="flex items-center gap-1.5 text-brand-ink">
+                      <span className="inline-block w-2 h-2 rounded-full bg-success" aria-hidden />
+                      Paid online (confirmation)
+                    </span>
+                    <span className="tabular-nums font-semibold text-success">
+                      {formatINR(order.confirmationFeeInr)}
+                      {order.paymentStatus === "CAPTURED" ? " ✓" : ""}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center pt-2 border-t border-brand-line">
+                    <span className="flex items-center gap-1.5 font-semibold text-brand-ink">
+                      <span className="inline-block w-2 h-2 rounded-full bg-brand-red" aria-hidden />
+                      Collect on delivery (cash)
+                    </span>
+                    <span className="tabular-nums font-bold text-brand-ink text-base">
+                      {formatINR(order.totalInr - order.confirmationFeeInr)}
+                    </span>
+                  </div>
+                </div>
+                <p className="mt-3 text-[11px] leading-snug text-brand-ink-soft">
+                  Courier collects{" "}
+                  <strong>{formatINR(order.totalInr - order.confirmationFeeInr)}</strong>{" "}
+                  cash at the door. The ₹{order.confirmationFeeInr} confirmation
+                  fee is already captured via Razorpay — Shiprocket is set to
+                  collect only the balance.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Event timeline */}
