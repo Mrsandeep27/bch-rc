@@ -28,7 +28,6 @@ import { isPackAuthenticated } from "@/lib/pack-auth";
 import { PackLoginForm } from "./PackLoginForm";
 import { PackSignOut } from "./PackSignOut";
 import { PackOrderRow } from "./PackOrderRow";
-import { PackManifestActions } from "./PackManifestActions";
 import { PackFilterSelect } from "./PackFilterSelect";
 
 export const dynamic = "force-dynamic";
@@ -117,9 +116,19 @@ function statusFilterFor(tab: Tab): SQL | undefined {
         and(eq(orders.status, "PACKED"), isNull(orders.awbCode)),
       );
     case "ready":
+      // AWB assigned, label ready, NOT yet manifested → still to hand over.
+      return and(
+        eq(orders.status, "PACKED"),
+        isNotNull(orders.awbCode),
+        isNull(orders.manifestedAt),
+      );
     case "pickups":
-      // AWB assigned, label ready, awaiting courier / manifest.
-      return and(eq(orders.status, "PACKED"), isNotNull(orders.awbCode));
+      // Manifest generated → moved out of Ready to Ship, awaiting pickup.
+      return and(
+        eq(orders.status, "PACKED"),
+        isNotNull(orders.awbCode),
+        isNotNull(orders.manifestedAt),
+      );
     case "transit":
       return eq(orders.status, "SHIPPED");
     case "delivered":
@@ -186,11 +195,16 @@ async function loadTabData(
           .select({
             status: orders.status,
             noAwb: sql<boolean>`${orders.awbCode} IS NULL`,
+            notManifested: sql<boolean>`${orders.manifestedAt} IS NULL`,
             count: sql<number>`count(*)::int`,
           })
           .from(orders)
           .where(dateFilter)
-          .groupBy(orders.status, sql`${orders.awbCode} IS NULL`),
+          .groupBy(
+            orders.status,
+            sql`${orders.awbCode} IS NULL`,
+            sql`${orders.manifestedAt} IS NULL`,
+          ),
       "pack:counts",
     );
 
@@ -204,8 +218,9 @@ async function loadTabData(
         counts.new += n;
       }
       if (g.status === "PACKED" && !g.noAwb) {
-        counts.ready += n;
-        counts.pickups += n;
+        // Manifested → Pickups & Manifests; not yet → Ready to Ship.
+        if (g.notManifested) counts.ready += n;
+        else counts.pickups += n;
       }
       if (g.status === "SHIPPED") counts.transit += n;
       if (g.status === "DELIVERED") counts.delivered += n;
@@ -250,18 +265,18 @@ export default async function PackPage({
   // Error state — render a clear failure UI instead of hanging in loading.tsx
   if (!result.ok) {
     return (
-      <div className="min-h-screen bg-[#0b0b0c] text-white flex items-center justify-center px-4">
+      <div className="min-h-screen bg-brand-cream text-brand-ink flex items-center justify-center px-4">
         <div className="max-w-md text-center">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-brand-red/15 text-brand-red mb-4">
             <AlertCircle size={24} />
           </div>
-          <h1 className="font-display text-2xl font-bold">
+          <h1 className="text-2xl font-bold">
             Can&rsquo;t load orders right now.
           </h1>
-          <p className="text-sm text-white/60 mt-2">{result.error}</p>
+          <p className="text-sm text-brand-ink-soft mt-2">{result.error}</p>
           <Link
             href="/pack"
-            className="mt-5 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/15 text-white text-sm font-semibold px-4 py-2 rounded-lg"
+            className="mt-5 inline-flex items-center gap-1.5 bg-brand-ink hover:bg-brand-ink-soft text-white text-sm font-semibold px-4 py-2 rounded-lg"
           >
             Try again
           </Link>
@@ -284,23 +299,18 @@ export default async function PackPage({
   const tabHref = (id: Tab) =>
     `/pack?tab=${id}&range=${range}&sort=${sort}`;
 
-  // "Ready to Ship" + "Pickups & Manifests" both run the courier handoff,
-  // so the manifest/pickup footer shows on either.
-  const showManifestFooter =
-    (tab === "ready" || tab === "pickups") && counts.ready > 0;
-
   return (
-    <div className="min-h-screen bg-[#0b0b0c] text-white">
+    <div className="min-h-screen bg-brand-cream text-brand-ink">
       {/* Header */}
-      <header className="sticky top-0 z-20 bg-[#0b0b0c]/95 backdrop-blur border-b border-white/10">
+      <header className="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-brand-line">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Package size={20} className="text-brand-red" />
             <div>
-              <h1 className="font-display text-base font-bold leading-tight">
+              <h1 className="text-base font-bold leading-tight">
                 Packing Console
               </h1>
-              <p className="text-[10px] font-mono uppercase tracking-widest text-white/40 leading-tight">
+              <p className="text-xs text-brand-ink-soft leading-tight">
                 pocketrccars · pack & ship
               </p>
             </div>
@@ -313,7 +323,7 @@ export default async function PackPage({
           {TABS.map((t) => (
             <TabLink key={t.id} href={tabHref(t.id)} active={tab === t.id}>
               {TAB_ICON[t.id]} {t.label}
-              <Count n={counts[t.id]} />
+              <Count n={counts[t.id]} active={tab === t.id} />
             </TabLink>
           ))}
         </nav>
@@ -345,7 +355,7 @@ export default async function PackPage({
             { value: "oldest", label: "Oldest first" },
           ]}
         />
-        <span className="ml-auto text-[11px] font-mono uppercase tracking-widest text-white/40">
+        <span className="ml-auto text-xs text-brand-ink-soft">
           {rows.length} order{rows.length === 1 ? "" : "s"}
         </span>
       </div>
@@ -386,6 +396,9 @@ export default async function PackPage({
               paymentMethod={order.paymentMethod}
               totalInr={order.totalInr}
               confirmationFeeInr={order.confirmationFeeInr}
+              manifestedAt={order.manifestedAt}
+              manifestUrl={order.manifestUrl}
+              pickupScheduledAt={order.pickupScheduledAt}
               packedAt={order.packedAt}
               shippedAt={order.shippedAt}
               showActions={tab === "new" || tab === "ready" || tab === "pickups"}
@@ -393,11 +406,6 @@ export default async function PackPage({
           ))
         )}
       </main>
-
-      {/* Sticky footer — manifest + pickup bulk actions for the courier handoff */}
-      {showManifestFooter && (
-        <PackManifestActions topackCount={counts.ready} />
-      )}
     </div>
   );
 }
@@ -450,10 +458,10 @@ function TabLink({
     <Link
       href={href}
       className={
-        "inline-flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors " +
+        "inline-flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors whitespace-nowrap " +
         (active
-          ? "text-white border-brand-red"
-          : "text-white/60 hover:text-white border-transparent")
+          ? "text-brand-ink border-brand-red"
+          : "text-brand-ink-soft hover:text-brand-ink border-transparent")
       }
     >
       {children}
@@ -461,9 +469,16 @@ function TabLink({
   );
 }
 
-function Count({ n }: { n: number }) {
+function Count({ n, active }: { n: number; active?: boolean }) {
   return (
-    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-white/10 text-[10px] font-mono tabular-nums">
+    <span
+      className={
+        "inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] tabular-nums " +
+        (active
+          ? "bg-brand-red text-white"
+          : "bg-brand-line/60 text-brand-ink-soft")
+      }
+    >
       {n}
     </span>
   );
@@ -502,10 +517,10 @@ function EmptyState({ tab }: { tab: Tab }) {
   };
   const m = messages[tab];
   return (
-    <div className="text-center py-16 bg-white/5 rounded-2xl border border-white/10">
-      <CheckCircle2 size={28} className="mx-auto text-white/40 mb-3" />
-      <p className="font-semibold text-white">{m.title}</p>
-      <p className="text-sm text-white/50 mt-1 max-w-md mx-auto">{m.sub}</p>
+    <div className="text-center py-16 bg-white rounded-2xl border border-brand-line">
+      <CheckCircle2 size={28} className="mx-auto text-brand-ink-soft/50 mb-3" />
+      <p className="font-semibold text-brand-ink">{m.title}</p>
+      <p className="text-sm text-brand-ink-soft mt-1 max-w-md mx-auto">{m.sub}</p>
     </div>
   );
 }

@@ -10,6 +10,7 @@ import {
   AlertCircle,
   Package,
   Truck,
+  ClipboardList,
   X,
 } from "lucide-react";
 import {
@@ -17,6 +18,8 @@ import {
   markDispatchedAction,
   cancelOrderFromPackAction,
   generateAwbAction,
+  printManifestForOrderAction,
+  schedulePickupForOrderAction,
 } from "./actions";
 
 type Props = {
@@ -44,6 +47,9 @@ type Props = {
   paymentMethod: string;
   totalInr: number;
   confirmationFeeInr: number;
+  manifestedAt: Date | string | null;
+  manifestUrl: string | null;
+  pickupScheduledAt: Date | string | null;
   packedAt: Date | string | null;
   shippedAt: Date | string | null;
   showActions: boolean;
@@ -72,13 +78,16 @@ export function PackOrderRow({
   paymentMethod,
   totalInr,
   confirmationFeeInr,
+  manifestedAt,
+  manifestUrl,
+  pickupScheduledAt,
   packedAt,
   shippedAt,
   showActions,
 }: Props) {
   const [busy, startTransition] = useTransition();
   const [busyKind, setBusyKind] = useState<
-    "label" | "invoice" | "dispatch" | "cancel" | "awb" | null
+    "label" | "invoice" | "dispatch" | "cancel" | "awb" | "manifest" | "pickup" | null
   >(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -90,6 +99,31 @@ export function PackOrderRow({
       setBusyKind(null);
       if (!result.ok) setError(result.error);
       // On success the action revalidates and the row moves to Ready to Ship.
+    });
+  }
+
+  function handleManifest() {
+    setError(null);
+    setBusyKind("manifest");
+    startTransition(async () => {
+      const result = await printManifestForOrderAction(orderId);
+      setBusyKind(null);
+      if (result.ok) {
+        window.open(result.manifestUrl, "_blank", "noopener");
+        // Action revalidates → row moves to Pickups & Manifests.
+      } else {
+        setError(result.error);
+      }
+    });
+  }
+
+  function handleSchedulePickup() {
+    setError(null);
+    setBusyKind("pickup");
+    startTransition(async () => {
+      const result = await schedulePickupForOrderAction(orderId);
+      setBusyKind(null);
+      if (!result.ok) setError(result.error);
     });
   }
 
@@ -149,7 +183,7 @@ export function PackOrderRow({
   const itemCount = items.reduce((s, i) => s + i.qty, 0);
 
   return (
-    <div className="bg-white rounded-xl text-brand-ink p-3 sm:p-4">
+    <div className="bg-white rounded-xl border border-brand-line text-brand-ink p-3 sm:p-4 shadow-sm">
       {/* Top row — order id + status + amount */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -245,6 +279,35 @@ export function PackOrderRow({
         </div>
       )}
 
+      {/* Manifest / pickup state strip — shows once the order has moved into
+          the Pickups & Manifests stage. */}
+      {(manifestedAt || pickupScheduledAt) && (
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-brand-ink-soft">
+          {manifestedAt && (
+            <span className="inline-flex items-center gap-1.5">
+              <Check size={12} className="text-success" />
+              Manifested {formatTime(manifestedAt)}
+              {manifestUrl && (
+                <a
+                  href={manifestUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline underline-offset-2 hover:text-brand-ink"
+                >
+                  view
+                </a>
+              )}
+            </span>
+          )}
+          {pickupScheduledAt && (
+            <span className="inline-flex items-center gap-1.5">
+              <Check size={12} className="text-success" />
+              Pickup scheduled {formatTime(pickupScheduledAt)}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Actions
           Cancel is available whenever the order is still cancellable
           (PAID or PACKED, AWB or not), so the packer can kill a test
@@ -280,6 +343,37 @@ export function PackOrderRow({
                 )}
                 Invoice
               </button>
+              {/* Per-order manifest — generates THIS order's manifest and
+                  moves it into Pickups & Manifests. Hidden once manifested. */}
+              {!manifestedAt && (
+                <button
+                  onClick={handleManifest}
+                  disabled={busy}
+                  className="inline-flex items-center gap-1.5 bg-white border border-brand-line hover:border-brand-ink text-brand-ink text-xs font-semibold px-3 py-2 rounded-lg disabled:opacity-50 transition-colors"
+                >
+                  {busyKind === "manifest" ? (
+                    <Loader2 size={13} className="animate-spin" />
+                  ) : (
+                    <ClipboardList size={13} />
+                  )}
+                  Manifest
+                </button>
+              )}
+              {/* Schedule pickup — appears after manifesting, hidden once done. */}
+              {manifestedAt && !pickupScheduledAt && (
+                <button
+                  onClick={handleSchedulePickup}
+                  disabled={busy}
+                  className="inline-flex items-center gap-1.5 bg-white border border-brand-line hover:border-brand-ink text-brand-ink text-xs font-semibold px-3 py-2 rounded-lg disabled:opacity-50 transition-colors"
+                >
+                  {busyKind === "pickup" ? (
+                    <Loader2 size={13} className="animate-spin" />
+                  ) : (
+                    <Truck size={13} />
+                  )}
+                  Schedule pickup
+                </button>
+              )}
             </>
           )}
           <button

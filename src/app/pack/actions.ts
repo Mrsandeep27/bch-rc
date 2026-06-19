@@ -131,6 +131,89 @@ export async function printManifestAction(): Promise<
 }
 
 // ============================================================
+// Print manifest for ONE order (per-order button in the card)
+//
+// Generates the Shiprocket manifest for this order's shipment and records
+// manifested_at + manifest_url so the order moves from "Ready to Ship" into
+// "Pickups & Manifests" (mirrors Shiprocket — no more showing in both tabs).
+// ============================================================
+export async function printManifestForOrderAction(
+  orderId: string,
+): Promise<ActionResult<{ manifestUrl: string }>> {
+  const denied = await gate();
+  if (denied) return denied;
+
+  const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
+  if (!order) return { ok: false, error: "Order not found." };
+  if (!order.shiprocketShipmentId) {
+    return { ok: false, error: "AWB not yet assigned. Generate AWB first." };
+  }
+
+  try {
+    const { manifestUrl } = await generateManifest([order.shiprocketShipmentId]);
+    if (!manifestUrl) {
+      return { ok: false, error: "Shiprocket didn't return a manifest URL." };
+    }
+    await db
+      .update(orders)
+      .set({ manifestedAt: new Date(), manifestUrl, updatedAt: new Date() })
+      .where(eq(orders.id, orderId));
+    await db.insert(events).values({
+      siteId: order.siteId,
+      orderId: order.id,
+      customerId: order.customerId,
+      type: "MANIFEST_GENERATED",
+      payload: { manifestUrl, by: "pack-console" },
+      source: "operator",
+    });
+    revalidateOrderEverywhere(orderId);
+    return { ok: true, manifestUrl };
+  } catch (err) {
+    logError("pack:manifest-order", err, { orderId });
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Manifest failed.",
+    };
+  }
+}
+
+// ============================================================
+// Schedule courier pickup for ONE order (per-order button)
+// ============================================================
+export async function schedulePickupForOrderAction(
+  orderId: string,
+): Promise<ActionResult<{ scheduledFor: string | null }>> {
+  const denied = await gate();
+  if (denied) return denied;
+
+  const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
+  if (!order) return { ok: false, error: "Order not found." };
+  if (!order.shiprocketShipmentId) {
+    return { ok: false, error: "AWB not yet assigned. Generate AWB first." };
+  }
+
+  const result = await schedulePickup([order.shiprocketShipmentId]);
+  // Shiprocket returns "Invalid Status" when pickup is already scheduled
+  // (premium couriers like Blue Dart Air auto-schedule). Treat that as a soft
+  // success — the pickup IS scheduled, just not by us.
+  const alreadyScheduled =
+    !result.ok && /invalid status|already/i.test(result.message);
+  if (!result.ok && !alreadyScheduled) {
+    return { ok: false, error: result.message };
+  }
+
+  await db
+    .update(orders)
+    .set({ pickupScheduledAt: new Date(), updatedAt: new Date() })
+    .where(eq(orders.id, orderId));
+  revalidateOrderEverywhere(orderId);
+  return {
+    ok: true,
+    scheduledFor: result.pickupScheduledDate ?? "auto-scheduled",
+  };
+}
+
+// ============================================================
 // Print invoice for a single order
 // ============================================================
 export async function printInvoiceAction(

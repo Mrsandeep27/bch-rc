@@ -85,6 +85,13 @@
       "when": 1781038800000,
       "tag": "0011_invoice_number",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1781125200000,
+      "tag": "0012_manifest_state",
+      "breakpoints": true
     }
   ]
 }

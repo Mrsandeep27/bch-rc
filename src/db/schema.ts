@@ -391,6 +391,15 @@ export const orders = pgTable(
     awbCode: text("awb_code"),
     courierName: text("courier_name"),
     trackingUrl: text("tracking_url"),
+    /**
+     * Manifest / pickup state — mirrors Shiprocket's lifecycle so an order
+     * MOVES from "Ready to Ship" to "Pickups & Manifests" once its manifest
+     * is generated (instead of showing in both). Set by printManifestAction /
+     * schedulePickupAction in the /pack console.
+     */
+    manifestedAt: timestamp("manifested_at", { withTimezone: true }),
+    manifestUrl: text("manifest_url"),
+    pickupScheduledAt: timestamp("pickup_scheduled_at", { withTimezone: true }),
     notes: text("notes"),
     /**
      * Exactly-once guard for releasing reserved inventory + coupon usage back.

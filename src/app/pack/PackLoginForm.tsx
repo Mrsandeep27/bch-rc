@@ -49,16 +49,16 @@ export function PackLoginForm() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0b0b0c] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-brand-cream flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-brand-red/15 text-brand-red mb-4">
             <Package size={28} />
           </div>
-          <h1 className="font-display text-3xl font-bold text-white">
+          <h1 className="text-3xl font-bold text-brand-ink">
             PRC Cars <span className="text-brand-red">Packing Console</span>
           </h1>
-          <p className="text-sm text-white/60 mt-2">
+          <p className="text-sm text-brand-ink-soft mt-2">
             Print labels, schedule pickup, dispatch orders.
           </p>
         </div>

@@ -13,7 +13,7 @@ export function PackSignOut() {
   return (
     <button
       onClick={onClick}
-      className="inline-flex items-center gap-1 text-white/70 hover:text-white text-xs"
+      className="inline-flex items-center gap-1 text-brand-ink-soft hover:text-brand-ink text-xs"
     >
       <LogOut size={13} />
       Sign out
