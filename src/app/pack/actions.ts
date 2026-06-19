@@ -164,6 +164,47 @@ export async function printInvoiceAction(
 }
 
 // ============================================================
+// Set / update the Zoho GST invoice number for an order
+//
+// Per Syed (2026-06-19): GST invoice numbers come from Zoho Books, not us.
+// The operator pulls the number from Zoho and enters it here; only then can
+// the branded invoice be sent to the customer. Order ID stays the reference;
+// this is the taxation document number.
+// ============================================================
+export async function setInvoiceNumberAction(
+  orderId: string,
+  invoiceNumber: string,
+): Promise<ActionResult<{ invoiceNumber: string }>> {
+  const denied = await gate();
+  if (denied) return denied;
+
+  const trimmed = invoiceNumber.trim();
+  if (trimmed.length < 2 || trimmed.length > 64) {
+    return { ok: false, error: "Enter a valid Zoho invoice number." };
+  }
+
+  const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
+  if (!order) return { ok: false, error: "Order not found." };
+
+  await db
+    .update(orders)
+    .set({ invoiceNumber: trimmed, updatedAt: new Date() })
+    .where(eq(orders.id, orderId));
+
+  await db.insert(events).values({
+    siteId: order.siteId,
+    orderId: order.id,
+    customerId: order.customerId,
+    type: "INVOICE_NUMBER_SET",
+    payload: { invoiceNumber: trimmed, setBy: "pack-console" },
+    source: "operator",
+  });
+
+  revalidateOrderEverywhere(orderId);
+  return { ok: true, invoiceNumber: trimmed };
+}
+
+// ============================================================
 // Schedule courier pickup for all packed orders
 // ============================================================
 export async function schedulePickupAction(): Promise<

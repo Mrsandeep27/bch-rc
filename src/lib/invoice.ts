@@ -35,6 +35,8 @@ export type InvoiceOrderItem = {
 
 export type InvoiceInput = {
   id: string;
+  /** GST invoice number from Zoho Books. Null until an operator enters it. */
+  invoiceNumber: string | null;
   placedAt: Date;
   items: InvoiceOrderItem[];
   subtotalInr: number;
@@ -57,7 +59,10 @@ export type InvoiceInput = {
 };
 
 export type ComputedInvoice = {
-  invoiceNumber: string;
+  /** Zoho invoice number, or null if not yet assigned (DRAFT state). */
+  invoiceNumber: string | null;
+  /** True when no Zoho number is set — invoice must not go to a customer. */
+  isDraft: boolean;
   invoiceDate: string;
   orderId: string;
   lines: InvoiceLine[];
@@ -180,7 +185,10 @@ export function computeInvoice(order: InvoiceInput): ComputedInvoice {
       : 0;
 
   return {
-    invoiceNumber: `${seller.invoicePrefix}${order.id}`,
+    // Zoho Books is the source of truth for the GST invoice number. We never
+    // mint our own — the order ID is the reference id, this is the tax-doc id.
+    invoiceNumber: order.invoiceNumber,
+    isDraft: !order.invoiceNumber,
     invoiceDate: order.placedAt.toLocaleDateString("en-IN", {
       day: "2-digit",
       month: "short",

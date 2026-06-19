@@ -8,6 +8,7 @@ import { PackLoginForm } from "../../PackLoginForm";
 import { computeInvoice, type InvoiceOrderItem } from "@/lib/invoice";
 import { formatINR } from "@/lib/utils";
 import { PrintButton } from "./PrintButton";
+import { InvoiceNumberForm } from "./InvoiceNumberForm";
 
 export const dynamic = "force-dynamic";
 
@@ -45,8 +46,19 @@ export default async function InvoicePage({
     email?: string;
   };
 
+  // Gate: no Zoho invoice number yet → show the entry form, not a draft
+  // invoice. Nothing un-numbered should ever be printed for a customer.
+  if (!order.invoiceNumber) {
+    return (
+      <div className="min-h-screen bg-neutral-100">
+        <InvoiceNumberForm orderId={order.id} current={null} />
+      </div>
+    );
+  }
+
   const inv = computeInvoice({
     id: order.id,
+    invoiceNumber: order.invoiceNumber,
     placedAt: order.placedAt,
     items: (order.items as InvoiceOrderItem[]) ?? [],
     subtotalInr: order.subtotalInr,
@@ -66,7 +78,7 @@ export default async function InvoicePage({
       {/* Toolbar — hidden when printing */}
       <div className="print:hidden sticky top-0 z-10 flex items-center justify-between gap-3 bg-neutral-900 px-4 py-3 text-white">
         <span className="text-sm font-mono uppercase tracking-widest text-neutral-300">
-          Invoice · {inv.invoiceNumber}
+          Invoice · {order.invoiceNumber}
         </span>
         <PrintButton />
       </div>
@@ -99,7 +111,7 @@ export default async function InvoicePage({
               Tax Invoice
             </div>
             <div className="mt-3 text-[12px]">
-              <Row k="Invoice No" v={inv.invoiceNumber} />
+              <Row k="Invoice No" v={order.invoiceNumber} />
               <Row k="Invoice Date" v={inv.invoiceDate} />
               <Row k="Order ID" v={inv.orderId} />
               {order.awbCode && <Row k="AWB" v={order.awbCode} />}

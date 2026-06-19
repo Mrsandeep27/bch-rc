@@ -78,6 +78,13 @@
       "when": 1780952400000,
       "tag": "0010_cod_confirmation_fee",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1781038800000,
+      "tag": "0011_invoice_number",
+      "breakpoints": true
     }
   ]
 }
