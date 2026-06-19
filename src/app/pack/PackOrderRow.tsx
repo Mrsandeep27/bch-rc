@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import {
   printLabelAction,
-  printInvoiceAction,
   markDispatchedAction,
   cancelOrderFromPackAction,
 } from "./actions";
@@ -82,18 +81,13 @@ export function PackOrderRow({
     });
   }
 
+  // Branded PRC GST tax invoice (boAt-style) — replaces Shiprocket's generic
+  // invoice. Opens our own print-ready page; no server round-trip needed.
+  // The legacy Shiprocket invoice (printInvoiceAction) is kept in actions.ts
+  // as a fallback but no longer wired to a button.
   function handlePrintInvoice() {
     setError(null);
-    setBusyKind("invoice");
-    startTransition(async () => {
-      const result = await printInvoiceAction(orderId);
-      setBusyKind(null);
-      if (result.ok) {
-        window.open(result.invoiceUrl, "_blank", "noopener");
-      } else {
-        setError(result.error);
-      }
-    });
+    window.open(`/pack/invoice/${orderId}`, "_blank", "noopener");
   }
 
   function handleMarkDispatched() {

@@ -94,9 +94,24 @@ export const THEME = {
     tradeName: "Bharath Cycle Hub",
     constitution: "Proprietorship",
     stateCode: "29", // Karnataka
+    stateName: "Karnataka",
     registeredAddress:
       "Temple, No 303, 15th A Cross, HIG A Sector, Yelahanka 1st Stage, Bengaluru, Karnataka 560064",
     addressShort: "Yelahanka 1st Stage, Bengaluru, Karnataka 560064",
+    // ── GST invoicing ──────────────────────────────────────────────
+    // Used by the branded tax invoice (/pack/invoice/[orderId]). Prices on
+    // the storefront are GST-INCLUSIVE (see policies.ts), so the invoice
+    // back-calculates the taxable value + tax from the charged amount.
+    //
+    // ⚠️ CONFIRM WITH CA BEFORE HIGH VOLUME: HSN 9503 covers "tricycles,
+    // scooters, pedal cars and similar wheeled toys; ... other toys".
+    // Electric/RC toys with a motor are commonly classified at 18 %; some
+    // non-electronic toys are 12 %. We default to 18 % — change `gstRatePct`
+    // here (single source of truth) if your GST filing uses a different slab.
+    hsnCode: "9503",
+    gstRatePct: 18,
+    // Invoice series prefix. Final number is `${invoicePrefix}${orderId}`.
+    invoicePrefix: "INV-",
   },
 } as const;
 
