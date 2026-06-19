@@ -9,12 +9,14 @@ import {
   MapPin,
   AlertCircle,
   Package,
+  Truck,
   X,
 } from "lucide-react";
 import {
   printLabelAction,
   markDispatchedAction,
   cancelOrderFromPackAction,
+  generateAwbAction,
 } from "./actions";
 
 type Props = {
@@ -22,16 +24,26 @@ type Props = {
   status: string;
   awbCode: string | null;
   courierName: string | null;
+  invoiceNumber: string | null;
+  placedAt: Date | string | null;
   shippingAddress: {
     fullName: string;
     phone: string;
     city: string;
     state: string;
     pincode: string;
+    email?: string;
   };
-  items: Array<{ name: string; qty: number; image?: string | null }>;
+  items: Array<{
+    name: string;
+    qty: number;
+    image?: string | null;
+    skuId?: string;
+    variantSlug?: string | null;
+  }>;
   paymentMethod: string;
   totalInr: number;
+  confirmationFeeInr: number;
   packedAt: Date | string | null;
   shippedAt: Date | string | null;
   showActions: boolean;
@@ -53,19 +65,33 @@ export function PackOrderRow({
   status,
   awbCode,
   courierName,
+  invoiceNumber,
+  placedAt,
   shippingAddress,
   items,
   paymentMethod,
   totalInr,
+  confirmationFeeInr,
   packedAt,
   shippedAt,
   showActions,
 }: Props) {
   const [busy, startTransition] = useTransition();
   const [busyKind, setBusyKind] = useState<
-    "label" | "invoice" | "dispatch" | "cancel" | null
+    "label" | "invoice" | "dispatch" | "cancel" | "awb" | null
   >(null);
   const [error, setError] = useState<string | null>(null);
+
+  function handleGenerateAwb() {
+    setError(null);
+    setBusyKind("awb");
+    startTransition(async () => {
+      const result = await generateAwbAction(orderId);
+      setBusyKind(null);
+      if (!result.ok) setError(result.error);
+      // On success the action revalidates and the row moves to Ready to Ship.
+    });
+  }
 
   function handlePrintLabel() {
     setError(null);
@@ -129,7 +155,7 @@ export function PackOrderRow({
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-mono text-sm font-bold">{orderId}</span>
-            <StatusBadge status={status} />
+            <StatusBadge status={status} hasAwb={!!awbCode} />
             {isCod && (
               <span className="text-[10px] font-mono uppercase tracking-widest font-bold bg-warning/15 text-warning px-1.5 py-0.5 rounded">
                 COD
@@ -137,15 +163,45 @@ export function PackOrderRow({
             )}
           </div>
           <p className="text-xs text-brand-ink-soft mt-0.5 font-mono">
-            {status === "SHIPPED" ? "Dispatched " : "Packed "}
-            {formatTime(status === "SHIPPED" ? shippedAt : packedAt)}
+            Ordered {formatTime(placedAt)}
+            {status === "SHIPPED" && shippedAt
+              ? ` · Dispatched ${formatTime(shippedAt)}`
+              : packedAt
+                ? ` · Packed ${formatTime(packedAt)}`
+                : ""}
           </p>
+          {invoiceNumber && (
+            <p className="text-[11px] text-brand-ink-soft mt-0.5 font-mono">
+              <span className="uppercase tracking-widest">Invoice</span>{" "}
+              <span className="font-semibold text-brand-ink">
+                {invoiceNumber}
+              </span>
+            </p>
+          )}
         </div>
         <div className="text-right shrink-0">
           <div className="font-bold tabular-nums">₹{totalInr.toLocaleString("en-IN")}</div>
           <div className="text-[10px] font-mono uppercase tracking-widest text-brand-ink-soft">
             {itemCount} item{itemCount === 1 ? "" : "s"}
           </div>
+          {/* Partial-prepaid COD: show what's already paid vs collected at the
+              door so the packer knows the exact cash to expect. */}
+          {isCod && confirmationFeeInr > 0 && (
+            <div className="mt-1 text-[10px] font-mono text-brand-ink-soft leading-tight">
+              <div>
+                paid{" "}
+                <span className="text-success font-semibold">
+                  ₹{confirmationFeeInr.toLocaleString("en-IN")}
+                </span>
+              </div>
+              <div>
+                collect{" "}
+                <span className="text-brand-red font-semibold">
+                  ₹{(totalInr - confirmationFeeInr).toLocaleString("en-IN")}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -256,11 +312,27 @@ export function PackOrderRow({
         </div>
       )}
 
-      {/* AWB-still-being-assigned hint, shown on the AWB-pending tab */}
-      {!awbCode && status !== "SHIPPED" && (
-        <div className="mt-3 text-xs text-brand-ink-soft inline-flex items-center gap-1.5">
-          <Loader2 size={12} className="animate-spin" />
-          Shiprocket assigning AWB… usually ~30 sec.
+      {/* AWB pending — auto-assign normally lands in ~30 sec. The Generate
+          AWB button is the manual backup for when the auto-job stalled. */}
+      {!awbCode && status !== "SHIPPED" && showActions && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-xs text-brand-ink-soft inline-flex items-center gap-1.5">
+            <Loader2 size={12} className="animate-spin" />
+            Auto-assigning AWB… ~30 sec.
+          </span>
+          <button
+            onClick={handleGenerateAwb}
+            disabled={busy}
+            title="Manually generate the AWB if it didn't auto-assign"
+            className="inline-flex items-center gap-1.5 bg-brand-ink hover:bg-brand-ink-soft text-white text-xs font-semibold px-3 py-2 rounded-lg disabled:opacity-50 transition-colors ml-auto"
+          >
+            {busyKind === "awb" ? (
+              <Loader2 size={13} className="animate-spin" />
+            ) : (
+              <Truck size={13} />
+            )}
+            Generate AWB
+          </button>
         </div>
       )}
 
@@ -319,11 +391,22 @@ function PackOrderItem({
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
+/**
+ * Status badge using Shiprocket's vocabulary so the operator reads the same
+ * stage names in /pack and the Shiprocket dashboard. PACKED splits on AWB:
+ * with an AWB it's "Ready to Ship", without it's still "New".
+ */
+function StatusBadge({ status, hasAwb }: { status: string; hasAwb: boolean }) {
   const map: Record<string, { bg: string; fg: string; label: string }> = {
-    PAID: { bg: "bg-blue-100", fg: "text-blue-800", label: "PAID" },
-    PACKED: { bg: "bg-amber-100", fg: "text-amber-800", label: "PACKED" },
-    SHIPPED: { bg: "bg-success/15", fg: "text-success", label: "SHIPPED" },
+    PAID: { bg: "bg-blue-100", fg: "text-blue-800", label: "New" },
+    PACKED: hasAwb
+      ? { bg: "bg-violet-100", fg: "text-violet-800", label: "Ready to Ship" }
+      : { bg: "bg-blue-100", fg: "text-blue-800", label: "New" },
+    SHIPPED: { bg: "bg-amber-100", fg: "text-amber-800", label: "In Transit" },
+    DELIVERED: { bg: "bg-success/15", fg: "text-success", label: "Delivered" },
+    RETURNED: { bg: "bg-red-100", fg: "text-red-700", label: "RTO" },
+    CANCELLED: { bg: "bg-brand-line/40", fg: "text-brand-ink-soft", label: "Cancelled" },
+    REFUNDED: { bg: "bg-brand-line/40", fg: "text-brand-ink-soft", label: "Refunded" },
   };
   const s = map[status] ?? {
     bg: "bg-brand-line/40",

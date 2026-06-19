@@ -164,6 +164,57 @@ export async function printInvoiceAction(
 }
 
 // ============================================================
+// Manually generate the AWB for an order whose auto-assign didn't fire
+//
+// AWBs are normally assigned automatically by the shipment-job runner the
+// moment an order is paid. This button is the backup for the rare case where
+// that job failed/stalled (Shiprocket hiccup, serviceability retry). It runs
+// the SAME proven path (runShipmentJobOnce) — no parallel logic — so the
+// result is identical to the auto path: Shiprocket order created, AWB
+// assigned, order moved PACKED.
+// ============================================================
+export async function generateAwbAction(
+  orderId: string,
+): Promise<ActionResult<{ awbCode: string | null }>> {
+  const denied = await gate();
+  if (denied) return denied;
+
+  const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
+  if (!order) return { ok: false, error: "Order not found." };
+  if (order.awbCode) {
+    return { ok: false, error: "AWB already assigned." };
+  }
+  if (order.status !== "PAID" && order.status !== "PACKED") {
+    return {
+      ok: false,
+      error: `Order is ${order.status} — can't generate AWB from here.`,
+    };
+  }
+
+  try {
+    const { runShipmentJobOnce } = await import(
+      "@/lib/fulfillment/shipment-queue"
+    );
+    const res = await runShipmentJobOnce(orderId);
+    if (res.error) return { ok: false, error: res.error };
+
+    // Re-read to surface the freshly-assigned AWB to the UI.
+    const [updated] = await db
+      .select({ awb: orders.awbCode })
+      .from(orders)
+      .where(eq(orders.id, orderId));
+    revalidateOrderEverywhere(orderId);
+    return { ok: true, awbCode: updated?.awb ?? null };
+  } catch (err) {
+    logError("pack:generate-awb", err, { orderId });
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "AWB generation failed.",
+    };
+  }
+}
+
+// ============================================================
 // Set / update the Zoho GST invoice number for an order
 //
 // Per Syed (2026-06-19): GST invoice numbers come from Zoho Books, not us.

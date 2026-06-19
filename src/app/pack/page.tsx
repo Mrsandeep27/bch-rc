@@ -1,15 +1,27 @@
 import Link from "next/link";
 import {
   and,
+  asc,
   desc,
   eq,
   gte,
+  inArray,
   isNotNull,
   isNull,
   or,
+  type SQL,
   sql,
 } from "drizzle-orm";
-import { Package, Truck, CheckCircle2, AlertCircle } from "lucide-react";
+import {
+  Package,
+  Truck,
+  CheckCircle2,
+  AlertCircle,
+  PackageCheck,
+  ClipboardList,
+  Undo2,
+  LayoutList,
+} from "lucide-react";
 import { db, withDbRetry, DatabaseUnavailableError } from "@/db";
 import { orders } from "@/db/schema";
 import { isPackAuthenticated } from "@/lib/pack-auth";
@@ -17,10 +29,51 @@ import { PackLoginForm } from "./PackLoginForm";
 import { PackSignOut } from "./PackSignOut";
 import { PackOrderRow } from "./PackOrderRow";
 import { PackManifestActions } from "./PackManifestActions";
+import { PackFilterSelect } from "./PackFilterSelect";
 
 export const dynamic = "force-dynamic";
 
-type Tab = "topack" | "awb" | "dispatched";
+/**
+ * Tabs mirror the Shiprocket order console 1:1 so the operator sees the same
+ * lifecycle stages in both places and never gets confused switching over.
+ *
+ *   Shiprocket          → our status
+ *   New                 → PAID, or PACKED without AWB (needs AWB)
+ *   Ready to Ship       → PACKED with AWB
+ *   Pickups & Manifests → PACKED with AWB (manifest/pickup stage)
+ *   In Transit          → SHIPPED
+ *   Delivered           → DELIVERED
+ *   RTO                 → RETURNED
+ *   All                 → every real order
+ */
+type Tab =
+  | "new"
+  | "ready"
+  | "pickups"
+  | "transit"
+  | "delivered"
+  | "rto"
+  | "all";
+
+const TABS: ReadonlyArray<{ id: Tab; label: string }> = [
+  { id: "new", label: "New" },
+  { id: "ready", label: "Ready to Ship" },
+  { id: "pickups", label: "Pickups & Manifests" },
+  { id: "transit", label: "In Transit" },
+  { id: "delivered", label: "Delivered" },
+  { id: "rto", label: "RTO" },
+  { id: "all", label: "All" },
+];
+
+type RangeKey = "7" | "30" | "90" | "all";
+type SortKey = "newest" | "oldest";
+
+const RANGE_DAYS: Record<RangeKey, number | null> = {
+  "7": 7,
+  "30": 30,
+  "90": 90,
+  all: null,
+};
 
 /**
  * /pack — three-section console for the packing employee.
@@ -42,100 +95,127 @@ type Tab = "topack" | "awb" | "dispatched";
  * one silent retry instead of a hung page.
  */
 const LIST_LIMIT = 200;
-const DISPATCHED_WINDOW_HRS = 24;
 
-// Filters — typed drizzle helpers so enum comparisons auto-cast.
-const topackFilter = and(
-  eq(orders.status, "PACKED"),
-  isNotNull(orders.awbCode),
-);
-const awbPendingFilter = or(
-  eq(orders.status, "PAID"),
-  and(eq(orders.status, "PACKED"), isNull(orders.awbCode)),
-);
-// dispatchedFilter is built per-request because it uses Date.now().
+/** Real orders shown in the "All" tab (excludes dead carts: PENDING/ABANDONED/FAILED). */
+const ALL_STATUSES = [
+  "PAID",
+  "PACKED",
+  "SHIPPED",
+  "DELIVERED",
+  "CANCELLED",
+  "RETURNED",
+  "REFUNDED",
+] as const;
+
+/** Status filter (no date) for a tab — same logic used by rows + counts. */
+function statusFilterFor(tab: Tab): SQL | undefined {
+  switch (tab) {
+    case "new":
+      // Paid but no AWB yet → needs shipping (auto or manual Generate AWB).
+      return or(
+        eq(orders.status, "PAID"),
+        and(eq(orders.status, "PACKED"), isNull(orders.awbCode)),
+      );
+    case "ready":
+    case "pickups":
+      // AWB assigned, label ready, awaiting courier / manifest.
+      return and(eq(orders.status, "PACKED"), isNotNull(orders.awbCode));
+    case "transit":
+      return eq(orders.status, "SHIPPED");
+    case "delivered":
+      return eq(orders.status, "DELIVERED");
+    case "rto":
+      return eq(orders.status, "RETURNED");
+    case "all":
+      return inArray(orders.status, [...ALL_STATUSES]);
+  }
+}
+
+/** Column each tab sorts by (newest activity first by default). */
+function sortColumn(tab: Tab) {
+  if (tab === "transit") return orders.shippedAt;
+  if (tab === "delivered" || tab === "rto") return orders.updatedAt;
+  if (tab === "new") return orders.paidAt;
+  return orders.packedAt;
+}
+
+type Counts = Record<Tab, number>;
 
 type LoadResult =
-  | {
-      ok: true;
-      topackCount: number;
-      awbCount: number;
-      dispatchedCount: number;
-      rows: Array<typeof orders.$inferSelect>;
-    }
+  | { ok: true; counts: Counts; rows: Array<typeof orders.$inferSelect> }
   | { ok: false; error: string };
 
-async function loadTabData(tab: Tab): Promise<LoadResult> {
-  const dispatchedFilter = and(
-    eq(orders.status, "SHIPPED"),
-    gte(
-      orders.shippedAt,
-      new Date(Date.now() - DISPATCHED_WINDOW_HRS * 60 * 60 * 1000),
-    ),
-  );
+async function loadTabData(
+  tab: Tab,
+  range: RangeKey,
+  sort: SortKey,
+): Promise<LoadResult> {
+  // Date window applies to every tab + the counts, mirroring Shiprocket's
+  // "Last 30 days" filter. Computed once per request (Date.now is fine here).
+  const days = RANGE_DAYS[range];
+  const dateFilter: SQL | undefined = days
+    ? gte(orders.placedAt, new Date(Date.now() - days * 24 * 60 * 60 * 1000))
+    : undefined;
 
-  const countOf = (filter: ReturnType<typeof and> | ReturnType<typeof or>) =>
-    withDbRetry(
-      () =>
-        db
-          .select({ count: sql<number>`count(*)::int` })
-          .from(orders)
-          .where(filter)
-          .then((r) => r[0]?.count ?? 0),
-      "pack:countOf",
-    );
+  const statusFilter = statusFilterFor(tab);
+  const rowsWhere =
+    dateFilter && statusFilter
+      ? and(statusFilter, dateFilter)
+      : (statusFilter ?? dateFilter);
 
-  const rowsFor = (tab: Tab) => {
-    if (tab === "topack") {
-      return withDbRetry(
-        () =>
-          db
-            .select()
-            .from(orders)
-            .where(topackFilter)
-            .orderBy(desc(orders.packedAt))
-            .limit(LIST_LIMIT),
-        "pack:rows:topack",
-      );
-    }
-    if (tab === "awb") {
-      return withDbRetry(
-        () =>
-          db
-            .select()
-            .from(orders)
-            .where(awbPendingFilter)
-            .orderBy(desc(orders.paidAt))
-            .limit(LIST_LIMIT),
-        "pack:rows:awb",
-      );
-    }
-    return withDbRetry(
+  const col = sortColumn(tab);
+  const orderBy = sort === "oldest" ? asc(col) : desc(col);
+
+  try {
+    // ROWS — the active tab's list.
+    const rows = await withDbRetry(
       () =>
         db
           .select()
           .from(orders)
-          .where(dispatchedFilter)
-          .orderBy(desc(orders.shippedAt))
+          .where(rowsWhere)
+          .orderBy(orderBy)
           .limit(LIST_LIMIT),
-      "pack:rows:dispatched",
+      "pack:rows",
     );
-  };
 
-  try {
-    // BATCH 1 — the active tab's full row list. Run first because it's the
-    // page's content; if it succeeds we can render before the counts arrive.
-    const rows = await rowsFor(tab);
+    // COUNTS — one grouped query for all tabs (pool-friendly: 1 round trip).
+    const grouped = await withDbRetry(
+      () =>
+        db
+          .select({
+            status: orders.status,
+            noAwb: sql<boolean>`${orders.awbCode} IS NULL`,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(orders)
+          .where(dateFilter)
+          .groupBy(orders.status, sql`${orders.awbCode} IS NULL`),
+      "pack:counts",
+    );
 
-    // BATCH 2 — three count(*) queries. The pool is max=3 so all three fit
-    // in one parallel batch.
-    const [topackCount, awbCount, dispatchedCount] = await Promise.all([
-      countOf(topackFilter),
-      countOf(awbPendingFilter),
-      countOf(dispatchedFilter),
-    ]);
+    const counts: Counts = {
+      new: 0, ready: 0, pickups: 0, transit: 0,
+      delivered: 0, rto: 0, all: 0,
+    };
+    for (const g of grouped) {
+      const n = g.count;
+      if (g.status === "PAID" || (g.status === "PACKED" && g.noAwb)) {
+        counts.new += n;
+      }
+      if (g.status === "PACKED" && !g.noAwb) {
+        counts.ready += n;
+        counts.pickups += n;
+      }
+      if (g.status === "SHIPPED") counts.transit += n;
+      if (g.status === "DELIVERED") counts.delivered += n;
+      if (g.status === "RETURNED") counts.rto += n;
+      if ((ALL_STATUSES as readonly string[]).includes(g.status)) {
+        counts.all += n;
+      }
+    }
 
-    return { ok: true, topackCount, awbCount, dispatchedCount, rows };
+    return { ok: true, counts, rows };
   } catch (err) {
     const msg =
       err instanceof DatabaseUnavailableError
@@ -150,15 +230,22 @@ async function loadTabData(tab: Tab): Promise<LoadResult> {
 export default async function PackPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; range?: string; sort?: string }>;
 }) {
   if (!(await isPackAuthenticated())) return <PackLoginForm />;
 
   const sp = await searchParams;
-  const tab: Tab =
-    sp.tab === "awb" ? "awb" : sp.tab === "dispatched" ? "dispatched" : "topack";
+  const tab: Tab = TABS.some((t) => t.id === sp.tab)
+    ? (sp.tab as Tab)
+    : "new";
+  const range: RangeKey = (["7", "30", "90", "all"] as const).includes(
+    sp.range as RangeKey,
+  )
+    ? (sp.range as RangeKey)
+    : "30";
+  const sort: SortKey = sp.sort === "oldest" ? "oldest" : "newest";
 
-  const result = await loadTabData(tab);
+  const result = await loadTabData(tab, range, sort);
 
   // Error state — render a clear failure UI instead of hanging in loading.tsx
   if (!result.ok) {
@@ -183,7 +270,24 @@ export default async function PackPage({
     );
   }
 
-  const { topackCount, awbCount, dispatchedCount, rows } = result;
+  const { counts, rows } = result;
+  const TAB_ICON: Record<Tab, React.ReactNode> = {
+    new: <Package size={13} />,
+    ready: <PackageCheck size={13} />,
+    pickups: <ClipboardList size={13} />,
+    transit: <Truck size={13} />,
+    delivered: <CheckCircle2 size={13} />,
+    rto: <Undo2 size={13} />,
+    all: <LayoutList size={13} />,
+  };
+  // Build a tab href that preserves the current range + sort selection.
+  const tabHref = (id: Tab) =>
+    `/pack?tab=${id}&range=${range}&sort=${sort}`;
+
+  // "Ready to Ship" + "Pickups & Manifests" both run the courier handoff,
+  // so the manifest/pickup footer shows on either.
+  const showManifestFooter =
+    (tab === "ready" || tab === "pickups") && counts.ready > 0;
 
   return (
     <div className="min-h-screen bg-[#0b0b0c] text-white">
@@ -204,22 +308,47 @@ export default async function PackPage({
           <PackSignOut />
         </div>
 
-        {/* Tabs */}
+        {/* Tabs — mirror Shiprocket's order lifecycle */}
         <nav className="max-w-5xl mx-auto px-4 flex gap-1 overflow-x-auto">
-          <TabLink href="/pack?tab=topack" active={tab === "topack"}>
-            <Package size={13} /> To pack
-            <Count n={topackCount} />
-          </TabLink>
-          <TabLink href="/pack?tab=awb" active={tab === "awb"}>
-            <Truck size={13} /> AWB pending
-            <Count n={awbCount} />
-          </TabLink>
-          <TabLink href="/pack?tab=dispatched" active={tab === "dispatched"}>
-            <CheckCircle2 size={13} /> Dispatched
-            <Count n={dispatchedCount} />
-          </TabLink>
+          {TABS.map((t) => (
+            <TabLink key={t.id} href={tabHref(t.id)} active={tab === t.id}>
+              {TAB_ICON[t.id]} {t.label}
+              <Count n={counts[t.id]} />
+            </TabLink>
+          ))}
         </nav>
       </header>
+
+      {/* Filter bar — date range + sort, like Shiprocket's "Last 30 days" */}
+      <div className="max-w-5xl mx-auto px-4 pt-4 flex flex-wrap items-center gap-2">
+        <FilterSelect
+          label="Range"
+          current={range}
+          tab={tab}
+          sort={sort}
+          paramKey="range"
+          options={[
+            { value: "7", label: "Last 7 days" },
+            { value: "30", label: "Last 30 days" },
+            { value: "90", label: "Last 90 days" },
+            { value: "all", label: "All time" },
+          ]}
+        />
+        <FilterSelect
+          label="Sort"
+          current={sort}
+          tab={tab}
+          range={range}
+          paramKey="sort"
+          options={[
+            { value: "newest", label: "Newest first" },
+            { value: "oldest", label: "Oldest first" },
+          ]}
+        />
+        <span className="ml-auto text-[11px] font-mono uppercase tracking-widest text-white/40">
+          {rows.length} order{rows.length === 1 ? "" : "s"}
+        </span>
+      </div>
 
       {/* Body */}
       <main className="max-w-5xl mx-auto px-4 py-5 space-y-3">
@@ -233,6 +362,8 @@ export default async function PackPage({
               status={order.status}
               awbCode={order.awbCode}
               courierName={order.courierName}
+              invoiceNumber={order.invoiceNumber}
+              placedAt={order.placedAt}
               shippingAddress={
                 order.shippingAddress as {
                   fullName: string;
@@ -240,6 +371,7 @@ export default async function PackPage({
                   city: string;
                   state: string;
                   pincode: string;
+                  email?: string;
                 }
               }
               items={
@@ -247,23 +379,61 @@ export default async function PackPage({
                   name: string;
                   qty: number;
                   image?: string | null;
+                  skuId?: string;
+                  variantSlug?: string | null;
                 }>
               }
               paymentMethod={order.paymentMethod}
               totalInr={order.totalInr}
+              confirmationFeeInr={order.confirmationFeeInr}
               packedAt={order.packedAt}
               shippedAt={order.shippedAt}
-              showActions={tab !== "dispatched"}
+              showActions={tab === "new" || tab === "ready" || tab === "pickups"}
             />
           ))
         )}
       </main>
 
-      {/* Sticky footer — manifest + pickup actions when on the TO PACK tab */}
-      {tab === "topack" && topackCount > 0 && (
-        <PackManifestActions topackCount={topackCount} />
+      {/* Sticky footer — manifest + pickup bulk actions for the courier handoff */}
+      {showManifestFooter && (
+        <PackManifestActions topackCount={counts.ready} />
       )}
     </div>
+  );
+}
+
+/**
+ * Server-rendered filter dropdown — a styled <select> that navigates to a new
+ * URL on change (client island for the onChange only). Preserves the other
+ * params so changing the range doesn't reset the sort and vice-versa.
+ */
+function FilterSelect({
+  label,
+  current,
+  paramKey,
+  options,
+  tab,
+  range,
+  sort,
+}: {
+  label: string;
+  current: string;
+  paramKey: "range" | "sort";
+  options: ReadonlyArray<{ value: string; label: string }>;
+  tab: Tab;
+  range?: RangeKey;
+  sort?: SortKey;
+}) {
+  return (
+    <PackFilterSelect
+      label={label}
+      current={current}
+      paramKey={paramKey}
+      options={options}
+      tab={tab}
+      range={range ?? "30"}
+      sort={sort ?? "newest"}
+    />
   );
 }
 
@@ -301,17 +471,33 @@ function Count({ n }: { n: number }) {
 
 function EmptyState({ tab }: { tab: Tab }) {
   const messages: Record<Tab, { title: string; sub: string }> = {
-    topack: {
-      title: "All caught up.",
-      sub: "No orders waiting to be packed. New orders appear here within ~30 seconds of payment.",
+    new: {
+      title: "No new orders.",
+      sub: "Paid orders awaiting an AWB appear here. They auto-assign within ~30 sec; if one is stuck, use Generate AWB.",
     },
-    awb: {
-      title: "No orders waiting for an AWB.",
-      sub: "Shiprocket usually assigns within 30 sec. If something is stuck here for >5 min, check the orders log.",
+    ready: {
+      title: "Nothing ready to ship.",
+      sub: "Orders with an AWB assigned show here, ready for label, invoice and dispatch.",
     },
-    dispatched: {
-      title: "Nothing dispatched in the last 24 hours.",
-      sub: "Switch to the To pack tab to start.",
+    pickups: {
+      title: "No pickups or manifests pending.",
+      sub: "Once orders have an AWB, print the manifest and schedule the courier pickup from here.",
+    },
+    transit: {
+      title: "Nothing in transit.",
+      sub: "Dispatched orders show here until the courier marks them delivered.",
+    },
+    delivered: {
+      title: "No deliveries in this window.",
+      sub: "Widen the date range to see older delivered orders.",
+    },
+    rto: {
+      title: "No RTO / returns.",
+      sub: "Orders the courier returns to origin appear here.",
+    },
+    all: {
+      title: "No orders in this window.",
+      sub: "Widen the date range to see more orders.",
     },
   };
   const m = messages[tab];
