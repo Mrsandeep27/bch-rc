@@ -25,6 +25,7 @@ import { db } from "@/db";
 import { orders, events, webhooksInbound } from "@/db/schema";
 import { verifyWebhookSignature, fetchAndConfirmCapture } from "@/lib/razorpay";
 import { notifyOrderEvent } from "@/lib/notifications/notify";
+import { sendSellerOrderAlert } from "@/lib/notifications/notify-seller";
 import {
   enqueueShipmentJob,
   runShipmentJobOnce,
@@ -145,6 +146,9 @@ export async function POST(req: Request) {
           // customers who closed the tab before /verify fired. notifyOrderEvent
           // reads the just-updated row so the txn ref renders on the receipt.
           await notifyOrderEvent(order.id, "PAYMENT_CAPTURED");
+          // Alert the seller/ops so they pack fast (email now, WhatsApp when
+          // configured). Runs past the response; never blocks the webhook.
+          after(() => sendSellerOrderAlert(order.id).catch(() => {}));
           // Durable + exactly-once: enqueue the job, run it past the response.
           // Dedups against /verify via the job PK + atomic claim.
           await enqueueShipmentJob(order.id);
@@ -215,8 +219,9 @@ export async function POST(req: Request) {
             source: "webhook",
           });
           // Same downstream as customer-self-service capture: confirmation
-          // email + Shiprocket shipment.
+          // email + seller alert + Shiprocket shipment.
           await notifyOrderEvent(order.id, "PAYMENT_CAPTURED");
+          after(() => sendSellerOrderAlert(order.id).catch(() => {}));
           await enqueueShipmentJob(order.id);
           after(() => runShipmentJobOnce(order.id).catch(() => {}));
         }
