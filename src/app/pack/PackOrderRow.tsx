@@ -58,11 +58,17 @@ type Props = {
 function formatTime(d: Date | string | null): string {
   if (!d) return "";
   const date = typeof d === "string" ? new Date(d) : d;
+  // PIN the timezone to IST. Without an explicit timeZone, the server renders
+  // in UTC and the browser in the user's local zone → different text → React
+  // hydration mismatch (#418) which kills all interactivity on /pack (the
+  // "Generate AWB" button silently did nothing). Fixed by rendering IST on
+  // both sides so server HTML === client HTML.
   return date.toLocaleString("en-IN", {
     hour: "2-digit",
     minute: "2-digit",
     day: "2-digit",
     month: "short",
+    timeZone: "Asia/Kolkata",
   });
 }
 
