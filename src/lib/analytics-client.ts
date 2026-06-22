@@ -102,9 +102,11 @@ async function postToCapi(input: {
 
 export function trackPageView(path?: string): void {
   if (typeof window === "undefined") return;
+  // GA fires for everyone — Consent Mode keeps it cookieless until consent.
+  window.gtag?.("event", "page_view", { page_path: path ?? window.location.pathname });
+  // Pixel + CAPI share identifying data → opt-in only.
   if (!consentGranted()) return;
   const eventId = newEventId();
-  window.gtag?.("event", "page_view", { page_path: path ?? window.location.pathname });
   window.fbq?.("track", "PageView", undefined, { eventID: eventId });
   void postToCapi({
     eventName: "PageView",
@@ -116,8 +118,6 @@ export function trackPageView(path?: string): void {
 
 export function trackAddToCart(input: AddToCartEventInput): void {
   if (typeof window === "undefined") return;
-  if (!consentGranted()) return;
-  const eventId = newEventId();
   const value = input.priceInr * (input.quantity ?? 1);
   window.gtag?.("event", "add_to_cart", {
     currency: "INR",
@@ -131,6 +131,8 @@ export function trackAddToCart(input: AddToCartEventInput): void {
       },
     ],
   });
+  if (!consentGranted()) return;
+  const eventId = newEventId();
   window.fbq?.(
     "track",
     "AddToCart",
@@ -160,9 +162,9 @@ export function trackAddToCart(input: AddToCartEventInput): void {
 
 export function trackInitiateCheckout(subtotalInr: number): void {
   if (typeof window === "undefined") return;
+  window.gtag?.("event", "begin_checkout", { currency: "INR", value: subtotalInr });
   if (!consentGranted()) return;
   const eventId = newEventId();
-  window.gtag?.("event", "begin_checkout", { currency: "INR", value: subtotalInr });
   window.fbq?.(
     "track",
     "InitiateCheckout",
@@ -180,8 +182,9 @@ export function trackInitiateCheckout(subtotalInr: number): void {
 
 export function trackPurchase(input: PurchaseEventInput): void {
   if (typeof window === "undefined") return;
-  if (!consentGranted()) return;
-  const eventId = newEventId();
+  // GA purchase fires for everyone (cookieless-modeled until consent) so
+  // revenue + conversion data is never lost. Meta Pixel/CAPI — which also
+  // carries hashed email/phone — stays opt-in.
   window.gtag?.("event", "purchase", {
     transaction_id: input.orderId,
     currency: "INR",
@@ -194,6 +197,8 @@ export function trackPurchase(input: PurchaseEventInput): void {
       quantity: c.quantity,
     })),
   });
+  if (!consentGranted()) return;
+  const eventId = newEventId();
   window.fbq?.(
     "track",
     "Purchase",

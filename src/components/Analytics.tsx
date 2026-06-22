@@ -1,25 +1,28 @@
 "use client";
 
 /**
- * Analytics script loader — GA4 (gtag.js) + Meta Pixel (fbq).
+ * Analytics script loader — GA4 (gtag.js) + Meta Pixel (fbq), with Google
+ * Consent Mode v2.
  *
- * Both are loaded ONLY when:
- *  1. the relevant NEXT_PUBLIC_ env var is set (so this code is safe to
- *     merge before Syed gives the IDs — scripts simply don't fire)
- *  2. the visitor has accepted the ConsentBanner (prc_consent === "accepted")
+ * Two different privacy postures, on purpose:
  *
- * On a normal first visit the order is:
- *   - Page paints (no scripts).
- *   - ConsentBanner shows after the first client effect.
- *   - User taps "Allow analytics" → dispatch prc:consent CustomEvent.
- *   - This component receives the event, sets `granted=true`, the JSX
- *     gates flip from null to the <Script> tags, and gtag/fbq load.
- *   - We also fire the initial PageView/page_view event ourselves, since
- *     the browser navigation that brought the user in had already
- *     completed before consent was granted.
+ *  - GA4 loads on EVERY page for EVERY visitor. Before it can write cookies
+ *    it is put into Consent Mode "denied" by default, which makes gtag send
+ *    cookieless, aggregated pings instead of identifying hits. Google uses
+ *    those to model traffic + conversions, so GA fills with data immediately
+ *    (the dashboard stops saying "No data received") without dropping a
+ *    tracking cookie on a non-consenting user. When the visitor taps "Allow
+ *    analytics" we upgrade consent to "granted" and the same session becomes
+ *    fully measured. This is Google's prescribed DPDP/GDPR-safe pattern.
  *
- * Route changes after consent fire trackPageView() from the usePathname
- * effect below.
+ *  - Meta Pixel (fbq) still loads ONLY after explicit consent, because Meta
+ *    has no equivalent cookieless mode and the Pixel + our CAPI relay share
+ *    identifying data with a foreign processor. That stays strictly opt-in.
+ *
+ * The default consent state is read from localStorage inside the inline init
+ * script itself (not via React state) so it is correct on the very first
+ * hit for returning consenters AND ordered before gtag('config') in the
+ * dataLayer — order matters for Consent Mode.
  */
 
 import { useEffect, useState } from "react";
@@ -35,38 +38,59 @@ export default function Analytics() {
   const pathname = usePathname();
   const sp = useSearchParams();
 
+  // `granted` only gates the Meta Pixel (and the fbq/CAPI calls inside
+  // analytics-client). GA itself always loads — Consent Mode handles its
+  // cookie posture.
   const [granted, setGranted] = useState(false);
 
-  // Read consent on mount (avoids SSR mismatch by deferring to effect).
+  // Read consent on mount + listen for the banner's accept event. On accept
+  // we (a) flip `granted` so the Pixel mounts, and (b) push a Consent Mode
+  // "update" so gtag upgrades the current session from cookieless to full.
   useEffect(() => {
+    const grant = () => {
+      window.gtag?.("consent", "update", {
+        ad_storage: "granted",
+        analytics_storage: "granted",
+        ad_user_data: "granted",
+        ad_personalization: "granted",
+      });
+      // fbq's typed signature only covers init/track; consent is a valid
+      // runtime command, so call through an untyped reference.
+      (window.fbq as ((...args: unknown[]) => void) | undefined)?.(
+        "consent",
+        "grant",
+      );
+    };
     const stored = window.localStorage?.getItem(CONSENT_KEY);
     if (stored === "accepted") setGranted(true);
     const onConsent = (e: Event) => {
       const detail = (e as CustomEvent<string>).detail;
-      if (detail === "accepted") setGranted(true);
+      if (detail === "accepted") {
+        setGranted(true);
+        grant();
+      }
     };
     window.addEventListener("prc:consent", onConsent as EventListener);
     return () => window.removeEventListener("prc:consent", onConsent as EventListener);
   }, []);
 
-  // Fire page_view on route change once consent is granted. Pixel + gtag
-  // both auto-fire their own PageView on script load (the initial one), so
-  // this only matters for client-side route transitions after that.
+  // Fire page_view on client-side route changes. gtag's config already sends
+  // the first page_view (cookieless or full per consent); this covers SPA
+  // navigations. trackPageView fires gtag for everyone and Pixel/CAPI only
+  // when consented, so no `granted` guard here.
   useEffect(() => {
-    if (!granted) return;
     // Skip the very first run — script init covers it.
     const t = setTimeout(() => trackPageView(pathname ?? "/"), 50);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname, sp?.toString(), granted]);
-
-  if (!granted) return null;
+  }, [pathname, sp?.toString()]);
 
   return (
     <>
-      {/* Google Analytics 4 (gtag.js) — Only loads when NEXT_PUBLIC_GA_ID
-          is set. The init script is small + idempotent; the network request
-          for gtag.js itself defers until after-interactive. */}
+      {/* Google Analytics 4 (gtag.js) + Consent Mode v2 — loads for everyone
+          when NEXT_PUBLIC_GA_ID is set. The consent default is read from
+          localStorage so returning consenters start "granted"; everyone else
+          starts "denied" (cookieless modeled data). */}
       {gaId && (
         <>
           <Script
@@ -78,6 +102,17 @@ export default function Analytics() {
               window.dataLayer = window.dataLayer || [];
               function gtag(){dataLayer.push(arguments);}
               window.gtag = gtag;
+              var __g = 'denied';
+              try { if (localStorage.getItem('${CONSENT_KEY}') === 'accepted') __g = 'granted'; } catch(e) {}
+              gtag('consent', 'default', {
+                ad_storage: __g,
+                analytics_storage: __g,
+                ad_user_data: __g,
+                ad_personalization: __g,
+                functionality_storage: 'granted',
+                security_storage: 'granted',
+                wait_for_update: 500
+              });
               gtag('js', new Date());
               gtag('config', '${gaId}', {
                 send_page_view: true,
@@ -89,8 +124,10 @@ export default function Analytics() {
         </>
       )}
 
-      {/* Meta Pixel — auto-fires PageView on init. */}
-      {pixelId && (
+      {/* Meta Pixel — opt-in only (loads after consent). Auto-fires PageView
+          on init; subsequent events come from analytics-client (Pixel+CAPI,
+          both consent-gated). */}
+      {granted && pixelId && (
         <Script id="fbq-init" strategy="afterInteractive">
           {`
             !function(f,b,e,v,n,t,s)
