@@ -43,12 +43,36 @@ async function dispatchRow(
       return await sendWhatsApp({ toPhone: payload.toPhone ?? "", text });
     }
     const rendered = renderTemplate(template, payload);
+
+    // Attach the GST invoice PDF to the DELIVERED email, generated from the
+    // computed invoice carried in the payload. Done at send-time (not enqueue)
+    // so it survives retries and never bloats the outbox row. If PDF generation
+    // throws, the email still goes out without the attachment rather than
+    // failing the whole notification.
+    let attachments: Array<{ filename: string; content: string }> | undefined;
+    if (template === "DELIVERED" && payload.invoice && !payload.invoice.isDraft) {
+      try {
+        const { renderInvoicePdfBase64 } = await import("@/lib/invoice-pdf");
+        const content = await renderInvoicePdfBase64(payload.invoice, {
+          name: payload.customerName,
+          address: payload.shippingAddress,
+        });
+        const num = payload.invoice.invoiceNumber ?? payload.orderId;
+        attachments = [
+          { filename: `Invoice-${num.replace(/[^A-Za-z0-9_-]/g, "")}.pdf`, content },
+        ];
+      } catch (err) {
+        logError("notifications:invoice-pdf", err, { orderId: payload.orderId });
+      }
+    }
+
     return await sendEmail({
       to: payload.to,
       subject: rendered.subject,
       html: rendered.html,
       text: rendered.text,
       idempotencyKey: dedupKey ?? undefined,
+      attachments,
     });
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };

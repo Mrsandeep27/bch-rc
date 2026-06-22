@@ -18,6 +18,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { orders } from "@/db/schema";
 import { resolveServiceability } from "@/lib/serviceability";
+import { computeInvoice } from "@/lib/invoice";
 import { logError } from "@/lib/logger";
 import { enqueueNotification, type NotificationChannel } from "./enqueue";
 import { sendOutboxRow } from "./drain";
@@ -50,9 +51,49 @@ function buildPayload(order: OrderRow): EmailPayload {
     qty: number;
     lineTotalInr: number;
     image?: string | null;
+    unitPriceInr?: number;
+    skuId?: string;
+    variantSlug?: string | null;
   }>) ?? [];
   const eta = addr.pincode
     ? resolveServiceability(addr.pincode).etaText || null
+    : null;
+
+  // GST invoice — only once a Zoho invoice number has been entered on /pack.
+  // Rendered in the DELIVERED email; null for everything before that (and for
+  // every non-delivered template, which simply ignore the field).
+  const invoice = order.invoiceNumber
+    ? computeInvoice({
+        id: order.id,
+        invoiceNumber: order.invoiceNumber,
+        placedAt: order.placedAt,
+        items: items.map((i) => ({
+          name: i.name,
+          qty: i.qty,
+          lineTotalInr: i.lineTotalInr,
+          unitPriceInr: i.unitPriceInr,
+          image: i.image ?? null,
+          skuId: i.skuId,
+          variantSlug: i.variantSlug,
+        })),
+        subtotalInr: order.subtotalInr,
+        shippingInr: order.shippingInr,
+        discountInr: order.discountInr,
+        codFeeInr: order.codFeeInr,
+        confirmationFeeInr: order.confirmationFeeInr,
+        totalInr: order.totalInr,
+        paymentMethod: order.paymentMethod,
+        shippingAddress: {
+          fullName: addr.fullName,
+          phone: addr.phone ?? undefined,
+          line1: addr.line1,
+          line2: addr.line2 ?? null,
+          city: addr.city,
+          state: addr.state,
+          pincode: addr.pincode ?? undefined,
+          email: addr.email ?? undefined,
+        },
+      })
     : null;
 
   return {
@@ -90,6 +131,7 @@ function buildPayload(order: OrderRow): EmailPayload {
           pincode: addr.pincode,
         }
       : null,
+    invoice,
   };
 }
 

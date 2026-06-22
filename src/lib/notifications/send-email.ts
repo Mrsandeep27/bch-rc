@@ -19,6 +19,9 @@ export type SendEmailInput = {
    * on top of our outbox dedup_key + row lease.
    */
   idempotencyKey?: string;
+  /** Optional file attachments. `content` is base64-encoded bytes — Resend
+   *  decodes and attaches them (e.g. the GST invoice PDF on a DELIVERED mail). */
+  attachments?: Array<{ filename: string; content: string }>;
 };
 
 const FROM_DEFAULT = "PRC Cars <orders@pocketrccars.com>";
@@ -38,6 +41,9 @@ export async function sendEmail(
     html: input.html,
     text: input.text,
     reply_to: input.replyTo ?? "support@pocketrccars.com",
+    ...(input.attachments && input.attachments.length
+      ? { attachments: input.attachments }
+      : {}),
   };
 
   let res: Response;
