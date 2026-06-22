@@ -93,7 +93,7 @@ export default function Hero({
         muted
         loop
         playsInline
-        preload="auto"
+        preload="metadata"
         aria-label="Pocket BMW M-style 1:64 die-cast RC drift car drifting on a smooth floor"
         className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none [object-position:50%_center] sm:[object-position:50%_center]"
       >
