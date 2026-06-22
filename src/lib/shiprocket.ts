@@ -218,6 +218,51 @@ export type AssignAwbResponse = {
   };
 };
 
+/**
+ * Find the cheapest SURFACE courier for a pickup→delivery route. Returns the
+ * courier_company_id to pass to /courier/assign/awb, or null to let Shiprocket
+ * auto-pick (which defaults to expensive AIR). Surface is detected via the
+ * `is_surface` flag, falling back to "name doesn't say Air". If no surface
+ * option exists we return the cheapest of whatever's available.
+ */
+async function getCheapestSurfaceCourierId(
+  deliveryPincode: string,
+  weightKg: number,
+  cod: 0 | 1,
+): Promise<number | null> {
+  const pickup = process.env.SHIPROCKET_PICKUP_PINCODE ?? "560043";
+  try {
+    const data = await srFetch<{
+      data?: {
+        available_courier_companies?: Array<{
+          courier_company_id: number;
+          courier_name?: string;
+          rate?: number;
+          is_surface?: boolean | number;
+        }>;
+      };
+    }>(
+      `/courier/serviceability/?pickup_postcode=${pickup}&delivery_postcode=${deliveryPincode}&weight=${weightKg}&cod=${cod}`,
+      { method: "GET" },
+    );
+    const couriers = data.data?.available_courier_companies ?? [];
+    if (couriers.length === 0) return null;
+    const surface = couriers.filter(
+      (c) =>
+        c.is_surface === true ||
+        c.is_surface === 1 ||
+        !/air/i.test(c.courier_name ?? "air"),
+    );
+    const pool = surface.length > 0 ? surface : couriers;
+    pool.sort((a, b) => (a.rate ?? Infinity) - (b.rate ?? Infinity));
+    return pool[0]?.courier_company_id ?? null;
+  } catch (err) {
+    // Never block shipment creation on serviceability — fall back to default.
+    logError("shiprocket:cheapest-courier", err, { deliveryPincode });
+    return null;
+  }
+}
+
 // ============================================================
 // Public helpers
 // ============================================================
@@ -284,11 +329,26 @@ export async function createShipment(input: CreateShipmentInput): Promise<{
 
   if (!awbCode && order.shipment_id) {
     try {
+      // Pick the CHEAPEST SURFACE courier for the route. Without an explicit
+      // courier_id, Shiprocket defaults to AIR (~₹200/parcel) instead of
+      // Surface (~₹70) — a big margin hit on ₹999-1899 toys. We query
+      // serviceability, drop air options, and assign the cheapest surface.
+      // If serviceability fails we fall back to Shiprocket's default pick.
+      const cod = input.paymentMethod === "COD" ? 1 : 0;
+      const courierId = await getCheapestSurfaceCourierId(
+        input.customer.pincode,
+        dims.weightKg,
+        cod,
+      );
       const awbResp = await srFetch<AssignAwbResponse>(
         "/courier/assign/awb",
         {
           method: "POST",
-          body: JSON.stringify({ shipment_id: order.shipment_id }),
+          body: JSON.stringify(
+            courierId
+              ? { shipment_id: order.shipment_id, courier_id: courierId }
+              : { shipment_id: order.shipment_id },
+          ),
         },
       );
       awbCode = awbResp.response?.data?.awb_code ?? null;
