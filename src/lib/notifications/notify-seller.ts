@@ -39,6 +39,78 @@ function inr(n: number): string {
   return `₹${n.toLocaleString("en-IN")}`;
 }
 
+/**
+ * Alert ops when a customer confirmation email bounced / was marked spam.
+ * The customer never got it, so the team must reach them another way — this
+ * surfaces the phone number prominently so they can WhatsApp/call.
+ */
+export async function alertOpsEmailBounce(
+  orderId: string,
+  status: string,
+): Promise<void> {
+  try {
+    const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
+    if (!order) return;
+    const addr = (order.shippingAddress ?? {}) as {
+      fullName?: string;
+      phone?: string;
+      email?: string;
+    };
+    const name = addr.fullName || "Customer";
+    const phone = addr.phone || "—";
+    const orderUrl = `${SITE_URL}/orders/${order.id}`;
+
+    const subject = `⚠️ Email ${status} — follow up ${order.id} by phone`;
+    const text = [
+      `A confirmation email did not reach the customer (${status}).`,
+      `Reach them another way — WhatsApp or call.`,
+      ``,
+      `Order:    ${order.id}`,
+      `Customer: ${name}`,
+      `Phone:    ${phone}`,
+      `Email:    ${addr.email ?? "—"} (${status})`,
+      `Total:    ${inr(order.totalInr)}`,
+      ``,
+      `Send them this link: ${orderUrl}`,
+    ].join("\n");
+    const html = `
+      <div style="font-family:system-ui,Segoe UI,Roboto,sans-serif;max-width:480px">
+        <h2 style="margin:0 0 4px;color:#dc2626">⚠️ Confirmation email ${status}</h2>
+        <p style="margin:0 0 12px;color:#555">Customer didn't get it — follow up by phone/WhatsApp.</p>
+        <table style="font-size:14px">
+          <tr><td style="color:#888;padding:3px 8px 3px 0">Order</td><td>${order.id}</td></tr>
+          <tr><td style="color:#888;padding:3px 8px 3px 0">Customer</td><td>${name}</td></tr>
+          <tr><td style="color:#888;padding:3px 8px 3px 0">Phone</td><td><strong>${phone}</strong></td></tr>
+          <tr><td style="color:#888;padding:3px 8px 3px 0">Email</td><td>${addr.email ?? "—"} (${status})</td></tr>
+        </table>
+        <a href="${orderUrl}" style="display:inline-block;margin-top:14px;color:#dc2626">Order link to send them →</a>
+      </div>`;
+
+    const emails = recipients("ORDER_ALERT_EMAILS");
+    await Promise.all(
+      emails.map((to) =>
+        sendEmail({
+          to,
+          subject,
+          html,
+          text,
+          idempotencyKey: `bounce-alert:${order.id}:${status}:${to}`,
+        }).catch((err) => logError("notify-seller:bounce-email", err, { orderId, to })),
+      ),
+    );
+    if (whatsappEnabled()) {
+      const phones = recipients("ORDER_ALERT_PHONES");
+      await Promise.all(
+        phones.map((toPhone) =>
+          sendWhatsApp({ toPhone, text }).catch(() => {}),
+        ),
+      );
+    }
+  } catch (err) {
+    logError("notify-seller:bounce", err, { orderId });
+  }
+}
+
 export async function sendSellerOrderAlert(orderId: string): Promise<void> {
   try {
     const [order] = await db.select().from(orders).where(eq(orders.id, orderId));

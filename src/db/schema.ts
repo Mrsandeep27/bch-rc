@@ -630,6 +630,21 @@ export const notificationsOutbox = pgTable(
       .defaultNow(),
     sentAt: timestamp("sent_at", { withTimezone: true }),
     lastError: text("last_error"),
+    /**
+     * Provider message id (Resend `email_id`) — set when we hand the message
+     * to Resend. The /api/webhooks/resend receiver matches delivery events
+     * back to this row by provider_id.
+     */
+    providerId: text("provider_id"),
+    /**
+     * ACTUAL delivery outcome from the provider's webhook — distinct from
+     * sent_at (which only means "we handed it to Resend"). One of:
+     * pending | sent | delivered | delayed | bounced | complained | failed.
+     * `bounced`/`complained` mean the customer never got it → ops follow up
+     * by phone.
+     */
+    deliveryStatus: text("delivery_status").notNull().default("pending"),
+    deliveryStatusAt: timestamp("delivery_status_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

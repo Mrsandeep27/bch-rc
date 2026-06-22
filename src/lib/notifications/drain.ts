@@ -78,9 +78,18 @@ async function settle(
   result: { ok: true; id: string } | { ok: false; error: string },
 ): Promise<"sent" | "failed" | "exhausted"> {
   if (result.ok) {
+    // Store the provider message id so the Resend webhook can match delivery
+    // events back to this row. delivery_status='sent' = handed to provider;
+    // the webhook later upgrades it to delivered / bounced / complained.
     await db
       .update(notificationsOutbox)
-      .set({ sentAt: new Date(), lastError: null })
+      .set({
+        sentAt: new Date(),
+        lastError: null,
+        providerId: result.id,
+        deliveryStatus: "sent",
+        deliveryStatusAt: new Date(),
+      })
       .where(eq(notificationsOutbox.id, row.id));
     return "sent";
   }

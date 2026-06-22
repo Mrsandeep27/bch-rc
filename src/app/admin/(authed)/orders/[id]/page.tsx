@@ -4,7 +4,7 @@ import Image from "next/image";
 import { ChevronLeft, ExternalLink, MessageCircle } from "lucide-react";
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { orders, customers, events } from "@/db/schema";
+import { orders, customers, events, notificationsOutbox } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
 import { formatINR } from "@/lib/utils";
 import { waLink } from "@/lib/config";
@@ -42,6 +42,19 @@ export default async function AdminOrderDetail({
     .from(events)
     .where(eq(events.orderId, id))
     .orderBy(desc(events.createdAt));
+
+  // Notification delivery status — so we can see if the customer's
+  // confirmation actually landed (delivered) or bounced.
+  const notifs = await db
+    .select({
+      template: notificationsOutbox.template,
+      channel: notificationsOutbox.channel,
+      deliveryStatus: notificationsOutbox.deliveryStatus,
+      sentAt: notificationsOutbox.sentAt,
+    })
+    .from(notificationsOutbox)
+    .where(eq(notificationsOutbox.orderId, id))
+    .orderBy(desc(notificationsOutbox.createdAt));
 
   const items = order.items as OrderItem[];
   const addr = order.shippingAddress as Record<string, string>;
@@ -182,6 +195,36 @@ export default async function AdminOrderDetail({
               </div>
             )}
           </div>
+
+          {/* Notification delivery — did the customer's email actually land? */}
+          {notifs.length > 0 && (
+            <div className="bg-white rounded-2xl border border-brand-line p-5">
+              <h2 className="font-semibold text-brand-ink mb-3">Notifications</h2>
+              <ul className="space-y-2 text-sm">
+                {notifs.map((n, i) => (
+                  <li key={i} className="flex items-center justify-between gap-3">
+                    <span className="text-brand-ink-soft">
+                      {n.template}{" "}
+                      <span className="text-[11px] font-mono uppercase">
+                        · {n.channel}
+                      </span>
+                    </span>
+                    <DeliveryBadge status={n.deliveryStatus} />
+                  </li>
+                ))}
+              </ul>
+              {notifs.some(
+                (n) =>
+                  n.deliveryStatus === "bounced" ||
+                  n.deliveryStatus === "complained",
+              ) && (
+                <p className="mt-3 text-xs text-brand-red font-medium">
+                  ⚠️ A confirmation didn&rsquo;t reach the customer — follow up by
+                  phone/WhatsApp using the number above.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Event timeline */}
           <div className="bg-white rounded-2xl border border-brand-line p-5">
@@ -326,6 +369,25 @@ export default async function AdminOrderDetail({
         </div>
       </div>
     </div>
+  );
+}
+
+function DeliveryBadge({ status }: { status: string }) {
+  const map: Record<string, { bg: string; fg: string; label: string }> = {
+    delivered: { bg: "bg-success/15", fg: "text-success", label: "Delivered" },
+    sent: { bg: "bg-blue-100", fg: "text-blue-700", label: "Sent" },
+    delayed: { bg: "bg-amber-100", fg: "text-amber-700", label: "Delayed" },
+    bounced: { bg: "bg-red-100", fg: "text-red-700", label: "Bounced" },
+    complained: { bg: "bg-red-100", fg: "text-red-700", label: "Spam" },
+    pending: { bg: "bg-brand-line/40", fg: "text-brand-ink-soft", label: "Pending" },
+  };
+  const s = map[status] ?? map.pending;
+  return (
+    <span
+      className={`text-[10px] font-mono font-bold uppercase tracking-widest px-1.5 py-0.5 rounded ${s.bg} ${s.fg}`}
+    >
+      {s.label}
+    </span>
   );
 }
 

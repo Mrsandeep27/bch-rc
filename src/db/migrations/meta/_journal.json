@@ -92,6 +92,13 @@
       "when": 1781125200000,
       "tag": "0012_manifest_state",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1781211600000,
+      "tag": "0013_email_delivery_tracking",
+      "breakpoints": true
     }
   ]
 }
