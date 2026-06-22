@@ -89,3 +89,4 @@ next-env.d.ts
 .vercel
 prc-all-images/
 public/invoice-preview.html
+.cmsg.txt
