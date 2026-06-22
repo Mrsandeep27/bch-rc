@@ -1,10 +1,9 @@
-﻿"use client";
+"use client";
 
-import { motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
 import { Play, Volume2, VolumeX, ShoppingBag } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { InstagramIcon } from "@/components/BrandIcons";
 import { THEME } from "@/lib/theme";
 import manifestData from "@/lib/ugc-manifest.json";
@@ -21,156 +20,134 @@ type UgcCard = {
 
 const MANIFEST = manifestData as UgcCard[];
 
-const MAX_CONCURRENT_VIDEOS = 2;
-
 const STUBS: UgcCard[] = [
-  {
-    src: "/products/PRC-bmw.webp",
-    handle: "164prccars",
-    caption: "Pocket BMW · drift wheels on",
-    likes: "1.2K",
-    isVideo: true,
-  },
-  {
-    src: "/products/PRC-porsche.webp",
-    handle: "pocketrccar",
-    caption: "GT3 silhouette in dark blue",
-    likes: "847",
-  },
-  {
-    src: "/products/PRC-monster.webp",
-    handle: "164prccars",
-    caption: "Monster Truck climbs anything",
-    likes: "2.4K",
-    isVideo: true,
-  },
-  {
-    src: "/products/PRC-thar.webp",
-    handle: "pocketrccar",
-    caption: "Thar off-roading on marble",
-    likes: "612",
-  },
-  {
-    src: "/products/PRC-f1-classic.webp",
-    handle: "164prccars",
-    caption: "Pocket F1 · race day at home",
-    likes: "1.9K",
-    isVideo: true,
-  },
-  {
-    src: "/products/PRC-bmw.webp",
-    handle: "pocketrccar",
-    caption: "Behind the scenes · Bangalore HQ",
-    likes: "534",
-  },
+  { src: "/products/PRC-bmw.webp", handle: "164prccars", caption: "Pocket BMW · drift wheels on", likes: "1.2K" },
+  { src: "/products/PRC-porsche.webp", handle: "pocketrccar", caption: "GT3 silhouette in dark blue", likes: "847" },
+  { src: "/products/PRC-monster.webp", handle: "164prccars", caption: "Monster Truck climbs anything", likes: "2.4K" },
+  { src: "/products/PRC-thar.webp", handle: "pocketrccar", caption: "Thar off-roading on marble", likes: "612" },
+  { src: "/products/PRC-f1-classic.webp", handle: "164prccars", caption: "Pocket F1 · race day at home", likes: "1.9K" },
+  { src: "/products/PRC-bmw.webp", handle: "pocketrccar", caption: "Behind the scenes · Bangalore HQ", likes: "534" },
 ];
 
+const SCROLL_SPEED_PX_PER_FRAME = 0.4; // ~24 px/sec
+const RESUME_AFTER_INTERACTION_MS = 2500;
+
+function posterFor(card: UgcCard): string {
+  return card.poster ?? card.src.replace(/\.mp4$/i, ".jpg");
+}
+
+/**
+ * One reel card. KEY BANDWIDTH RULE: the <video> element is only mounted once
+ * the card is tapped (isPlaying). Until then we render just the poster image,
+ * so an un-tapped reel downloads ~0 video bytes (was ~2-3 MB each on autoplay).
+ */
 function ReelCard({
   card,
-  index,
-  cardRef,
-  isActive,
+  isVideo,
+  isPlaying,
   isUnmuted,
+  onPlay,
   onToggleSound,
 }: {
   card: UgcCard;
-  index: number;
-  cardRef: (el: HTMLDivElement | null) => void;
-  isActive: boolean;
+  isVideo: boolean;
+  isPlaying: boolean;
   isUnmuted: boolean;
+  onPlay: () => void;
   onToggleSound: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const isMp4 = card.src.toLowerCase().endsWith(".mp4");
+  const poster = posterFor(card);
   const href = card.url ?? `https://instagram.com/${card.handle}`;
 
   useEffect(() => {
     const v = videoRef.current;
-    if (!v) return;
-    if (isActive) {
-      const p = v.play();
-      if (p && typeof p.catch === "function") p.catch(() => {});
-    } else {
-      v.pause();
-    }
-  }, [isActive]);
-
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
+    if (!v || !isPlaying) return;
     v.muted = !isUnmuted;
-    if (isUnmuted) {
-      v.volume = 1;
-      const p = v.play();
-      if (p && typeof p.catch === "function") p.catch(() => {});
-    }
-  }, [isUnmuted]);
-
-  const onSoundToggle = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    onToggleSound();
-  };
+    if (isUnmuted) v.volume = 1;
+    const p = v.play();
+    if (p && typeof p.catch === "function") p.catch(() => {});
+  }, [isPlaying, isUnmuted]);
 
   return (
-    <motion.div
-      ref={cardRef}
-      data-reel-index={index}
-      initial={{ opacity: 0, y: 12 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ duration: 0.4, delay: index * 0.04, ease: "easeOut" }}
-      className="group snap-center relative shrink-0 w-[180px] sm:w-[200px] aspect-[9/16] rounded-xl overflow-hidden bg-brand-ink border border-brand-line"
-    >
-      {isMp4 ? (
+    <div className="group snap-center relative shrink-0 w-[180px] sm:w-[200px] aspect-[9/16] rounded-xl overflow-hidden bg-brand-ink border border-brand-line">
+      {/* Poster — always shown (cheap). Video paints over it once playing. */}
+      <Image
+        src={poster}
+        alt={`@${card.handle} · ${card.caption}`}
+        fill
+        sizes="200px"
+        className="object-cover"
+      />
+
+      {/* Video — mounted ONLY after tap, so it only downloads on engagement. */}
+      {isVideo && isPlaying && (
         <video
           ref={videoRef}
           src={card.src}
-          poster={card.poster ?? card.src.replace(/\.mp4$/i, ".jpg")}
-          muted={!isUnmuted}
+          poster={poster}
           loop
           playsInline
-          preload="metadata"
-          className="absolute inset-0 w-full h-full object-cover transform-gpu"
-        />
-      ) : (
-        <Image
-          src={card.src}
-          alt={`@${card.handle} · ${card.caption}`}
-          fill
-          sizes="200px"
-          className="object-cover lg:group-hover:scale-105 transition-transform duration-500"
+          autoPlay
+          muted={!isUnmuted}
+          preload="auto"
+          className="absolute inset-0 w-full h-full object-cover transform-gpu z-[5]"
         />
       )}
-
-      <a
-        href={href}
-        target="_blank"
-        rel="noopener"
-        aria-label={`Open @${card.handle} on Instagram`}
-        className="absolute inset-0 z-10"
-      />
 
       <div className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-black/70 to-transparent pointer-events-none z-20" />
       <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none z-20" />
 
-      {!isMp4 && (
+      {/* Tap layer:
+          - video cards  → tap toggles play (loads the video on first tap)
+          - image stubs  → tap opens Instagram */}
+      {isVideo ? (
+        <button
+          type="button"
+          onClick={onPlay}
+          aria-label={isPlaying ? "Pause reel" : "Play reel"}
+          className="absolute inset-0 z-10"
+        />
+      ) : (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener"
+          aria-label={`Open @${card.handle} on Instagram`}
+          className="absolute inset-0 z-10"
+        />
+      )}
+
+      {/* Play button overlay — shown until the reel is playing. */}
+      {isVideo && !isPlaying && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
-          <div className="w-12 h-12 rounded-full bg-white/15 backdrop-blur-sm border border-white/30 flex items-center justify-center">
+          <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm border border-white/40 flex items-center justify-center group-hover:scale-110 transition-transform">
             <Play size={18} className="fill-white text-white translate-x-0.5" />
           </div>
         </div>
       )}
 
-      <div className="absolute top-2.5 left-2.5 z-30 flex items-center gap-1 bg-black/60 backdrop-blur-sm text-white text-[10px] font-mono uppercase tracking-widest px-2 py-1 rounded-full pointer-events-none">
+      {/* Handle chip → Instagram (stops the tap from toggling play). */}
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener"
+        onClick={(e) => e.stopPropagation()}
+        className="absolute top-2.5 left-2.5 z-30 flex items-center gap-1 bg-black/60 backdrop-blur-sm text-white text-[10px] font-mono uppercase tracking-widest px-2 py-1 rounded-full hover:bg-black/80"
+      >
         <InstagramIcon size={10} />
         <span className="truncate max-w-[110px]">@{card.handle}</span>
-      </div>
+      </a>
 
-      {isMp4 && (
+      {/* Sound toggle — only while playing. */}
+      {isVideo && isPlaying && (
         <button
           type="button"
-          onClick={onSoundToggle}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onToggleSound();
+          }}
           aria-label={isUnmuted ? "Mute reel" : "Unmute reel"}
           className="absolute top-2.5 right-2.5 z-30 w-8 h-8 rounded-full bg-black/60 backdrop-blur-sm border border-white/20 flex items-center justify-center text-white hover:bg-black/80 active:scale-95 transition"
         >
@@ -183,7 +160,7 @@ function ReelCard({
           {card.caption}
         </p>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -201,50 +178,75 @@ export default function UgcGrid() {
       .slice(0, 12);
   }, []);
 
-  const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
-  const ratiosRef = useRef<Map<number, number>>(new Map());
-  const [activeIdxs, setActiveIdxs] = useState<Set<number>>(new Set());
-  const [unmutedIdx, setUnmutedIdx] = useState<number | null>(null);
+  // Two copies for a seamless auto-scroll loop. playingKey is the render-index
+  // (0..2N-1) of the one card whose video is mounted — only that card plays.
+  const cards = useMemo(() => [...UGC, ...UGC], [UGC]);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [playingKey, setPlayingKey] = useState<number | null>(null);
+  const [unmuted, setUnmuted] = useState(false);
 
-  const recompute = useCallback(() => {
-    const top = [...ratiosRef.current.entries()]
-      .filter(([, r]) => r > 0.5)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, MAX_CONCURRENT_VIDEOS)
-      .map(([i]) => i);
-    setActiveIdxs((prev) => {
-      const next = new Set(top);
-      if (prev.size === next.size && [...prev].every((i) => next.has(i))) {
-        return prev;
-      }
-      return next;
-    });
-  }, []);
+  // Keep the latest "is a video playing" in a ref so the rAF loop can read it
+  // without the effect re-subscribing on every play toggle.
+  const playingRef = useRef(false);
+  playingRef.current = playingKey !== null;
 
   useEffect(() => {
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          const idxAttr = (entry.target as HTMLElement).dataset.reelIndex;
-          if (idxAttr == null) continue;
-          const idx = Number(idxAttr);
-          ratiosRef.current.set(idx, entry.intersectionRatio);
-        }
-        recompute();
-      },
-      { threshold: [0, 0.25, 0.5, 0.75, 1] }
-    );
-    for (const el of cardRefs.current.values()) io.observe(el);
-    return () => io.disconnect();
-  }, [recompute, UGC.length]);
+    const track = trackRef.current;
+    if (!track) return;
 
-  const setCardRef = useCallback(
-    (idx: number) => (el: HTMLDivElement | null) => {
-      if (el) cardRefs.current.set(idx, el);
-      else cardRefs.current.delete(idx);
-    },
-    []
-  );
+    let raf = 0;
+    let paused = false;
+    let resumeAt = 0;
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let reduced = mq.matches;
+    const onMq = (e: MediaQueryListEvent) => (reduced = e.matches);
+    mq.addEventListener("change", onMq);
+
+    const tick = (now: number) => {
+      if (paused && resumeAt > 0 && now >= resumeAt) {
+        paused = false;
+        resumeAt = 0;
+      }
+      // Auto-scroll continuously, but freeze while a reel is playing so the
+      // viewer can watch it, and while the user is interacting.
+      if (!reduced && !paused && !playingRef.current) {
+        track.scrollLeft += SCROLL_SPEED_PX_PER_FRAME;
+        const half = track.scrollWidth / 2;
+        if (half > 0 && track.scrollLeft >= half) track.scrollLeft -= half;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+
+    const pauseTemporarily = () => {
+      paused = true;
+      resumeAt = performance.now() + RESUME_AFTER_INTERACTION_MS;
+    };
+    const pauseHover = () => {
+      paused = true;
+      resumeAt = 0;
+    };
+    const resume = () => {
+      paused = false;
+      resumeAt = 0;
+    };
+
+    track.addEventListener("touchstart", pauseTemporarily, { passive: true });
+    track.addEventListener("touchmove", pauseTemporarily, { passive: true });
+    track.addEventListener("wheel", pauseTemporarily, { passive: true });
+    track.addEventListener("mouseenter", pauseHover);
+    track.addEventListener("mouseleave", resume);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      mq.removeEventListener("change", onMq);
+      track.removeEventListener("touchstart", pauseTemporarily);
+      track.removeEventListener("touchmove", pauseTemporarily);
+      track.removeEventListener("wheel", pauseTemporarily);
+      track.removeEventListener("mouseenter", pauseHover);
+      track.removeEventListener("mouseleave", resume);
+    };
+  }, []);
 
   return (
     <section className="py-8 sm:py-14 bg-white" aria-label="Drifters of India">
@@ -266,32 +268,41 @@ export default function UgcGrid() {
             >
               @{THEME.instagramHandle}
             </a>{" "}
-            to get featured. Tap the speaker to hear.
+            to get featured. Tap a reel to play.
           </p>
         </div>
 
-        <div className="mt-8 -mx-4 sm:mx-0 overflow-x-auto overflow-y-hidden snap-x snap-mandatory no-scrollbar touch-pan-x">
-          <div className="flex gap-3 sm:gap-4 px-4 sm:px-0 pb-4">
-            {UGC.map((card, i) => (
-              <ReelCard
-                key={`${card.handle}-${i}`}
-                card={card}
-                index={i}
-                cardRef={setCardRef(i)}
-                isActive={activeIdxs.has(i)}
-                isUnmuted={unmutedIdx === i}
-                onToggleSound={() =>
-                  setUnmutedIdx((cur) => (cur === i ? null : i))
-                }
-              />
-            ))}
+        <div
+          ref={trackRef}
+          className="mt-8 -mx-4 sm:-mx-0 overflow-x-auto overflow-y-hidden no-scrollbar touch-pan-x"
+        >
+          <div className="flex gap-3 sm:gap-4 px-4 w-max">
+            {cards.map((card, i) => {
+              const isVideo =
+                card.isVideo ?? card.src.toLowerCase().endsWith(".mp4");
+              return (
+                <ReelCard
+                  key={`${card.handle}-${i}`}
+                  card={card}
+                  isVideo={isVideo}
+                  isPlaying={playingKey === i}
+                  isUnmuted={playingKey === i && unmuted}
+                  onPlay={() =>
+                    setPlayingKey((cur) => {
+                      if (cur === i) {
+                        setUnmuted(false);
+                        return null; // tap again to stop
+                      }
+                      return i;
+                    })
+                  }
+                  onToggleSound={() => setUnmuted((u) => !u)}
+                />
+              );
+            })}
           </div>
         </div>
 
-        {/* F05 - Mid-arc CTA now ADVANCES the purchase instead of leaking
-            an engaged buyer off to Instagram. The "Follow" link demoted
-            to a tiny secondary text link so brand can still grow IG
-            audience without ceding the primary mid-page CTA pixel. */}
         <div className="mt-8 text-center flex flex-col items-center gap-3">
           <Link
             href="/#sku"
