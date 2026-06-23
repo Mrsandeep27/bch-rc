@@ -67,6 +67,10 @@ type SkuCardProps = {
 
 function SkuCard({ sku, index, stockMap }: SkuCardProps) {
   const router = useRouter();
+  // Whole-card hover drives the preview video. The image sits under the
+  // card-wide PDP <Link> overlay, so hovering the image alone is an
+  // unreliable, tiny target — make the entire card the trigger instead.
+  const [hovered, setHovered] = useState(false);
   // Keep the hero ring on the SKU we promote, but treat the badge field as
   // a hint, not a social-proof claim (W09 — see FACTUAL_BADGES below).
   const isHero = sku.badge === "MOST GIFTED";
@@ -96,6 +100,8 @@ function SkuCard({ sku, index, stockMap }: SkuCardProps) {
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ duration: 0.4, delay: index * 0.1, ease: "easeOut" }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       className={cn(
         "snap-center min-w-[85%] sm:min-w-0 bg-white border rounded-2xl overflow-hidden flex flex-col shadow-md relative group",
         isHero
@@ -114,7 +120,7 @@ function SkuCard({ sku, index, stockMap }: SkuCardProps) {
       />
 
       <div className="aspect-square relative flex items-center justify-center overflow-hidden">
-        <ProductImage sku={sku} />
+        <ProductImage sku={sku} active={hovered} />
         {/* W09 - Only render FACTUAL badges. NEW (product status) and PRO
             (tier) describe the product itself. MOST GIFTED + BESTSELLER are
             social-proof claims that need a review/order count behind them;

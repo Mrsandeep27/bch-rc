@@ -1,15 +1,23 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import type { Sku } from "@/lib/products";
 import { ProductPlaceholder } from "@/components/ProductPlaceholder";
 
 /**
  * Renders the product hero image with a graceful fallback.
- * If the SKU has a heroVideo, the video plays on hover (desktop) or tap
- * (mobile) — muted, looped, web-optimized H.264. Image stays as the poster.
- * If the image fails to load, the colored ProductPlaceholder SVG shows.
+ * If the SKU has a heroVideo, the video plays on hover — muted, looped,
+ * web-optimized H.264. Image stays as the poster. If the image fails to
+ * load, the colored ProductPlaceholder SVG shows.
+ *
+ * Hover trigger: by default the image owns its own hover (the `active` prop
+ * is undefined). But the card-wide `<Link>` overlay in SkuLineup covers the
+ * image, and the image is only a slice of the card, so a self-owned hover is
+ * a tiny, unreliable hit target. When a parent passes `active`, this component
+ * runs in CONTROLLED mode: the card decides play/pause from hovering ANYWHERE
+ * on the card, and we react via an effect. This is what makes the preview fire
+ * reliably — the whole card is the target, not the image-under-the-overlay.
  *
  * Earlier we tried an Aritzia-style lazy-load (preload=none + JS src injection
  * + IntersectionObserver) but it caused first-hover playback to stutter while
@@ -19,13 +27,40 @@ import { ProductPlaceholder } from "@/components/ProductPlaceholder";
 export function ProductImage({
   sku,
   className,
+  active,
 }: {
   sku: Sku;
   className?: string;
+  /** When provided, the parent controls hover (whole-card trigger). When
+   *  undefined, the image manages its own hover. */
+  active?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
   const [playing, setPlaying] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const controlled = active !== undefined;
+
+  const startVideo = useCallback(() => {
+    if (!sku.heroVideo || !videoRef.current) return;
+    videoRef.current.currentTime = 0;
+    videoRef.current
+      .play()
+      .then(() => setPlaying(true))
+      .catch(() => {});
+  }, [sku.heroVideo]);
+
+  const stopVideo = useCallback(() => {
+    if (!sku.heroVideo || !videoRef.current) return;
+    videoRef.current.pause();
+    setPlaying(false);
+  }, [sku.heroVideo]);
+
+  // Controlled mode: play/pause follows the parent's `active` flag.
+  useEffect(() => {
+    if (!controlled) return;
+    if (active) startVideo();
+    else stopVideo();
+  }, [controlled, active, startVideo, stopVideo]);
 
   if (!sku.heroImage || failed) {
     return (
@@ -33,28 +68,20 @@ export function ProductImage({
     );
   }
 
-  const startVideo = () => {
-    if (!sku.heroVideo || !videoRef.current) return;
-    videoRef.current.currentTime = 0;
-    videoRef.current
-      .play()
-      .then(() => setPlaying(true))
-      .catch(() => {});
-  };
-
-  const stopVideo = () => {
-    if (!sku.heroVideo || !videoRef.current) return;
-    videoRef.current.pause();
-    setPlaying(false);
-  };
+  // Self-managed hover handlers only when the parent isn't driving it.
+  const selfHover = controlled
+    ? {}
+    : {
+        onMouseEnter: startVideo,
+        onMouseLeave: stopVideo,
+        onTouchStart: startVideo,
+        onTouchEnd: stopVideo,
+      };
 
   return (
     <div
       className={`relative w-full h-full bg-brand-cream ${className ?? ""}`}
-      onMouseEnter={startVideo}
-      onMouseLeave={stopVideo}
-      onTouchStart={startVideo}
-      onTouchEnd={stopVideo}
+      {...selfHover}
     >
       {/* Static image — always rendered, fades out when video plays.
           The parent's `bg-brand-cream` is the load-state backdrop; we no
