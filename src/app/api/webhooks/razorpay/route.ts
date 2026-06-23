@@ -30,7 +30,7 @@ import {
   enqueueShipmentJob,
   runShipmentJobOnce,
 } from "@/lib/fulfillment/shipment-queue";
-import { releaseOrderHoldsBestEffort } from "@/lib/inventory/release";
+import { releaseOrderHoldsBestEffort, reacquireOrderHolds } from "@/lib/inventory/release";
 
 export async function POST(req: Request) {
   const rawBody = await req.text();
@@ -91,7 +91,12 @@ export async function POST(req: Request) {
           .select()
           .from(orders)
           .where(eq(orders.razorpayOrderId, payment.order_id));
-        if (order && order.paymentStatus !== "CAPTURED" && order.paymentStatus !== "FAILED" && order.paymentStatus !== "REFUNDED") {
+        // A captured payment is GROUND TRUTH. Process it even if a prior failed
+        // attempt already marked the order FAILED (Razorpay allows retry on the
+        // same order: fail → succeed). The old guard excluded FAILED here, so a
+        // successful retry was silently dropped — money taken, no order. Only a
+        // genuine CAPTURED (already done) or REFUNDED order is skipped.
+        if (order && order.paymentStatus !== "CAPTURED" && order.paymentStatus !== "REFUNDED") {
           // Partial-prepaid COD (Pay X now + rest on delivery) captures only
           // the upfront confirmation fee, not the total. Pure prepaid (UPI/
           // CARD/etc.) captures the full total. Legacy COD orders (created
@@ -123,6 +128,11 @@ export async function POST(req: Request) {
             });
             break;
           }
+          // If a prior failed attempt released this order's stock, re-reserve it
+          // BEFORE marking PAID so a recovered order never under-ships.
+          if (order.holdsReleased) {
+            await reacquireOrderHolds(order.id);
+          }
           await db
             .update(orders)
             .set({
@@ -138,7 +148,7 @@ export async function POST(req: Request) {
             orderId: order.id,
             customerId: order.customerId,
             type: "WEBHOOK_PAYMENT_CAPTURED",
-            payload: { paymentId: payment.id, amount: payment.amount },
+            payload: { paymentId: payment.id, amount: payment.amount, recoveredFrom: order.status !== "PENDING" ? order.status : undefined },
             source: "webhook",
           });
 

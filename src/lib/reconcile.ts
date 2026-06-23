@@ -14,15 +14,19 @@
  *  4. alert if permanently-failed shipment jobs exist.
  */
 
-import { and, eq, inArray, lt } from "drizzle-orm";
+import { and, eq, inArray, lt, gte, isNotNull, sql, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { events, orders } from "@/db/schema";
-import { releaseOrderHolds } from "@/lib/inventory/release";
+import { releaseOrderHolds, reacquireOrderHolds } from "@/lib/inventory/release";
 import {
   drainShipmentJobs,
   countFailedShipmentJobs,
+  enqueueShipmentJob,
+  runShipmentJobOnce,
 } from "@/lib/fulfillment/shipment-queue";
 import { drainNotificationsOutbox } from "@/lib/notifications/drain";
+import { notifyOrderEvent } from "@/lib/notifications/notify";
+import { razorpay } from "@/lib/razorpay";
 import { alertOps } from "@/lib/alert";
 import { logError } from "@/lib/logger";
 
@@ -142,7 +146,106 @@ export async function sweepUnverifiedCodOrders(
   return { swept: claimed.length, released };
 }
 
+/**
+ * Recover paid-but-not-recorded orders — the money-truth backstop.
+ *
+ * Razorpay is the source of truth for whether a customer paid. Any order still
+ * in a non-paid state (PENDING / FAILED / ABANDONED) that actually HAS a
+ * captured payment is a silently-dropped sale: the most common cause is a
+ * Razorpay retry (failed attempt → order marked FAILED + stock released →
+ * customer retries → succeeds, but the capture was ignored), plus any
+ * payment.captured webhook we never received. We reconcile our state to
+ * Razorpay so a paid order is NEVER lost and no manual daily verification is
+ * needed.
+ *
+ * For each match: re-reserve stock if a prior failure released it, mark
+ * PAID/CAPTURED, fire the shipment + customer confirmation — exactly what the
+ * live capture path does.
+ */
+export async function recoverCapturedPayments(
+  limit = 100,
+): Promise<{ checked: number; recovered: number }> {
+  const candidates = await db
+    .select()
+    .from(orders)
+    .where(
+      and(
+        inArray(orders.status, [
+          "PENDING",
+          "FAILED",
+          "ABANDONED",
+          "PENDING_COD_VERIFICATION",
+        ]),
+        isNotNull(orders.razorpayOrderId),
+        gte(orders.placedAt, sql`now() - interval '7 days'`),
+      ),
+    )
+    .orderBy(desc(orders.placedAt))
+    .limit(limit);
+
+  let recovered = 0;
+  for (const o of candidates) {
+    if (o.paymentStatus === "CAPTURED") continue;
+    try {
+      const pays = await razorpay.orders.fetchPayments(o.razorpayOrderId!);
+      const cap = (pays.items as { id: string; status: string; amount: number }[]).find(
+        (p) => p.status === "captured",
+      );
+      if (!cap) continue;
+
+      // Amount must match what we expect (full total for prepaid, confirmation
+      // fee for partial-prepaid COD) — guards against a stray payment on a
+      // reused order id.
+      const isPartialCod = o.paymentMethod === "COD" && o.confirmationFeeInr > 0;
+      const expectedPaise = (isPartialCod ? o.confirmationFeeInr : o.totalInr) * 100;
+      if (Number(cap.amount) !== expectedPaise) {
+        await db
+          .insert(events)
+          .values({
+            siteId: o.siteId,
+            orderId: o.id,
+            customerId: o.customerId,
+            type: "PAYMENT_RECOVER_AMOUNT_MISMATCH",
+            payload: { paymentId: cap.id, paid: cap.amount, expected: expectedPaise, status: o.status },
+            source: "system",
+          })
+          .catch(() => {});
+        continue;
+      }
+
+      if (o.holdsReleased) await reacquireOrderHolds(o.id);
+      await db
+        .update(orders)
+        .set({
+          status: "PAID",
+          paymentStatus: "CAPTURED",
+          razorpayPaymentId: cap.id,
+          paidAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(orders.id, o.id));
+      await db.insert(events).values({
+        siteId: o.siteId,
+        orderId: o.id,
+        customerId: o.customerId,
+        type: "PAYMENT_RECOVERED_RECONCILE",
+        payload: { paymentId: cap.id, amount: cap.amount, priorStatus: o.status },
+        source: "system",
+      });
+
+      await enqueueShipmentJob(o.id);
+      await runShipmentJobOnce(o.id).catch(() => {});
+      await notifyOrderEvent(o.id, "PAYMENT_CAPTURED").catch(() => {});
+      recovered++;
+    } catch (err) {
+      logError("reconcile:recover-captured", err, { orderId: o.id });
+    }
+  }
+  return { checked: candidates.length, recovered };
+}
+
 export type ReconcileSummary = {
+  recoveredPayments: { checked: number; recovered: number };
   abandoned: { swept: number; released: number };
   codAutoRejected: { swept: number; released: number };
   shipments: Awaited<ReturnType<typeof drainShipmentJobs>>;
@@ -151,6 +254,20 @@ export type ReconcileSummary = {
 };
 
 export async function reconcileAll(): Promise<ReconcileSummary> {
+  // Money-truth first: recover any paid-but-dropped order BEFORE the abandon
+  // sweep, so a captured order is never mistakenly swept to ABANDONED.
+  const recoveredPayments = await recoverCapturedPayments().catch((err) => {
+    logError("reconcile:recover-captured-all", err);
+    return { checked: 0, recovered: 0 };
+  });
+  if (recoveredPayments.recovered > 0) {
+    await alertOps({
+      scope: "reconcile",
+      message: `Recovered ${recoveredPayments.recovered} paid-but-dropped order(s) from Razorpay`,
+      context: recoveredPayments,
+    }).catch(() => {});
+  }
+
   const abandoned = await sweepAbandonedOrders().catch((err) => {
     logError("reconcile:sweep", err);
     return { swept: 0, released: 0 };
@@ -181,6 +298,7 @@ export async function reconcileAll(): Promise<ReconcileSummary> {
   }
 
   return {
+    recoveredPayments,
     abandoned,
     codAutoRejected,
     shipments,
