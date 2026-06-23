@@ -6,6 +6,7 @@ import { Truck, ShieldCheck } from "lucide-react";
 import { HERO_VARIANTS, type HeroVariant } from "@/lib/copy";
 import { defaultVariantSlug, getHeroSku } from "@/lib/products";
 import { useCart } from "@/lib/cart-store";
+import { trackFunnel } from "@/lib/funnel-client";
 
 /**
  * Map the ad UTM source -> hero copy variant. Reads useSearchParams on the
@@ -47,6 +48,7 @@ export default function Hero({
   const { h1, h1Accent, sub, ctaLabel, underCta } = HERO_VARIANTS[variant];
 
   const handlePrimaryCta = () => {
+    trackFunnel("hero_cta_click", { variant });
     const heroSku = getHeroSku();
     useCart.getState().add(heroSku.id, defaultVariantSlug(heroSku));
     useCart.getState().open();

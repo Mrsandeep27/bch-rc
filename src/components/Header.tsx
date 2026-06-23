@@ -8,6 +8,7 @@ import { ShoppingBag, Menu, X, ChevronLeft } from "lucide-react";
 import { WhatsAppIcon } from "@/components/BrandIcons";
 import { THEME, waLink } from "@/lib/theme";
 import { useCart, getCartCount } from "@/lib/cart-store";
+import { trackFunnel } from "@/lib/funnel-client";
 import { cn } from "@/lib/utils";
 
 const NAV_LINKS = [
@@ -137,6 +138,7 @@ export default function Header() {
               href={waLink("Hi! Mujhe ye Pocket RC drift car chahiye — price aur COD details bhej do?")}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => trackFunnel("whatsapp_click", { placement: "header" })}
               className="inline-flex items-center gap-1.5 sm:gap-2 bg-whatsapp-green hover:bg-whatsapp-green-hover text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-sm font-semibold transition-colors"
               aria-label="Chat on WhatsApp"
             >

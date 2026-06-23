@@ -23,6 +23,9 @@ export const FUNNEL_EVENTS = [
   "payment_failed", // Razorpay reported a failure (metadata.reason)
   "payment_cancelled", // customer dismissed the Razorpay modal
   "purchase", // order success page reached
+  // --- engagement / leak signals (not funnel stages) ---
+  "hero_cta_click", // tapped the hero primary CTA (metadata.variant)
+  "whatsapp_click", // left to WhatsApp chat (metadata.placement: fab|header)
 ] as const;
 
 export type FunnelEventType = (typeof FUNNEL_EVENTS)[number];
