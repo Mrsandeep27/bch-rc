@@ -29,6 +29,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import Script from "next/script";
 import { trackPageView } from "@/lib/analytics-client";
+import { trackFunnel } from "@/lib/funnel-client";
 
 const CONSENT_KEY = "prc_consent";
 
@@ -84,6 +85,13 @@ export default function Analytics() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, sp?.toString()]);
+
+  // First-party funnel page_view — fires for EVERY visitor (no consent gate),
+  // including the initial load. This is the funnel's top-of-line denominator.
+  useEffect(() => {
+    trackFunnel("page_view", {}, { path: pathname ?? "/" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
 
   return (
     <>

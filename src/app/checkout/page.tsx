@@ -20,6 +20,7 @@ import {
 import { nanoid } from "nanoid";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
 import { PayButton } from "@/components/PayButton";
+import { trackFunnel } from "@/lib/funnel-client";
 import {
   useCart,
   getCartLines,
@@ -189,6 +190,10 @@ export default function CheckoutPage() {
     import("@/lib/analytics-client").then((m) =>
       m.trackInitiateCheckout(subtotal),
     );
+    trackFunnel("checkout_started", {
+      cartValueInr: subtotal,
+      itemCount: getCartCount(items),
+    });
   }, [subtotal]);
 
   // Provenance tracking: which address fields did the buyer type vs. which
@@ -638,6 +643,11 @@ export default function CheckoutPage() {
           // Payment SUCCEEDED at Razorpay. From here the customer must never be
           // stranded — if our verify call fails, the webhook still captures it.
           paidRef.current = true;
+          trackFunnel(
+            "payment_succeeded",
+            { amountInr: data.amountInr },
+            { orderId: data.orderId, immediate: true },
+          );
           setError(null);
           setPaymentCancelled(null);
           setConfirming(true);
@@ -673,6 +683,11 @@ export default function CheckoutPage() {
             if (paidRef.current) return;
             submittingRef.current = false;
             setLoading(false);
+            trackFunnel(
+              "payment_cancelled",
+              {},
+              { orderId: data.orderId, immediate: true },
+            );
             setPaymentCancelled(
               "Payment wasn't completed — you weren't charged and your order is saved. Tap below to try again.",
             );
@@ -686,10 +701,20 @@ export default function CheckoutPage() {
         submittingRef.current = false;
         setLoading(false);
         const why = resp?.error?.description || resp?.error?.reason;
+        trackFunnel(
+          "payment_failed",
+          { reason: why ?? null },
+          { orderId: data.orderId, immediate: true },
+        );
         setPaymentCancelled(
           `Payment failed${why ? ` — ${why}` : ""}. You weren't charged. Try again, or switch to Cash on Delivery.`,
         );
       });
+      trackFunnel(
+        "razorpay_opened",
+        { amountInr: data.amountInr, paymentMethod: data.paymentMethod },
+        { orderId: data.orderId, immediate: true },
+      );
       rzp.open();
     },
     [router],
@@ -747,6 +772,16 @@ export default function CheckoutPage() {
       if (!res.ok) {
         throw new Error(data.error || "Failed to create order");
       }
+
+      trackFunnel(
+        "order_submitted",
+        {
+          totalInr: total,
+          paymentMethod: payment === "upi" ? "UPI" : "COD",
+          pincode,
+        },
+        { orderId: data.orderId, immediate: true },
+      );
 
       // Both UPI (full prepaid) and CoD (partial-prepaid confirmation fee)
       // now hand off to Razorpay. The CoD flow charges the upfront

@@ -22,6 +22,7 @@ import {
   trackAddToCart,
   trackInitiateCheckout,
 } from "@/lib/analytics-client";
+import { trackFunnel } from "@/lib/funnel-client";
 
 // Below-fold sections — split into their own JS chunks so the buy-box +
 // gallery don't wait on their bundle. Skeletons hold the layout so scrolling
@@ -159,6 +160,13 @@ export default function PDPClient({ sku }: { sku: Sku }) {
       priceInr: sku.retailINR,
       quantity: finalQty,
     });
+    trackFunnel("add_to_cart", {
+      skuId: sku.id,
+      variant: selectedColorSlug,
+      qty: finalQty,
+      valueInr: sku.retailINR * finalQty,
+      via: "pdp",
+    });
   }
 
   function buyNow() {
@@ -171,6 +179,13 @@ export default function PDPClient({ sku }: { sku: Sku }) {
       priceInr: sku.retailINR,
       quantity: finalQty,
     });
+    trackFunnel("add_to_cart", {
+      skuId: sku.id,
+      variant: selectedColorSlug,
+      qty: finalQty,
+      valueInr: sku.retailINR * finalQty,
+      via: "pdp_buynow",
+    });
     trackInitiateCheckout(sku.retailINR * finalQty);
     router.push("/checkout");
   }
@@ -179,6 +194,11 @@ export default function PDPClient({ sku }: { sku: Sku }) {
   // strip — fires once when the PDP mounts.
   useEffect(() => {
     recordView(sku.id);
+    trackFunnel("product_view", {
+      skuId: sku.id,
+      name: sku.name,
+      priceInr: sku.retailINR,
+    });
   }, [sku.id]);
 
   return (

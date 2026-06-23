@@ -14,6 +14,7 @@ import {
   trackAddToCart,
   trackInitiateCheckout,
 } from "@/lib/analytics-client";
+import { trackFunnel } from "@/lib/funnel-client";
 
 /** Resolve a swatch token (hex or `gradient:from,to[,...]`) to a CSS background value. */
 function swatchBg(swatch: string): string {
@@ -195,6 +196,12 @@ function SkuCard({ sku, index, stockMap }: SkuCardProps) {
                 priceInr: sku.retailINR,
                 quantity: 1,
               });
+              trackFunnel("add_to_cart", {
+                skuId: sku.id,
+                qty: 1,
+                valueInr: sku.retailINR,
+                via: "lineup_buynow",
+              });
               trackInitiateCheckout(onlinePrice);
               router.push("/checkout");
             }}
@@ -215,6 +222,12 @@ function SkuCard({ sku, index, stockMap }: SkuCardProps) {
                 name: sku.name,
                 priceInr: sku.retailINR,
                 quantity: 1,
+              });
+              trackFunnel("add_to_cart", {
+                skuId: sku.id,
+                qty: 1,
+                valueInr: sku.retailINR,
+                via: "lineup",
               });
             }}
             className="bg-white border border-brand-ink/15 hover:border-brand-ink text-brand-ink rounded-full py-2 px-4 transition-colors inline-flex items-center justify-center gap-2 font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed"

@@ -99,6 +99,13 @@
       "when": 1781211600000,
       "tag": "0013_email_delivery_tracking",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1781298000000,
+      "tag": "0014_funnel_analytics_events",
+      "breakpoints": true
     }
   ]
 }

@@ -742,6 +742,52 @@ export const events = pgTable(
 );
 
 // ============================================================
+// 10b. FUNNEL EVENTS — first-party "every user action" stream
+// ============================================================
+// High-volume, visitor/session-keyed behavioural telemetry that powers the
+// conversion funnel + drop-off dashboard (page_view → product_view →
+// add_to_cart → checkout_started → serviceability_checked → payment_* →
+// purchase). Kept SEPARATE from `events` (which is the order-scoped audit log)
+// so checkout telemetry never bloats the order history and can be pruned on a
+// different schedule. No PII is stored here — only skuId, cart value, pincode
+// (area-level), payment method, and failure reasons. First-party + business-
+// essential, so it is captured without consent, exactly like analytics_sessions.
+// `order_id` is intentionally NOT a foreign key: a funnel event can be recorded
+// before the order row exists (or carry a client-supplied id), and a telemetry
+// insert must never fail on an FK violation.
+
+export const funnelEvents = pgTable(
+  "funnel_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: text("site_id").references(() => sites.id),
+    /** prc_sid — 30-min session. */
+    sessionId: text("session_id"),
+    /** prc_vid — 1-year visitor. The unique-visitor key for funnel rates. */
+    visitorId: text("visitor_id"),
+    /** Funnel event type (see src/lib/funnel-events.ts FUNNEL_EVENTS). */
+    type: text("type").notNull(),
+    /** Page path where the event fired. */
+    path: text("path"),
+    /** Event-specific, NO PII: skuId, cartValueInr, itemCount, pincode,
+     *  serviceable, codAvailable, paymentMethod, failureReason, etc. */
+    metadata: jsonb("metadata").notNull().default({}),
+    /** Set once an order exists. Loose (no FK) on purpose — see note above. */
+    orderId: text("order_id"),
+    isBot: boolean("is_bot").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("funnel_events_site_created_idx").on(t.siteId, t.createdAt),
+    index("funnel_events_type_idx").on(t.type),
+    index("funnel_events_session_idx").on(t.sessionId),
+    index("funnel_events_visitor_idx").on(t.visitorId),
+  ],
+);
+
+// ============================================================
 // 11. WEBHOOKS INBOUND — idempotency on (source, external_id)
 // ============================================================
 

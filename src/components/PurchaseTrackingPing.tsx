@@ -17,6 +17,7 @@
 
 import { useEffect } from "react";
 import { trackPurchase } from "@/lib/analytics-client";
+import { trackFunnel } from "@/lib/funnel-client";
 
 type Props = {
   orderId: string;
@@ -55,6 +56,11 @@ export default function PurchaseTrackingPing(props: Props) {
       phone: props.phone ?? null,
       contents: props.contents,
     });
+    trackFunnel(
+      "purchase",
+      { totalInr: props.totalInr, itemCount: props.itemCount, paymentMethod: props.paymentMethod },
+      { orderId: props.orderId, immediate: true },
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.orderId]);
 

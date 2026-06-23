@@ -11,13 +11,29 @@
  * lets the UI warn the customer before they fill the whole form / pick COD.
  */
 
-import { NextResponse } from "next/server";
+import { NextResponse, after, type NextRequest } from "next/server";
 import { verifyServiceabilityLive } from "@/lib/serviceability";
+import { recordServerFunnelEvent } from "@/lib/funnel-server";
 
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const pincode = url.searchParams.get("pincode") ?? "";
   const needsCod = (url.searchParams.get("payment") ?? "").toLowerCase() === "cod";
   const result = await verifyServiceabilityLive(pincode, needsCod);
+
+  // Authoritative funnel signal — recorded server-side so it can't be blocked
+  // and reflects the REAL answer the customer saw. A spike of serviceable:false
+  // for valid pincodes is the early-warning siren for a pickup-config outage.
+  // Runs after the response so it never adds latency to the checkout UI.
+  after(() =>
+    recordServerFunnelEvent(req, "serviceability_checked", {
+      pincode,
+      needsCod,
+      serviceable: result.serviceable,
+      codAvailable: result.codAvailable,
+      reason: result.reason,
+    }),
+  );
+
   return NextResponse.json({ ok: true, ...result });
 }
