@@ -1,7 +1,7 @@
-import { and, count, desc, gte, inArray, sql } from "drizzle-orm";
-import { BarChart3, PackageCheck, Repeat } from "lucide-react";
+import { and, count, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { BarChart3, PackageCheck, Repeat, CreditCard, Smartphone, MapPin } from "lucide-react";
 import { db } from "@/db";
-import { customers, orders } from "@/db/schema";
+import { analyticsSessions, customers, orders } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
 import { formatINR } from "@/lib/utils";
 
@@ -58,6 +58,9 @@ export default async function AdminAnalytics() {
     total30dStats,
     sourceRows,
     campaignRows,
+    paymentOutcomeRows,
+    geoRows,
+    deviceStats,
   ] = await Promise.all([
       db
         .select({
@@ -152,6 +155,54 @@ export default async function AdminAnalytics() {
         .groupBy(orders.utmCampaign, orders.source)
         .orderBy(desc(sql`count(*) filter (where ${paidFilter})`))
         .limit(10),
+      // Payment outcome by method — every method × status cell. Drives the
+      // "is it really 70% payment failure?" answer + COD/prepaid split + RTO.
+      db
+        .select({
+          method: orders.paymentMethod,
+          status: orders.status,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(orders)
+        .where(
+          and(gte(orders.placedAt, last30), inArray(orders.siteId, ctx.siteIds)),
+        )
+        .groupBy(orders.paymentMethod, orders.status),
+      // Geography — paid orders by state (top 8).
+      db
+        .select({
+          state: sql<string>`coalesce(nullif(${orders.shippingAddress}->>'state', ''), 'Unknown')`,
+          paid: sql<number>`count(*)::int`,
+          revenue: sql<number>`coalesce(sum(${orders.totalInr}), 0)::int`,
+        })
+        .from(orders)
+        .where(
+          and(
+            gte(orders.placedAt, last30),
+            inArray(orders.siteId, ctx.siteIds),
+            inArray(orders.status, [...PAID_STATUSES]),
+          ),
+        )
+        .groupBy(sql`coalesce(nullif(${orders.shippingAddress}->>'state', ''), 'Unknown')`)
+        .orderBy(desc(sql`count(*)`))
+        .limit(8),
+      // Device split of real (non-bot) sessions, last 30 days. Tablet tested
+      // before mobile because iPad UAs also contain "Mobile".
+      db
+        .select({
+          total: sql<number>`count(*)::int`,
+          tablet: sql<number>`count(*) filter (where ${analyticsSessions.userAgent} ~* 'ipad|tablet|playbook|silk')::int`,
+          mobile: sql<number>`count(*) filter (where ${analyticsSessions.userAgent} ~* 'mobi|iphone|ipod|android.*mobile|windows phone|blackberry' and ${analyticsSessions.userAgent} !~* 'ipad|tablet|playbook|silk')::int`,
+        })
+        .from(analyticsSessions)
+        .where(
+          and(
+            gte(analyticsSessions.startedAt, last30),
+            inArray(analyticsSessions.siteId, ctx.siteIds),
+            eq(analyticsSessions.isBot, false),
+          ),
+        )
+        .then((rows) => rows[0]),
     ]);
 
   // -------------------------------------------------------------------------
@@ -234,6 +285,71 @@ export default async function AdminAnalytics() {
     weeklyBuckets.push({ weekStart: d, count: weeklyMap.get(key) ?? 0 });
   }
   const maxWeekly = Math.max(1, ...weeklyBuckets.map((b) => b.count));
+
+  // -------------------------------------------------------------------------
+  // Payment outcome by method — the report that decides whether the failure
+  // problem is real declines, abandonment, or ops-cancellations.
+  // -------------------------------------------------------------------------
+  const PAID_SET = new Set<string>(PAID_STATUSES);
+  type MethodAgg = {
+    method: string;
+    attempts: number;
+    paid: number;
+    failed: number;
+    abandoned: number;
+    cancelled: number;
+    pending: number;
+  };
+  const methodMap = new Map<string, MethodAgg>();
+  for (const r of paymentOutcomeRows) {
+    const m = methodMap.get(r.method) ?? {
+      method: r.method,
+      attempts: 0,
+      paid: 0,
+      failed: 0,
+      abandoned: 0,
+      cancelled: 0,
+      pending: 0,
+    };
+    m.attempts += r.count;
+    if (PAID_SET.has(r.status)) m.paid += r.count;
+    else if (r.status === "FAILED") m.failed += r.count;
+    else if (r.status === "ABANDONED") m.abandoned += r.count;
+    else if (r.status === "CANCELLED") m.cancelled += r.count;
+    else if (r.status === "PENDING" || r.status === "PENDING_COD_VERIFICATION")
+      m.pending += r.count;
+    methodMap.set(r.method, m);
+  }
+  const methodAggs = Array.from(methodMap.values()).sort(
+    (a, b) => b.attempts - a.attempts,
+  );
+
+  // COD vs prepaid split (of paid orders) + COD RTO rate.
+  let codPaid = 0;
+  let prepaidPaid = 0;
+  for (const m of methodAggs) {
+    if (m.method === "COD") codPaid += m.paid;
+    else prepaidPaid += m.paid;
+  }
+  const paidSplitTotal = codPaid + prepaidPaid;
+  let codDispatched = 0;
+  let codReturned = 0;
+  for (const r of paymentOutcomeRows) {
+    if (r.method !== "COD") continue;
+    if (["SHIPPED", "DELIVERED", "RETURNED"].includes(r.status))
+      codDispatched += r.count;
+    if (r.status === "RETURNED") codReturned += r.count;
+  }
+  const codRtoPct =
+    codDispatched > 0 ? Math.round((codReturned / codDispatched) * 100) : null;
+
+  // Device split of real sessions.
+  const devTotal = deviceStats?.total ?? 0;
+  const devMobile = deviceStats?.mobile ?? 0;
+  const devTablet = deviceStats?.tablet ?? 0;
+  const devDesktop = Math.max(0, devTotal - devMobile - devTablet);
+  const devPct = (n: number) =>
+    devTotal === 0 ? 0 : Math.round((n / devTotal) * 100);
 
   return (
     <div className="space-y-6">
@@ -453,6 +569,182 @@ export default async function AdminAnalytics() {
         )}
       </section>
 
+      {/* Payment outcome by method — the real failure story */}
+      <section className="bg-white rounded-2xl border border-brand-line">
+        <header className="px-5 py-4 border-b border-brand-line">
+          <h2 className="font-semibold text-brand-ink flex items-center gap-2">
+            <CreditCard size={16} className="text-brand-red" /> Payment outcome
+            by method{" "}
+            <span className="text-brand-ink-soft font-normal">— 30 days</span>
+          </h2>
+          <p className="text-xs text-brand-ink-soft mt-1">
+            Splits the &quot;failed&quot; lump into real declines vs abandoned
+            carts vs cancellations — so you fix the right thing.{" "}
+            <span className="font-mono">paid</span> = completed,{" "}
+            <span className="font-mono">failed</span> = declined,{" "}
+            <span className="font-mono">aband.</span> = never paid,{" "}
+            <span className="font-mono">canc.</span> = cancelled.
+          </p>
+        </header>
+        {methodAggs.length === 0 ? (
+          <p className="px-5 py-10 text-center text-sm text-brand-ink-soft">
+            No orders in the last 30 days yet.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[11px] font-mono uppercase tracking-wider text-brand-ink-soft border-b border-brand-line">
+                  <th className="text-left px-5 py-2 font-semibold">Method</th>
+                  <th className="text-right px-3 py-2 font-semibold">Attempts</th>
+                  <th className="text-right px-3 py-2 font-semibold">Paid</th>
+                  <th className="text-right px-3 py-2 font-semibold">Failed</th>
+                  <th className="text-right px-3 py-2 font-semibold">Aband.</th>
+                  <th className="text-right px-5 py-2 font-semibold">Canc.</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-brand-line">
+                {methodAggs.map((m) => {
+                  const conv =
+                    m.attempts > 0
+                      ? Math.round((m.paid / m.attempts) * 100)
+                      : 0;
+                  return (
+                    <tr key={m.method}>
+                      <td className="px-5 py-2.5 font-semibold text-brand-ink">
+                        {m.method}
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-brand-ink-soft">
+                        {m.attempts}
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-brand-ink">
+                        {m.paid}{" "}
+                        <span className="text-brand-ink-soft font-normal">
+                          ({conv}%)
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-brand-red">
+                        {m.failed || "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-brand-ink-soft">
+                        {m.abandoned || "—"}
+                      </td>
+                      <td className="px-5 py-2.5 text-right tabular-nums text-brand-ink-soft">
+                        {m.cancelled || "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* Audience snapshot — device, COD/prepaid, RTO */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {/* Device split */}
+        <section className="bg-white rounded-2xl border border-brand-line p-5">
+          <h2 className="font-semibold text-brand-ink flex items-center gap-2 mb-3">
+            <Smartphone size={15} className="text-brand-red" /> Device
+          </h2>
+          {devTotal === 0 ? (
+            <p className="text-sm text-brand-ink-soft">No sessions yet.</p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              <DeviceRow label="Mobile" count={devMobile} pct={devPct(devMobile)} />
+              <DeviceRow label="Desktop" count={devDesktop} pct={devPct(devDesktop)} />
+              <DeviceRow label="Tablet" count={devTablet} pct={devPct(devTablet)} />
+            </ul>
+          )}
+        </section>
+
+        {/* COD vs prepaid */}
+        <section className="bg-white rounded-2xl border border-brand-line p-5">
+          <h2 className="font-semibold text-brand-ink flex items-center gap-2 mb-3">
+            <CreditCard size={15} className="text-brand-red" /> COD vs prepaid
+          </h2>
+          {paidSplitTotal === 0 ? (
+            <p className="text-sm text-brand-ink-soft">No paid orders yet.</p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              <DeviceRow
+                label="Prepaid"
+                count={prepaidPaid}
+                pct={Math.round((prepaidPaid / paidSplitTotal) * 100)}
+              />
+              <DeviceRow
+                label="COD"
+                count={codPaid}
+                pct={Math.round((codPaid / paidSplitTotal) * 100)}
+              />
+            </ul>
+          )}
+        </section>
+
+        {/* COD RTO */}
+        <section className="bg-white rounded-2xl border border-brand-line p-5">
+          <h2 className="font-semibold text-brand-ink flex items-center gap-2 mb-3">
+            <Repeat size={15} className="text-brand-red" /> COD RTO rate
+          </h2>
+          {codRtoPct === null ? (
+            <p className="text-sm text-brand-ink-soft">
+              No COD parcels dispatched yet.
+            </p>
+          ) : (
+            <>
+              <p
+                className={`font-display text-3xl font-bold ${
+                  codRtoPct > 25 ? "text-brand-red" : "text-brand-ink"
+                }`}
+              >
+                {codRtoPct}%
+              </p>
+              <p className="text-xs text-brand-ink-soft mt-1">
+                {codReturned} returned of {codDispatched} COD dispatched. A
+                return costs ~2× freight.
+              </p>
+            </>
+          )}
+        </section>
+      </div>
+
+      {/* Geography */}
+      <section className="bg-white rounded-2xl border border-brand-line">
+        <header className="px-5 py-4 border-b border-brand-line">
+          <h2 className="font-semibold text-brand-ink flex items-center gap-2">
+            <MapPin size={16} className="text-brand-red" /> Top states{" "}
+            <span className="text-brand-ink-soft font-normal">
+              — paid orders, 30 days
+            </span>
+          </h2>
+        </header>
+        {geoRows.length === 0 ? (
+          <p className="px-5 py-10 text-center text-sm text-brand-ink-soft">
+            No paid orders in the last 30 days yet.
+          </p>
+        ) : (
+          <ul className="divide-y divide-brand-line">
+            {geoRows.map((g) => (
+              <li
+                key={g.state}
+                className="flex items-center gap-4 px-5 py-3 text-sm"
+              >
+                <span className="font-semibold text-brand-ink flex-1 truncate">
+                  {g.state}
+                </span>
+                <span className="text-brand-ink-soft tabular-nums shrink-0">
+                  {g.paid} order{g.paid === 1 ? "" : "s"}
+                </span>
+                <span className="font-semibold text-brand-ink tabular-nums text-right w-24 shrink-0">
+                  {formatINR(g.revenue)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       {/* Best sellers */}
       <section className="bg-white rounded-2xl border border-brand-line">
         <header className="px-5 py-4 border-b border-brand-line">
@@ -563,6 +855,30 @@ function SummaryCard({
         {value}
       </p>
     </div>
+  );
+}
+
+function DeviceRow({
+  label,
+  count,
+  pct,
+}: {
+  label: string;
+  count: number;
+  pct: number;
+}) {
+  return (
+    <li>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-brand-ink-soft">{label}</span>
+        <span className="tabular-nums font-semibold text-brand-ink">
+          {pct}% <span className="text-brand-ink-soft font-normal">({count})</span>
+        </span>
+      </div>
+      <div className="h-1.5 rounded-full bg-brand-cream overflow-hidden">
+        <div className="h-full bg-brand-ink" style={{ width: `${pct}%` }} />
+      </div>
+    </li>
   );
 }
 

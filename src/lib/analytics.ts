@@ -53,6 +53,25 @@ export function isBotUA(ua: string | null | undefined): boolean {
   return BOT_UA_RE.test(ua);
 }
 
+// ---- Device classification ----------------------------------------------------
+
+export type DeviceType = "mobile" | "tablet" | "desktop";
+
+/**
+ * Coarse device bucket from a user-agent. India is mobile-first, so the
+ * mobile-vs-desktop split is the single most useful cut for diagnosing where
+ * checkout/payment friction concentrates. Tablet is split out because iPad UAs
+ * also contain "Mobile" — so tablet MUST be tested before mobile.
+ */
+export function deviceFromUA(ua: string | null | undefined): DeviceType {
+  if (!ua) return "desktop";
+  if (/ipad|tablet|playbook|silk|(android(?!.*mobile))/i.test(ua))
+    return "tablet";
+  if (/mobi|iphone|ipod|android.*mobile|windows phone|blackberry/i.test(ua))
+    return "mobile";
+  return "desktop";
+}
+
 // ---- Source classification (last-click, first-touch persisted) ---------------
 
 export type TrafficSource =
