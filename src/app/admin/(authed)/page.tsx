@@ -21,6 +21,7 @@ import { and, desc, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { orders } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
+import { DataExport } from "./DataExport";
 import { formatINR } from "@/lib/utils";
 import { LIVE_WINDOW_MINUTES, SOURCE_LABEL, type TrafficSource } from "@/lib/analytics";
 
@@ -514,6 +515,8 @@ export default async function AdminOverview() {
             : `Managing ${ctx.siteIds.length} sites.`}
         </p>
       </div>
+
+      <DataExport />
 
       {/* Row 1 — order velocity */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
