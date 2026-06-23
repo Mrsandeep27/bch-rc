@@ -36,6 +36,7 @@ const CONSENT_KEY = "prc_consent";
 export default function Analytics() {
   const gaId = process.env.NEXT_PUBLIC_GA_ID;
   const pixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID;
+  const clarityId = process.env.NEXT_PUBLIC_CLARITY_ID;
   const pathname = usePathname();
   const sp = useSearchParams();
 
@@ -148,6 +149,23 @@ export default function Analytics() {
             'https://connect.facebook.net/en_US/fbevents.js');
             fbq('init', '${pixelId}');
             fbq('track', 'PageView');
+          `}
+        </Script>
+      )}
+
+      {/* Microsoft Clarity — heatmaps + session recordings + scroll/bounce.
+          Records the session, so it's opt-in only (loads after consent), same
+          posture as the Meta Pixel. Activates automatically once
+          NEXT_PUBLIC_CLARITY_ID is set in the env — no code change needed. */}
+      {granted && clarityId && (
+        <Script id="clarity-init" strategy="afterInteractive">
+          {`
+            (function(c,l,a,r,i,t,y){
+              c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+              t=l.createElement(r);t.async=1;
+              t.src="https://www.clarity.ms/tag/"+i;
+              y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+            })(window, document, "clarity", "script", "${clarityId}");
           `}
         </Script>
       )}
