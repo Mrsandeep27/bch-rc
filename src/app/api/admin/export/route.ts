@@ -95,6 +95,11 @@ async function exportOrders(sinceDays: number | null): Promise<string> {
     "discount_inr",
     "total_inr",
     "coupon_code",
+    "source",
+    "utm_source",
+    "utm_medium",
+    "utm_campaign",
+    "referrer_host",
     "customer_total_orders",
     "customer_total_spent_inr",
   ];
@@ -131,6 +136,11 @@ async function exportOrders(sinceDays: number | null): Promise<string> {
       o.discountInr,
       o.totalInr,
       o.couponCode,
+      o.source,
+      o.utmSource,
+      o.utmMedium,
+      o.utmCampaign,
+      o.referrerHost,
       c?.totalOrders ?? "",
       c?.totalSpentInr ?? "",
     ];

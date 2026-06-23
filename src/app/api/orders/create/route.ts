@@ -17,6 +17,7 @@
  */
 
 import { NextResponse, after } from "next/server";
+import { cookies } from "next/headers";
 import { z } from "zod";
 import { db } from "@/db";
 import {
@@ -37,6 +38,8 @@ import { sendOutboxRow } from "@/lib/notifications/drain";
 import { notifyOrderEvent, whatsappEnabled } from "@/lib/notifications/notify";
 import { verifyServiceabilityLive } from "@/lib/serviceability";
 import { logError } from "@/lib/logger";
+import { resolveOrderAttribution } from "@/lib/attribution";
+import { VISITOR_COOKIE, SESSION_COOKIE } from "@/lib/analytics";
 
 const PaymentMethod = z.enum(["UPI", "CARD", "NETBANKING", "WALLET", "COD"]);
 
@@ -267,6 +270,17 @@ export async function POST(req: Request) {
   const cartQty = body.items.reduce((n, i) => n + i.qty, 0);
   const bundleDiscount = bundleDiscountInr(cartQty);
 
+  // ── 2b. Resolve marketing attribution (first-touch) from the visitor's
+  //        analytics session, to snapshot onto the order. Best-effort and
+  //        read-only — never blocks checkout. Done before the txn loop so a
+  //        retry doesn't re-query it.
+  const cookieStore = await cookies();
+  const attribution = await resolveOrderAttribution({
+    visitorId: cookieStore.get(VISITOR_COOKIE)?.value,
+    sessionId: cookieStore.get(SESSION_COOKIE)?.value,
+    siteId: body.siteId,
+  });
+
   // ── 3. Open transaction: atomic stock decrement, customer upsert, coupon
   //       redemption (with customerId for per-customer limit), address insert,
   //       order insert, event insert, notification outbox insert.
@@ -388,6 +402,14 @@ export async function POST(req: Request) {
           couponCode: null,
           paymentMethod: body.paymentMethod,
           paymentStatus: "PENDING",
+          // First-touch marketing attribution — turns clicks-per-channel into
+          // paid-orders-per-channel once these are reported in /admin/analytics.
+          source: attribution.source,
+          utmSource: attribution.utmSource,
+          utmMedium: attribution.utmMedium,
+          utmCampaign: attribution.utmCampaign,
+          utmContent: attribution.utmContent,
+          referrerHost: attribution.referrerHost,
         });
 
         // 3d. Coupon — atomic redeem + per-customer-limit guard + ledger.

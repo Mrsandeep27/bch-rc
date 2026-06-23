@@ -47,8 +47,18 @@ export default async function AdminAnalytics() {
 
   // Five aggregates in parallel. Daily revenue uses a DATE_TRUNC bucketing
   // query for accuracy; the rest are straightforward GROUP BYs.
-  const [dailyRevenueRows, paidVsFailedRows, paidOrdersForSku, weeklyCustomerRows, total30dStats] =
-    await Promise.all([
+  // Paid-order filter as a reusable SQL fragment for the attribution rollups.
+  const paidFilter = sql`${orders.status} in ('PAID','PACKED','SHIPPED','DELIVERED')`;
+
+  const [
+    dailyRevenueRows,
+    paidVsFailedRows,
+    paidOrdersForSku,
+    weeklyCustomerRows,
+    total30dStats,
+    sourceRows,
+    campaignRows,
+  ] = await Promise.all([
       db
         .select({
           day: sql<string>`to_char(date_trunc('day', ${orders.placedAt}), 'YYYY-MM-DD')`,
@@ -108,6 +118,40 @@ export default async function AdminAnalytics() {
           ),
         )
         .then((rows) => rows[0]),
+      // Attribution by source — attempts vs paid vs revenue per channel. This
+      // is the "paid orders per channel" view, not just clicks.
+      db
+        .select({
+          source: orders.source,
+          attempts: sql<number>`count(*)::int`,
+          paid: sql<number>`count(*) filter (where ${paidFilter})::int`,
+          revenue: sql<number>`coalesce(sum(${orders.totalInr}) filter (where ${paidFilter}), 0)::int`,
+        })
+        .from(orders)
+        .where(
+          and(gte(orders.placedAt, last30), inArray(orders.siteId, ctx.siteIds)),
+        )
+        .groupBy(orders.source)
+        .orderBy(desc(sql`count(*) filter (where ${paidFilter})`)),
+      // Top campaigns — only orders that carried a utm_campaign tag.
+      db
+        .select({
+          campaign: orders.utmCampaign,
+          source: orders.source,
+          paid: sql<number>`count(*) filter (where ${paidFilter})::int`,
+          revenue: sql<number>`coalesce(sum(${orders.totalInr}) filter (where ${paidFilter}), 0)::int`,
+        })
+        .from(orders)
+        .where(
+          and(
+            gte(orders.placedAt, last30),
+            inArray(orders.siteId, ctx.siteIds),
+            sql`${orders.utmCampaign} is not null`,
+          ),
+        )
+        .groupBy(orders.utmCampaign, orders.source)
+        .orderBy(desc(sql`count(*) filter (where ${paidFilter})`))
+        .limit(10),
     ]);
 
   // -------------------------------------------------------------------------
@@ -332,6 +376,80 @@ export default async function AdminAnalytics() {
               />
             </div>
           </>
+        )}
+      </section>
+
+      {/* Attribution — paid orders & revenue by channel */}
+      <section className="bg-white rounded-2xl border border-brand-line">
+        <header className="px-5 py-4 border-b border-brand-line">
+          <h2 className="font-semibold text-brand-ink">
+            Where paid orders come from{" "}
+            <span className="text-brand-ink-soft font-normal">
+              — last 30 days, by source
+            </span>
+          </h2>
+          <p className="text-xs text-brand-ink-soft mt-1">
+            First-touch attribution snapshotted on each order. Tag your content
+            links with UTMs so &quot;social&quot; splits into the actual reel /
+            post. Bare links land in <span className="font-mono">direct</span>.
+          </p>
+        </header>
+        {sourceRows.length === 0 ? (
+          <p className="px-5 py-10 text-center text-sm text-brand-ink-soft">
+            No orders in the last 30 days yet.
+          </p>
+        ) : (
+          <ul className="divide-y divide-brand-line">
+            {sourceRows.map((r) => {
+              const conv =
+                r.attempts > 0 ? Math.round((r.paid / r.attempts) * 100) : 0;
+              return (
+                <li
+                  key={r.source}
+                  className="flex items-center gap-4 px-5 py-3 text-sm"
+                >
+                  <span className="font-semibold text-brand-ink capitalize w-24 shrink-0">
+                    {r.source}
+                  </span>
+                  <span className="text-brand-ink-soft tabular-nums flex-1">
+                    {r.paid} paid{" "}
+                    <span className="text-brand-ink-soft/70">
+                      / {r.attempts} attempts ({conv}%)
+                    </span>
+                  </span>
+                  <span className="font-semibold text-brand-ink tabular-nums text-right shrink-0">
+                    {formatINR(r.revenue)}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {campaignRows.length > 0 && (
+          <div className="border-t border-brand-line px-5 py-4">
+            <h3 className="text-xs font-mono font-bold uppercase tracking-widest text-brand-ink-soft mb-3">
+              Top campaigns
+            </h3>
+            <ul className="space-y-2">
+              {campaignRows.map((c) => (
+                <li
+                  key={`${c.campaign}-${c.source}`}
+                  className="flex items-center gap-3 text-sm"
+                >
+                  <span className="font-mono text-brand-ink truncate flex-1">
+                    {c.campaign}
+                    <span className="text-brand-ink-soft ml-2">/ {c.source}</span>
+                  </span>
+                  <span className="text-brand-ink-soft tabular-nums shrink-0">
+                    {c.paid} paid
+                  </span>
+                  <span className="font-semibold text-brand-ink tabular-nums text-right w-20 shrink-0">
+                    {formatINR(c.revenue)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </section>
 
