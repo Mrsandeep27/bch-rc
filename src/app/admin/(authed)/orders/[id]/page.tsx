@@ -7,7 +7,7 @@ import { db } from "@/db";
 import { orders, customers, events, notificationsOutbox } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
 import { formatINR } from "@/lib/utils";
-import { waLink } from "@/lib/config";
+import { waLink, OFFERS, bundleDiscountInr, bundleTierLabel } from "@/lib/config";
 import { ShipButton } from "./ShipButton";
 import OrderActions from "./OrderActions";
 
@@ -141,13 +141,48 @@ export default async function AdminOrderDetail({
               {order.codFeeInr > 0 && (
                 <Row label="COD fee" value={formatINR(order.codFeeInr)} />
               )}
-              {order.discountInr > 0 && (
-                <Row
-                  label="Prepaid discount"
-                  value={`-${formatINR(order.discountInr)}`}
-                  green
-                />
-              )}
+              {/* Discount breakdown — derived from items + payment method so
+                  the line says WHY money came off (combo bundle vs prepaid vs
+                  coupon) instead of an opaque, often-wrong "Prepaid discount".
+                  On a COD order there is no prepaid bonus, so the whole amount
+                  is the bundle/coupon — labelling it "Prepaid discount" was the
+                  source of the "price mismatch?" confusion. Sum == discountInr. */}
+              {order.discountInr > 0 && (() => {
+                const cartQty = items.reduce((n, i) => n + i.qty, 0);
+                const prepaidBonus =
+                  order.paymentMethod !== "COD" ? OFFERS.prepaidDiscountINR : 0;
+                const bundleBonus = bundleDiscountInr(cartQty);
+                const bundleName = bundleTierLabel(cartQty);
+                const couponBonus = Math.max(
+                  0,
+                  order.discountInr - prepaidBonus - bundleBonus,
+                );
+                return (
+                  <>
+                    {bundleBonus > 0 && (
+                      <Row
+                        label={`Bundle offer${bundleName ? ` (${bundleName})` : ""}`}
+                        value={`-${formatINR(bundleBonus)}`}
+                        green
+                      />
+                    )}
+                    {prepaidBonus > 0 && (
+                      <Row
+                        label="Prepaid (pay-online) discount"
+                        value={`-${formatINR(prepaidBonus)}`}
+                        green
+                      />
+                    )}
+                    {couponBonus > 0 && (
+                      <Row
+                        label={order.couponCode ? `Coupon (${order.couponCode})` : "Coupon"}
+                        value={`-${formatINR(couponBonus)}`}
+                        green
+                      />
+                    )}
+                  </>
+                );
+              })()}
               <div className="flex justify-between font-bold text-base text-brand-ink pt-2 border-t border-brand-line mt-2">
                 <span>Total</span>
                 <span>{formatINR(order.totalInr)}</span>
