@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Activity, BarChart3, Boxes, Filter, LayoutDashboard, Package, Settings, Users } from "lucide-react";
+import { Activity, BarChart3, Boxes, Filter, LayoutDashboard, LifeBuoy, Package, Settings, Users } from "lucide-react";
 import { requireAdmin } from "@/lib/admin-auth";
 import { THEME } from "@/lib/theme";
 import { AdminSignOut } from "./AdminSignOut";
@@ -46,6 +46,9 @@ export default async function AdminLayout({
               <NavLink href="/admin/funnel" icon={Filter}>
                 Funnel
               </NavLink>
+              <NavLink href="/admin/recovery" icon={LifeBuoy}>
+                Recovery
+              </NavLink>
               <NavLink href="/admin/activity" icon={Activity}>
                 Activity
               </NavLink>
@@ -84,6 +87,9 @@ export default async function AdminLayout({
             </NavLink>
             <NavLink href="/admin/funnel" icon={Filter}>
               Funnel
+            </NavLink>
+            <NavLink href="/admin/recovery" icon={LifeBuoy}>
+              Recovery
             </NavLink>
             <NavLink href="/admin/activity" icon={Activity}>
               Activity

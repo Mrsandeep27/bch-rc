@@ -1,5 +1,5 @@
-import { and, count, desc, eq, gte, inArray, sql } from "drizzle-orm";
-import { BarChart3, PackageCheck, Repeat, CreditCard, Smartphone, MapPin } from "lucide-react";
+import { and, count, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
+import { BarChart3, PackageCheck, Repeat, CreditCard, Smartphone, MapPin, Users } from "lucide-react";
 import { db } from "@/db";
 import { analyticsSessions, customers, orders } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
@@ -50,6 +50,19 @@ export default async function AdminAnalytics() {
   // Paid-order filter as a reusable SQL fragment for the attribution rollups.
   const paidFilter = sql`${orders.status} in ('PAID','PACKED','SHIPPED','DELIVERED')`;
 
+  // Sub-select of visitors first seen BEFORE the window — used to split this
+  // window's visitors into new vs returning.
+  const earlierVisitors = db
+    .select({ v: analyticsSessions.visitorId })
+    .from(analyticsSessions)
+    .where(
+      and(
+        lt(analyticsSessions.startedAt, last30),
+        eq(analyticsSessions.isBot, false),
+        inArray(analyticsSessions.siteId, ctx.siteIds),
+      ),
+    );
+
   const [
     dailyRevenueRows,
     paidVsFailedRows,
@@ -61,6 +74,9 @@ export default async function AdminAnalytics() {
     paymentOutcomeRows,
     geoRows,
     deviceStats,
+    activeVisitors,
+    returningVisitors,
+    cohort,
   ] = await Promise.all([
       db
         .select({
@@ -202,6 +218,46 @@ export default async function AdminAnalytics() {
             eq(analyticsSessions.isBot, false),
           ),
         )
+        .then((rows) => rows[0]),
+      // Unique visitors active in the window.
+      db
+        .select({
+          c: sql<number>`count(distinct ${analyticsSessions.visitorId})::int`,
+        })
+        .from(analyticsSessions)
+        .where(
+          and(
+            gte(analyticsSessions.startedAt, last30),
+            eq(analyticsSessions.isBot, false),
+            inArray(analyticsSessions.siteId, ctx.siteIds),
+          ),
+        )
+        .then((rows) => rows[0]?.c ?? 0),
+      // …of which were also seen before the window (returning).
+      db
+        .select({
+          c: sql<number>`count(distinct ${analyticsSessions.visitorId})::int`,
+        })
+        .from(analyticsSessions)
+        .where(
+          and(
+            gte(analyticsSessions.startedAt, last30),
+            eq(analyticsSessions.isBot, false),
+            inArray(analyticsSessions.siteId, ctx.siteIds),
+            inArray(analyticsSessions.visitorId, earlierVisitors),
+          ),
+        )
+        .then((rows) => rows[0]?.c ?? 0),
+      // Repeat-purchase cohort from the customer ledger.
+      db
+        .select({
+          one: sql<number>`count(*) filter (where ${customers.totalOrders} = 1)::int`,
+          two: sql<number>`count(*) filter (where ${customers.totalOrders} = 2)::int`,
+          threePlus: sql<number>`count(*) filter (where ${customers.totalOrders} >= 3)::int`,
+          buyers: sql<number>`count(*) filter (where ${customers.totalOrders} >= 1)::int`,
+        })
+        .from(customers)
+        .where(inArray(customers.firstSiteId, ctx.siteIds))
         .then((rows) => rows[0]),
     ]);
 
@@ -350,6 +406,18 @@ export default async function AdminAnalytics() {
   const devDesktop = Math.max(0, devTotal - devMobile - devTablet);
   const devPct = (n: number) =>
     devTotal === 0 ? 0 : Math.round((n / devTotal) * 100);
+
+  // New vs returning visitors (30d).
+  const activeV = activeVisitors ?? 0;
+  const returningV = returningVisitors ?? 0;
+  const newV = Math.max(0, activeV - returningV);
+  const returningPct =
+    activeV === 0 ? 0 : Math.round((returningV / activeV) * 100);
+
+  // Repeat-purchase cohort.
+  const buyers = cohort?.buyers ?? 0;
+  const repeatBuyers = (cohort?.two ?? 0) + (cohort?.threePlus ?? 0);
+  const repeatRate = buyers === 0 ? 0 : Math.round((repeatBuyers / buyers) * 100);
 
   return (
     <div className="space-y-6">
@@ -744,6 +812,60 @@ export default async function AdminAnalytics() {
           </ul>
         )}
       </section>
+
+      {/* Retention — new vs returning + repeat buyers */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <section className="bg-white rounded-2xl border border-brand-line p-5">
+          <h2 className="font-semibold text-brand-ink flex items-center gap-2 mb-3">
+            <Users size={15} className="text-brand-red" /> Visitors{" "}
+            <span className="text-brand-ink-soft font-normal text-sm">
+              — new vs returning (30d)
+            </span>
+          </h2>
+          {activeV === 0 ? (
+            <p className="text-sm text-brand-ink-soft">No visitors yet.</p>
+          ) : (
+            <>
+              <ul className="space-y-2 text-sm">
+                <DeviceRow
+                  label="New"
+                  count={newV}
+                  pct={activeV === 0 ? 0 : Math.round((newV / activeV) * 100)}
+                />
+                <DeviceRow
+                  label="Returning"
+                  count={returningV}
+                  pct={returningPct}
+                />
+              </ul>
+              <p className="text-xs text-brand-ink-soft mt-3">
+                {activeV} unique visitors. Returning visitors are the clearest
+                signal your content builds an audience, not just one-off traffic.
+              </p>
+            </>
+          )}
+        </section>
+
+        <section className="bg-white rounded-2xl border border-brand-line p-5">
+          <h2 className="font-semibold text-brand-ink flex items-center gap-2 mb-3">
+            <Repeat size={15} className="text-brand-red" /> Repeat buyers
+          </h2>
+          {buyers === 0 ? (
+            <p className="text-sm text-brand-ink-soft">No buyers yet.</p>
+          ) : (
+            <>
+              <p className="font-display text-3xl font-bold text-brand-ink">
+                {repeatRate}%
+              </p>
+              <p className="text-xs text-brand-ink-soft mt-1">
+                {repeatBuyers} of {buyers} customers ordered 2+ times.{" "}
+                {cohort?.one ?? 0} one-time · {cohort?.two ?? 0} twice ·{" "}
+                {cohort?.threePlus ?? 0} three or more.
+              </p>
+            </>
+          )}
+        </section>
+      </div>
 
       {/* Best sellers */}
       <section className="bg-white rounded-2xl border border-brand-line">
