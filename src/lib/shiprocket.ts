@@ -70,6 +70,26 @@ async function srFetch<T>(
   return JSON.parse(text) as T;
 }
 
+/**
+ * The pickup pincode used for every serviceability / courier-rate query.
+ *
+ * Sanitised on purpose: Shiprocket's serviceability endpoint replies HTTP 200
+ * with `{ message: "Invalid Pickup Pincode" }` and ZERO couriers when the
+ * pickup_postcode is malformed — a trailing space, the pickup-location NAME
+ * ("warehouse") pasted in by mistake, or an empty string. Because our gate
+ * reads "0 couriers" as "not serviceable", a single bad env value silently
+ * blocks EVERY customer at checkout (this exact outage, 2026-06-23).
+ *
+ * So we strip non-digits and, if the result isn't a valid 6-digit Indian
+ * pincode, fall back to the known warehouse pincode (560043) rather than
+ * sending Shiprocket garbage. One bad env edit can never blank-out checkout
+ * again.
+ */
+function getPickupPincode(): string {
+  const raw = (process.env.SHIPROCKET_PICKUP_PINCODE ?? "").replace(/\D/g, "");
+  return /^[1-9][0-9]{5}$/.test(raw) ? raw : "560043";
+}
+
 // ============================================================
 // Serviceability — live courier lookup
 // ============================================================
@@ -117,10 +137,10 @@ export async function getShiprocketServiceability(
 ): Promise<ShiprocketServiceability | null> {
   if (!/^[1-9][0-9]{5}$/.test(deliveryPincode)) return null;
 
-  const pickupPincode = process.env.SHIPROCKET_PICKUP_PINCODE ?? "560064";
+  const pickup = getPickupPincode();
   const url =
     `${API}/courier/serviceability/` +
-    `?pickup_postcode=${pickupPincode}` +
+    `?pickup_postcode=${pickup}` +
     `&delivery_postcode=${deliveryPincode}` +
     `&cod=${needsCod ? 1 : 0}` +
     `&weight=0.5`;
@@ -138,10 +158,24 @@ export async function getShiprocketServiceability(
       logError("shiprocket:serviceability", new Error(`${res.status} ${await res.text()}`));
       return null;
     }
-    const json = (await res.json()) as ServiceabilityResp;
-    const couriers = json.data?.available_courier_companies ?? [];
+    const json = (await res.json()) as ServiceabilityResp & { message?: string };
+    const couriers = json.data?.available_courier_companies;
+    if (couriers === undefined) {
+      // No `data` block at all → Shiprocket rejected the REQUEST itself (e.g.
+      // "Invalid Pickup Pincode"), NOT the customer's delivery PIN. This is an
+      // OUR-side error — returning {serviceable:false} here would block every
+      // customer for a config problem (the 2026-06-23 outage). Treat it like an
+      // API failure → return null so the caller uses the permissive heuristic
+      // and checkout stays open.
+      logError(
+        "shiprocket:serviceability",
+        new Error(`no courier data (pickup=${pickup}): ${json.message ?? "unknown"}`),
+      );
+      return null;
+    }
     if (couriers.length === 0) {
-      // Shiprocket genuinely doesn't serve this PIN — fail closed.
+      // `data` present but the list is empty → this delivery PIN genuinely has
+      // no courier. Fail closed for this PIN only.
       return { serviceable: false, codAvailable: false, etaMinDays: null, etaMaxDays: null };
     }
     const codCouriers = couriers.filter((c) => c.cod === 1);
@@ -230,7 +264,7 @@ async function getCheapestSurfaceCourierId(
   weightKg: number,
   cod: 0 | 1,
 ): Promise<number | null> {
-  const pickup = process.env.SHIPROCKET_PICKUP_PINCODE ?? "560043";
+  const pickup = getPickupPincode();
   try {
     const data = await srFetch<{
       data?: {
