@@ -319,11 +319,18 @@ export async function createShipment(input: CreateShipmentInput): Promise<{
   const pickup = process.env.SHIPROCKET_PICKUP_LOCATION?.trim();
   if (!pickup) throw new Error("SHIPROCKET_PICKUP_LOCATION not set");
 
+  // Real packaging is a 7×10 inch tamper-proof POLYBAG (flat), not a box.
+  // Shiprocket bills the GREATER of actual weight and volumetric weight
+  // (L×B×H ÷ 5000). The old 20×15×10 "box" declared a fake 10 cm height →
+  // volumetric 0.6 kg → pushed every parcel into a higher weight slab (~₹150–
+  // 290). The polybag is ~25×18×4 cm → volumetric 0.36 kg → falls under the
+  // 0.5 kg surface minimum → cheapest slab (~₹95). A 1:64 / 88 mm die-cast +
+  // polybag is ~0.15–0.3 kg actual, so 0.5 kg is the billed floor. (2026-06-23)
   const dims = input.dimensions ?? {
-    lengthCm: 20,
-    breadthCm: 15,
-    heightCm: 10,
-    weightKg: 0.4,
+    lengthCm: 25, // 10 in
+    breadthCm: 18, // 7 in
+    heightCm: 4, // flat polybag with one small car
+    weightKg: 0.3,
   };
 
   const nameParts = input.customer.name.trim().split(/\s+/);
