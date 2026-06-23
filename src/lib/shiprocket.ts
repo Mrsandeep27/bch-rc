@@ -312,7 +312,11 @@ export async function createShipment(input: CreateShipmentInput): Promise<{
   courierName: string | null;
   trackingUrl: string | null;
 }> {
-  const pickup = process.env.SHIPROCKET_PICKUP_LOCATION;
+  // Trim: Shiprocket matches the pickup nickname EXACTLY, so a stray trailing
+  // space in the env value (" warehouse" / "warehouse ") makes every create
+  // fail with "Wrong Pickup location entered" — the same whitespace class of
+  // bug that took down serviceability via SHIPROCKET_PICKUP_PINCODE (2026-06-23).
+  const pickup = process.env.SHIPROCKET_PICKUP_LOCATION?.trim();
   if (!pickup) throw new Error("SHIPROCKET_PICKUP_LOCATION not set");
 
   const dims = input.dimensions ?? {
