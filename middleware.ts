@@ -18,6 +18,11 @@ import {
   type NextRequest,
   type NextFetchEvent,
 } from "next/server";
+// Relative import (not the "@/" alias) on purpose: a freshly-created Vercel
+// project can externalize alias-resolved imports in the Edge middleware bundle
+// ("The Edge Function 'middleware' is referencing unsupported modules:
+// @/lib/analytics"), failing the deploy. A relative path always inlines
+// correctly across project configs and is harmless everywhere else.
 import {
   SESSION_COOKIE,
   SESSION_TTL_SECONDS,
@@ -25,7 +30,7 @@ import {
   VISITOR_TTL_SECONDS,
   UTM_KEYS,
   shouldTrackPath,
-} from "@/lib/analytics";
+} from "./src/lib/analytics";
 
 // MAINTENANCE MODE — gated by env var. Runs BEFORE Supabase/analytics so a
 // paused site doesn't waste a DB round-trip on every request. Toggle via
