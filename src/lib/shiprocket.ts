@@ -357,6 +357,19 @@ export async function createShipment(input: CreateShipmentInput): Promise<{
     { method: "POST", body: JSON.stringify(body) },
   );
 
+  // Shiprocket intermittently answers HTTP 200 with NO order_id/shipment_id
+  // (a transient rejection under load). Without this guard, String(undefined)
+  // persisted the literal text "undefined" as the shiprocket id and the
+  // shipment job was marked DONE — silently losing a PAID order, with no retry
+  // and no alert (2026-06-23 incident: 3 paid orders vanished this way).
+  // Throwing makes runShipmentJob treat it as a TRANSIENT failure → backoff +
+  // retry, then an ops alert if it never succeeds.
+  if (order?.order_id == null || order?.shipment_id == null) {
+    throw new Error(
+      `Shiprocket create returned no order_id/shipment_id (transient): ${JSON.stringify(order ?? {}).slice(0, 200)}`,
+    );
+  }
+
   // If AWB wasn't auto-assigned (most cases), call assign AWB.
   let awbCode = order.awb_code;
   let courierName = order.courier_name;

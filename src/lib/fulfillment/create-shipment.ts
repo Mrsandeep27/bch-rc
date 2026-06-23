@@ -66,10 +66,13 @@ export async function createShipmentForOrder(orderId: string): Promise<ShipmentR
   const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
   if (!order) throw new OrderNotFoundError();
 
-  // Idempotency: already shipped → return the existing record.
-  if (order.shiprocketOrderId && order.awbCode) {
+  // Idempotency: already shipped → return the existing record. A REAL
+  // Shiprocket order id is all-digits; the `/^\d+$/` guard makes sure the
+  // legacy String(undefined) bug value ("undefined") is never mistaken for a
+  // real shipment, so such an order is re-created instead of skipped.
+  if (/^\d+$/.test(order.shiprocketOrderId ?? "") && order.awbCode) {
     return {
-      shiprocketOrderId: order.shiprocketOrderId,
+      shiprocketOrderId: order.shiprocketOrderId!,
       shipmentId: order.shiprocketShipmentId,
       awbCode: order.awbCode,
       courierName: order.courierName,

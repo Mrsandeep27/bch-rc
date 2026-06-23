@@ -18,7 +18,7 @@
  * that somehow has no job.
  */
 
-import { and, eq, isNull, lte, sql, inArray } from "drizzle-orm";
+import { and, eq, isNull, lte, sql, inArray, or } from "drizzle-orm";
 import { db } from "@/db";
 import { orders, shipmentJobs } from "@/db/schema";
 import {
@@ -189,7 +189,15 @@ export async function drainShipmentJobs(
     )
     .returning({ orderId: shipmentJobs.orderId });
 
-  // 2. Safety net: any PAID/PACKED order with no shipment + no job → enqueue.
+  // A real Shiprocket order id is all-digits. NULL or the legacy "undefined"
+  // (from the old String(undefined) bug) both mean "not actually created".
+  const noRealShipment = or(
+    isNull(orders.shiprocketOrderId),
+    eq(orders.shiprocketOrderId, "undefined"),
+    eq(orders.shiprocketOrderId, ""),
+  );
+
+  // 2. Safety net: any PAID/PACKED order with no real shipment + no job → enqueue.
   const orphans = await db
     .select({ id: orders.id })
     .from(orders)
@@ -197,7 +205,7 @@ export async function drainShipmentJobs(
     .where(
       and(
         inArray(orders.status, ["PAID", "PACKED"]),
-        isNull(orders.shiprocketOrderId),
+        noRealShipment,
         isNull(shipmentJobs.orderId),
       ),
     )
@@ -208,6 +216,45 @@ export async function drainShipmentJobs(
     await enqueueShipmentJob(o.id);
     enqueued++;
   }
+
+  // 2b. Heal orders whose job already finished (DONE/FAILED) but which have NO
+  // real shipment + no AWB — the exact silent-loss footprint of the old bug.
+  // Reset the job to PENDING so it re-creates. Forward-path code now throws on
+  // a missing id (never marks DONE with "undefined"), so this only catches
+  // pre-fix rows + any future regression. Belt-and-suspenders.
+  const stuck = await db
+    .update(shipmentJobs)
+    .set({
+      status: "PENDING",
+      lockedAt: null,
+      nextAttemptAt: new Date(),
+      lastError: "reset: order had no valid shiprocket id",
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        inArray(shipmentJobs.status, ["DONE", "FAILED"]),
+        inArray(
+          shipmentJobs.orderId,
+          db
+            .select({ id: orders.id })
+            .from(orders)
+            .where(
+              and(
+                inArray(orders.status, ["PAID", "PACKED"]),
+                isNull(orders.awbCode),
+                or(
+                  eq(orders.shiprocketOrderId, "undefined"),
+                  eq(orders.shiprocketOrderId, ""),
+                  isNull(orders.shiprocketOrderId),
+                ),
+              ),
+            ),
+        ),
+      ),
+    )
+    .returning({ orderId: shipmentJobs.orderId });
+  enqueued += stuck.length;
 
   // 3. Claim a batch of due PENDING jobs (SKIP LOCKED so parallel cron runs
   //    never contend), flip to PROCESSING, then process outside any lock.
