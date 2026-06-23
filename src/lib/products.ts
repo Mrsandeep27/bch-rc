@@ -259,7 +259,7 @@ export const PRODUCTS: Sku[] = [
     scale: "1:64",
     name: "Pocket F1 Classic",
     tagline: "Formula racing silhouette · entry-grade · most popular",
-    retailINR: 1599,
+    retailINR: 1799,
     mrpINR: 2299,
     bullets: [
       "Trasped HG4-218 Formula 1 generic body",
@@ -441,9 +441,28 @@ export function getProductById(id: string): Sku | undefined {
   return PRODUCTS.find((p) => p.id === id);
 }
 
-/** Storefront grid — excludes anything flagged `hidden`. */
+/** Explicit display order for the storefront grid, by SKU id. Anything not
+ *  listed falls to the end in its original array order. Keep this as the one
+ *  place that controls card order so the big PRODUCTS array stays stable for
+ *  sitemap/static-params/PDP lookups. */
+const STOREFRONT_ORDER = [
+  "pocket-monster",
+  "pocket-f1-classic",
+  "pocket-thar",
+  "pocket-porsche",
+  "pocket-bmw",
+];
+
+/** Storefront grid — excludes anything flagged `hidden`, ordered per
+ *  STOREFRONT_ORDER. */
 export function getVisibleProducts(): Sku[] {
-  return PRODUCTS.filter((p) => !p.hidden && !p.internal);
+  const rank = (id: string) => {
+    const i = STOREFRONT_ORDER.indexOf(id);
+    return i === -1 ? STOREFRONT_ORDER.length : i;
+  };
+  return PRODUCTS.filter((p) => !p.hidden && !p.internal).sort(
+    (a, b) => rank(a.id) - rank(b.id)
+  );
 }
 
 export function getHeroSku(): Sku {
