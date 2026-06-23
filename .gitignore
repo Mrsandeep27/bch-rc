@@ -90,3 +90,6 @@ next-env.d.ts
 prc-all-images/
 public/invoice-preview.html
 .cmsg.txt
+
+.vercel
+.env*.local
