@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Activity, BarChart3, Boxes, Filter, LayoutDashboard, LifeBuoy, Package, Settings, Users } from "lucide-react";
 import { requireAdmin } from "@/lib/admin-auth";
 import { THEME } from "@/lib/theme";
@@ -23,9 +24,20 @@ export default async function AdminLayout({
           <div className="flex items-center gap-6">
             <Link
               href="/admin"
-              className="font-display font-bold text-lg tracking-tight"
+              className="flex items-center gap-2 shrink-0"
+              aria-label={`${THEME.brandName} Admin`}
             >
-              {THEME.brandName} <span className="text-brand-red">Admin</span>
+              <Image
+                src={THEME.logoMain}
+                alt={THEME.brandName}
+                width={826}
+                height={304}
+                className="h-7 w-auto"
+                priority
+              />
+              <span className="text-brand-red font-bold text-xs uppercase tracking-widest">
+                Admin
+              </span>
             </Link>
             <nav className="hidden md:flex items-center gap-1 text-sm">
               <NavLink href="/admin" icon={LayoutDashboard}>

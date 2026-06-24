@@ -185,9 +185,11 @@ function SkuCard({ sku, index, stockMap }: SkuCardProps) {
 
         {/* W14 + X08 - Two-button stack. Primary = Buy now (impulse,
             straight to /checkout). Secondary = Add to cart (browse mode).
-            Both carry the price + COD signal ON the button per W14.
-            Re-enables pointer events so clicks never bubble to the
-            card-wide PDP link. */}
+            The Buy-now button carries the ONLINE (UPI) price — no "COD"
+            label, since that price is the prepaid one (the COD price shows
+            in the line above). whitespace-nowrap keeps every card's button on
+            one line so they align across the grid. Re-enables pointer events
+            so clicks never bubble to the card-wide PDP link. */}
         <div className="flex flex-col gap-2 pointer-events-auto">
           <button
             type="button"
@@ -211,10 +213,10 @@ function SkuCard({ sku, index, stockMap }: SkuCardProps) {
               trackInitiateCheckout(onlinePrice);
               router.push("/checkout");
             }}
-            className="bg-brand-red hover:bg-brand-red-hover text-white rounded-full py-2.5 px-4 transition-colors inline-flex items-center justify-center gap-2 font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand-red"
+            className="bg-brand-red hover:bg-brand-red-hover text-white rounded-full py-2.5 px-4 transition-colors inline-flex items-center justify-center gap-2 font-semibold text-sm whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand-red"
           >
             <Zap size={15} aria-hidden />
-            {skuSoldOut ? "Sold out" : `Buy now — ${formatINR(onlinePrice)}, COD`}
+            {skuSoldOut ? "Sold out" : `Buy now — ${formatINR(onlinePrice)}`}
           </button>
           <button
             type="button"
