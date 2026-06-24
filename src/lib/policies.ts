@@ -54,13 +54,13 @@ Final delivery is by Shiprocket's courier partner (Delhivery, Blue Dart, Ekart, 
 ## Shipping charges
 
 - **Free shipping** on every order ₹1,099 and above.
-- Below ₹1,099: a flat ₹49 shipping fee applies.
+- Below ₹1,099: a flat ₹85 shipping fee applies.
 
 ## Cash on Delivery (COD)
 
 - COD available pan-India.
 - A flat ₹49 COD handling fee applies on orders below ₹999. No COD fee on orders ₹999 and above.
-- Pay online (UPI / card / net banking) to save ₹100 with code **PRC100**.
+- Pay online (UPI / card / net banking) and ₹100 is taken off automatically — no code needed.
 
 ## Tracking your order
 

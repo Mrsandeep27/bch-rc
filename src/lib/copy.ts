@@ -122,11 +122,11 @@ export const FAQS: { q: string; a: string; defaultOpen?: boolean }[] = [
   },
   {
     q: "How long does the battery last?",
-    a: "1:64 → 25 min · 1:43 → 35 min · 1:24 → 45 min. USB-C, ~30 min full charge.",
+    a: "12-15 min of real drift per charge. USB-C, ~30 min for a full charge. We don't inflate this number.",
   },
   {
     q: "What age is this for?",
-    a: "1:64 → 6+ · 1:43 → 8+ · 1:24 → 10+. Adults love them too.",
+    a: "Recommended 8+ (small parts — keep away from children under 3). Adults love them too.",
   },
   {
     q: "What if it breaks?",

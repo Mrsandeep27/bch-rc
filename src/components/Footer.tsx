@@ -48,7 +48,7 @@ export default function Footer() {
                 Mini 1:64 RC drift cars · Sold from Bangalore
               </span>
               <span className="hidden sm:inline">
-                India&apos;s most-gifted mini RC cars — 1:64 RC drift cars.
+                Gift-ready mini RC drift cars — 1:64 RC drift cars.
                 Pan-India COD, ships in 24 hrs from Bangalore.
               </span>
             </p>

@@ -1,12 +1,22 @@
 "use client";
 
 import { useCart } from "@/lib/cart-store";
-import { defaultVariantSlug, getHeroSku } from "@/lib/products";
+import { defaultVariantSlug, getVisibleProducts } from "@/lib/products";
+import { OFFERS } from "@/lib/config";
+import { formatINR } from "@/lib/utils";
 
 export default function FinalCta() {
+  // Lead with the ACTUAL cheapest car so the "from ₹999" promise and the cart
+  // land on the same number. Was: hardcoded "₹999" copy but handleAdd added the
+  // ₹1,399 hero Porsche → a ₹300/₹400 jump the moment the cart opened.
+  const entry = getVisibleProducts().reduce((min, p) =>
+    p.retailINR < min.retailINR ? p : min,
+  );
+  const online = entry.retailINR - OFFERS.prepaidDiscountINR;
+  const cod = entry.retailINR;
+
   const handleAdd = () => {
-    const hero = getHeroSku();
-    useCart.getState().add(hero.id, defaultVariantSlug(hero));
+    useCart.getState().add(entry.id, defaultVariantSlug(entry));
     useCart.getState().open();
   };
 
@@ -20,14 +30,15 @@ export default function FinalCta() {
           The gift he&apos;ll use for months.
         </h2>
         <p className="mt-2 text-sm sm:text-base text-white/90">
-          ₹999 online · ₹1,099 COD · ships from Bangalore
+          {formatINR(online)} online · {formatINR(cod)} COD · ships from
+          Bangalore
         </p>
         <button
           type="button"
           onClick={handleAdd}
           className="mt-4 sm:mt-6 bg-white text-brand-red hover:bg-brand-cream px-6 sm:px-8 py-3 sm:py-4 rounded-full font-bold text-sm sm:text-lg inline-flex items-center gap-2 shadow-2xl"
         >
-          🛒 Order his gift — ₹999, COD
+          🛒 Order his gift — {formatINR(online)}, COD
         </button>
         <p className="mt-3 text-[11px] sm:text-xs text-white/80 font-mono uppercase tracking-widest">
           COD · 7-day replacement · WhatsApp
