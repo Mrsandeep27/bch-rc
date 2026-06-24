@@ -7,7 +7,8 @@ import { db } from "@/db";
 import { orders, customers, events, notificationsOutbox } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
 import { formatINR } from "@/lib/utils";
-import { waLink, OFFERS, bundleDiscountInr, bundleTierLabel } from "@/lib/config";
+import { OFFERS, bundleDiscountInr, bundleTierLabel } from "@/lib/config";
+import { orderConfirmationWaLink } from "@/lib/wa";
 import { ShipButton } from "./ShipButton";
 import OrderActions from "./OrderActions";
 
@@ -310,16 +311,27 @@ export default async function AdminOrderDetail({
                   {customer.totalOrders} orders ·{" "}
                   {formatINR(customer.totalSpentInr)} lifetime
                 </div>
-                <a
-                  href={waLink(
-                    `Hi ${customer.name ?? ""}, regarding your order ${order.id}:`,
-                  )}
-                  target="_blank"
-                  rel="noopener"
-                  className="mt-3 inline-flex items-center gap-1.5 text-sm text-whatsapp-green hover:text-whatsapp-green-hover font-semibold"
-                >
-                  <MessageCircle size={14} /> WhatsApp customer
-                </a>
+                {(() => {
+                  const waHref = orderConfirmationWaLink(
+                    order,
+                    customer.phone ?? addr.phone,
+                    customer.name ?? addr.fullName,
+                  );
+                  return waHref ? (
+                    <a
+                      href={waHref}
+                      target="_blank"
+                      rel="noopener"
+                      className="mt-3 inline-flex items-center gap-1.5 bg-whatsapp-green hover:bg-whatsapp-green-hover text-white px-4 py-2 rounded-full text-sm font-semibold transition-colors"
+                    >
+                      <MessageCircle size={14} /> Send confirmation on WhatsApp
+                    </a>
+                  ) : (
+                    <span className="mt-3 inline-block text-xs text-brand-ink-soft">
+                      No phone on file
+                    </span>
+                  );
+                })()}
               </div>
             </div>
           )}
