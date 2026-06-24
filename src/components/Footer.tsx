@@ -1,11 +1,5 @@
 import Link from "next/link";
 import Image from "next/image";
-import { MapPin, Phone, Mail } from "lucide-react";
-import {
-  InstagramIcon,
-  YoutubeIcon,
-  WhatsAppIcon,
-} from "@/components/BrandIcons";
 import { waLink } from "@/lib/config";
 import { THEME } from "@/lib/theme";
 
@@ -58,27 +52,45 @@ export default function Footer() {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="Instagram"
-                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/5 hover:bg-brand-red flex items-center justify-center transition-colors"
+                className="hover:scale-110 transition-transform"
               >
-                <InstagramIcon size={16} />
+                <Image
+                  src="/icons/instagram.png"
+                  alt="Instagram"
+                  width={40}
+                  height={40}
+                  className="w-9 h-9 sm:w-10 sm:h-10"
+                />
               </a>
               <a
                 href={waLink()}
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="WhatsApp"
-                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/5 hover:bg-whatsapp-green flex items-center justify-center transition-colors"
+                className="hover:scale-110 transition-transform"
               >
-                <WhatsAppIcon size={16} />
+                <Image
+                  src="/icons/whatsapp.png"
+                  alt="WhatsApp"
+                  width={40}
+                  height={40}
+                  className="w-9 h-9 sm:w-10 sm:h-10"
+                />
               </a>
               <a
                 href="https://youtube.com/@pocketrccars"
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="YouTube"
-                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/5 hover:bg-brand-red flex items-center justify-center transition-colors"
+                className="hover:scale-110 transition-transform"
               >
-                <YoutubeIcon size={16} />
+                <Image
+                  src="/icons/youtube.png"
+                  alt="YouTube"
+                  width={40}
+                  height={40}
+                  className="w-9 h-9 sm:w-10 sm:h-10"
+                />
               </a>
             </div>
           </div>
@@ -90,7 +102,13 @@ export default function Footer() {
             </h3>
             <ul className="space-y-1.5 sm:space-y-3 text-xs sm:text-sm text-neutral-300">
               <li className="flex items-start gap-2 sm:gap-2.5">
-                <Phone size={14} className="text-brand-red shrink-0 mt-0.5" />
+                <Image
+                  src="/icons/phone.png"
+                  alt=""
+                  width={16}
+                  height={16}
+                  className="w-4 h-4 shrink-0 mt-0.5"
+                />
                 <span className="leading-snug">
                   <a
                     href={`tel:+${THEME.whatsappNumber}`}
@@ -110,7 +128,13 @@ export default function Footer() {
                 </span>
               </li>
               <li className="flex items-start gap-2 sm:gap-2.5">
-                <Mail size={14} className="text-brand-red shrink-0 mt-0.5" />
+                <Image
+                  src="/icons/gmail.png"
+                  alt=""
+                  width={16}
+                  height={16}
+                  className="w-4 h-4 shrink-0 mt-0.5"
+                />
                 <a
                   href={`mailto:${THEME.email}`}
                   className="hover:text-white break-all"
@@ -121,7 +145,13 @@ export default function Footer() {
               {/* Compact ships-from row - replaces the dedicated map block
                   on mobile so we save ~200 px of footer height. */}
               <li className="flex items-start gap-2 sm:gap-2.5 lg:hidden">
-                <MapPin size={14} className="text-brand-red shrink-0 mt-0.5" />
+                <Image
+                  src="/icons/location.png"
+                  alt=""
+                  width={16}
+                  height={16}
+                  className="w-4 h-4 shrink-0 mt-0.5"
+                />
                 <a
                   href={MAP_LINK}
                   target="_blank"
@@ -171,7 +201,13 @@ export default function Footer() {
               </span>
               <span className="absolute inset-0 flex items-center justify-center text-white text-sm font-semibold">
                 <span className="inline-flex items-center gap-1.5 bg-black/40 backdrop-blur px-3 py-1.5 rounded-full">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 22s-8-7.5-8-13a8 8 0 1116 0c0 5.5-8 13-8 13z"/><circle cx="12" cy="9" r="2.5"/></svg>
+                  <Image
+                    src="/icons/location.png"
+                    alt=""
+                    width={14}
+                    height={14}
+                    className="w-3.5 h-3.5"
+                  />
                   Open in Google Maps
                 </span>
               </span>
