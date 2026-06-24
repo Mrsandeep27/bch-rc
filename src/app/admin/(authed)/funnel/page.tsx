@@ -1,15 +1,9 @@
-import Link from "next/link";
 import { AlertTriangle, TrendingDown, Activity } from "lucide-react";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getFunnelReport } from "@/lib/funnel-queries";
+import { FunnelWindowTabs } from "./FunnelWindowTabs";
 
 export const dynamic = "force-dynamic";
-
-const WINDOWS = [
-  { d: 1, label: "24h" },
-  { d: 7, label: "7 days" },
-  { d: 30, label: "30 days" },
-];
 
 function pct(x: number): string {
   return `${x.toFixed(x < 10 ? 1 : 0)}%`;
@@ -42,21 +36,7 @@ export default async function FunnelDashboard({
             Of everyone who visited, where they dropped off — and why.
           </p>
         </div>
-        <div className="flex gap-1 bg-brand-cream rounded-full p-1">
-          {WINDOWS.map((w) => (
-            <Link
-              key={w.d}
-              href={`/admin/funnel?window=${w.d}`}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium ${
-                report.windowDays === w.d
-                  ? "bg-brand-ink text-white"
-                  : "text-brand-ink-soft hover:text-brand-ink"
-              }`}
-            >
-              {w.label}
-            </Link>
-          ))}
-        </div>
+        <FunnelWindowTabs />
       </div>
 
       {/* Headline conversion */}
