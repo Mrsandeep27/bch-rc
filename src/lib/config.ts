@@ -27,8 +27,6 @@ export const OFFERS = {
   codConfirmationMinINR: THEME.codConfirmationMinINR,
   codConfirmationMaxINR: THEME.codConfirmationMaxINR,
   codConfirmationRoundToINR: THEME.codConfirmationRoundToINR,
-  bundle2PriceINR: THEME.bundle2PriceINR,
-  bundle2SaveINR: THEME.bundle2SaveINR,
   ledSmokeUpgradeINR: THEME.ledSmokeUpgradeINR,
 } as const;
 

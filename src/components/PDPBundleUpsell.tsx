@@ -8,12 +8,19 @@ import type { Sku } from "@/lib/products";
 import { defaultVariantSlug, getVisibleProducts } from "@/lib/products";
 import { formatINR, cn } from "@/lib/utils";
 import { useCart } from "@/lib/cart-store";
-import { THEME } from "@/lib/theme";
+import { bundleDiscountInr } from "@/lib/config";
 
 /**
  * "Pair it" bundle module — sits below the Buy Now button on the PDP. Shows
- * the current SKU + a recommended pair-with car, with a single-tap "Add both
- * for ₹2,299 (save ₹299)" CTA. AOV-lifting upsell at the decision moment.
+ * the current SKU + a recommended pair-with car, with a single-tap "add both"
+ * CTA. AOV-lifting upsell at the decision moment.
+ *
+ * Pricing MUST mirror what checkout actually charges: the bundle is a FLAT
+ * ₹298 (2-car) bonus off the real subtotal — NOT a fixed ₹2,299 total. The old
+ * fixed price assumed two base-price cars, so on a premium PDP (e.g. Monster
+ * Truck ₹1,899) it under-quoted by ~₹600 and the customer was billed more at
+ * checkout. We now derive the bonus from the same bundleDiscountInr() the
+ * order creator uses, so the page and the bill always agree.
  *
  * Recommended pair = the first visible SKU that isn't the current one. Hero
  * (Pocket Porsche) is pinned first in the products list so most PDPs pair
@@ -30,9 +37,11 @@ export default function PDPBundleUpsell({ sku }: { sku: Sku }) {
 
   if (!pair) return null;
 
+  // Flat 2-car bundle bonus — the exact value checkout subtracts. Price the
+  // pair as (both retails − bonus), never a fixed total.
+  const pairSavings = bundleDiscountInr(2);
   const singleTotal = sku.retailINR;
-  const pairTotal = THEME.bundle2PriceINR;
-  const pairSavings = sku.retailINR + pair.retailINR - pairTotal;
+  const pairTotal = sku.retailINR + pair.retailINR - pairSavings;
   const finalTotal = includePair ? pairTotal : singleTotal;
 
   function addBundle() {
@@ -111,9 +120,9 @@ export default function PDPBundleUpsell({ sku }: { sku: Sku }) {
               {pair.name}
             </p>
             <p className="text-xs text-brand-ink-soft">
-              <span className="line-through">{formatINR(pair.retailINR)}</span>
-              <span className="ml-2 text-brand-red font-semibold">
-                FREE bundle pricing
+              {formatINR(pair.retailINR)}
+              <span className="ml-2 text-success font-semibold">
+                save {formatINR(pairSavings)} together
               </span>
             </p>
           </div>

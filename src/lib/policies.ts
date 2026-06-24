@@ -152,7 +152,7 @@ Refunds are NOT available for:
 
 ## Partial refunds
 
-If a bundle order (Buy 2 / Buy 3) is partially defective, we refund only the affected unit at its **un-bundled** retail price, not the discounted bundle slice. Example: a Buy-2 bundle at ₹2,299 where one Porsche is defective — refund is ₹1,299 (Porsche retail), keeping the second car at full retail value.
+If a bundle order (Buy 2 / Buy 3) is partially defective, we refund only the affected unit at its **un-bundled** retail price, not the discounted bundle slice. Example: a 2-car bundle where one Porsche is defective — refund is ₹1,399 (Porsche retail), keeping the second car at full retail value.
 
 ## Order cancellation before dispatch
 

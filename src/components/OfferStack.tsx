@@ -9,7 +9,7 @@ import {
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
-import { OFFERS } from "@/lib/config";
+import { OFFERS, bundleDiscountInr } from "@/lib/config";
 import { getHeroSku } from "@/lib/products";
 import { formatINR } from "@/lib/utils";
 
@@ -39,7 +39,7 @@ const OFFERS_LIST: Offer[] = [
   {
     icon: Package,
     title: "Mix 2 cars",
-    sub: `Auto-save ${formatINR(OFFERS.bundle2SaveINR)}`,
+    sub: `Auto-save ${formatINR(bundleDiscountInr(2))}`,
   },
   {
     icon: Zap,

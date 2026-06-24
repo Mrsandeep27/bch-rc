@@ -66,10 +66,10 @@ export const THEME = {
   codConfirmationMinINR: 100,
   codConfirmationMaxINR: 300,
   codConfirmationRoundToINR: 50,
-  bundle2PriceINR: 2299,       // Buy 2 = ₹2,299 (save ₹299)
-  bundle2SaveINR: 299,
-  bundle3PriceINR: 3199,       // Buy 3 = ₹3,199 (save ₹698)
-  bundle3SaveINR: 698,
+  // Bundle pricing is a FLAT per-tier discount, NOT a fixed total — see
+  // BUNDLE_TIERS in config.ts (the single source the checkout uses). The old
+  // fixed bundle2PriceINR/bundle2SaveINR/bundle3* values were removed: they
+  // assumed two base-price cars and mis-quoted premium combos on the PDP.
   ledSmokeUpgradeINR: 200,
   driverFigurineUpgradeINR: 600,  // base ₹1,299 → Pro ₹1,899
 
