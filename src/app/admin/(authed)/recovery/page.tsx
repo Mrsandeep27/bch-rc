@@ -7,10 +7,15 @@ import { formatINR } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-// A cart is "recoverable" if an order row exists but never got paid. We treat
-// PENDING (UPI order created, never captured) and ABANDONED as the recoverable
-// set. PENDING_COD_VERIFICATION is a different (manual) queue, not here.
-const RECOVERABLE = ["PENDING", "ABANDONED"] as const;
+// A cart is "recoverable" if an order row exists but never got paid:
+//   PENDING   — UPI order created, payment never captured (still open / pre-sweep)
+//   ABANDONED — reconcile sweep marked a stale PENDING dead (modal closed, lost net)
+//   FAILED    — Razorpay payment.failed: the UPI attempt timed out or was declined.
+//               This is the HOTTEST lead — they actively tried to pay — yet it was
+//               previously excluded, so "payment timed out" orders never surfaced here.
+// PENDING_COD_VERIFICATION is a different (manual) queue, not here. CANCELLED /
+// RETURNED / REFUNDED are deliberate exits, not recoverable, so they stay out.
+const RECOVERABLE = ["PENDING", "ABANDONED", "FAILED"] as const;
 const PAID = ["PAID", "PACKED", "SHIPPED", "DELIVERED"] as const;
 
 // Don't show carts younger than this — the customer may still be mid-checkout.
@@ -107,7 +112,19 @@ export default async function RecoveryPage() {
   ]);
 
   const paidSet = new Set(paidRows.map((r) => r.customerId));
-  const recoverable = (carts as Cart[]).filter((c) => !paidSet.has(c.customerId));
+  // Show a lead only if they NEVER succeeded, and only ONCE — their latest
+  // unpaid attempt. `carts` is ordered by placedAt desc, so the first row we
+  // see per customer is the most recent; later (older) retries are collapsed.
+  // Net effect: a FAILED order appears only if the customer hasn't paid and
+  // hasn't already been listed via a newer attempt.
+  const seenCustomer = new Set<string>();
+  const recoverable = (carts as Cart[]).filter((c) => {
+    if (paidSet.has(c.customerId)) return false;
+    const key = c.customerId ?? c.id;
+    if (seenCustomer.has(key)) return false;
+    seenCustomer.add(key);
+    return true;
+  });
   const fresh = recoverable.filter((c) => c.placedAt.getTime() >= freshCutoff);
   const cold = recoverable.filter((c) => c.placedAt.getTime() < freshCutoff);
   const freshValue = fresh.reduce((sum, c) => sum + c.totalInr, 0);
