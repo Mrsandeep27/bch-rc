@@ -1,5 +1,5 @@
 import { and, desc, gte, inArray, lt } from "drizzle-orm";
-import { LifeBuoy, MessageCircle } from "lucide-react";
+import { LifeBuoy, MessageCircle, Phone } from "lucide-react";
 import { db } from "@/db";
 import { orders } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
@@ -29,6 +29,12 @@ function ageLabel(d: Date, nowMs: number): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+/** Normalise a stored 10-digit Indian number to +91 E.164 (for wa.me / tel:). */
+function e164(phone: string): string {
+  const digits = phone.replace(/\D/g, "").replace(/^0+/, "");
+  return digits.length === 10 ? `91${digits}` : digits;
+}
+
 /** WhatsApp deep link to the CUSTOMER (not the store) with a recovery nudge. */
 function recoveryWaLink(phone: string, name: string, orderId: string, totalInr: number): string {
   const first = (name || "there").split(" ")[0];
@@ -37,10 +43,7 @@ function recoveryWaLink(phone: string, name: string, orderId: string, totalInr: 
     `(${orderId}) for ${formatINR(totalInr)} but the payment didn't go ` +
     `through. Want me to help you finish it? You can also pay Cash on ` +
     `Delivery if that's easier. Just reply here 🙂`;
-  // Indian numbers are stored as 10 digits → prefix country code 91.
-  const digits = phone.replace(/\D/g, "").replace(/^0+/, "");
-  const e164 = digits.length === 10 ? `91${digits}` : digits;
-  return `https://wa.me/${e164}?text=${encodeURIComponent(msg)}`;
+  return `https://wa.me/${e164(phone)}?text=${encodeURIComponent(msg)}`;
 }
 
 export default async function RecoveryPage() {
@@ -170,19 +173,27 @@ export default async function RecoveryPage() {
                       {formatINR(c.totalInr)}
                     </span>
                     {phone ? (
-                      <a
-                        href={recoveryWaLink(
-                          phone,
-                          addr.fullName ?? "",
-                          c.id,
-                          c.totalInr,
-                        )}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 bg-whatsapp-green hover:bg-whatsapp-green-hover text-white px-3 py-2 rounded-full text-sm font-semibold transition-colors"
-                      >
-                        <MessageCircle size={14} /> Nudge
-                      </a>
+                      <>
+                        <a
+                          href={`tel:+${e164(phone)}`}
+                          className="inline-flex items-center gap-1.5 bg-white border border-brand-ink/15 hover:border-brand-ink text-brand-ink px-3 py-2 rounded-full text-sm font-semibold transition-colors"
+                        >
+                          <Phone size={14} /> Call
+                        </a>
+                        <a
+                          href={recoveryWaLink(
+                            phone,
+                            addr.fullName ?? "",
+                            c.id,
+                            c.totalInr,
+                          )}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 bg-whatsapp-green hover:bg-whatsapp-green-hover text-white px-3 py-2 rounded-full text-sm font-semibold transition-colors"
+                        >
+                          <MessageCircle size={14} /> Nudge
+                        </a>
+                      </>
                     ) : (
                       <span className="text-xs text-brand-ink-soft">
                         no phone
