@@ -145,6 +145,24 @@ h4 {
   letter-spacing: -0.005em;
 }
 
+/* Backend / operator UI (admin, pack, cod) — plain system font, no branded
+   display face. Redefining the font variables on this scope cascades to h1/h2
+   and .font-display automatically (both resolve var(--font-display) from here),
+   so every heading drops Nippo for a simple, readable system sans. These are
+   internal tools, not the storefront. */
+.backend-ui {
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  --font-display: var(--font-sans);
+  font-family: var(--font-sans);
+}
+.backend-ui h1,
+.backend-ui h2,
+.backend-ui h3,
+.backend-ui h4 {
+  letter-spacing: normal;
+}
+
 /* Hero entrance — replaces framer-motion fade-up animations. Pure CSS keeps
    the LCP path framework-free and saves ~30 KB of hydration JS. */
 @keyframes hero-fade-up {
