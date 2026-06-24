@@ -59,9 +59,13 @@ export default function Hero({
   // can't decode: it IS the drift video's first frame, so the user always
   // sees an on-brand still even when bytes are still arriving.
   //
-  // preload="auto" because the file is small enough (3.16 MB mobile / 6.29 MB
-  // desktop) that proactive buffering wins the smoothness vs the bandwidth
-  // cost - and the bandwidth ISN'T saved by "metadata" since autoplay is on.
+  // Both encodes are now NATIVE 1080×1920 (re-encoded from the 1080p master via
+  // scripts/regen-hero-video.py): 4.6 MB mobile (CRF 29) / 5.8 MB desktop (CRF
+  // 27). The old 720p mobile file got upscaled ~1.6× on 3×-DPI phones and looked
+  // soft; encoding at the phone's real device-pixel width is the sharpness win.
+  // preload="metadata" + faststart streams the loop from the front while the
+  // WebP poster (first frame) holds the paint, so the bigger file doesn't delay
+  // LCP.
   //
   // Respects prefers-reduced-motion by pausing the video (poster stays
   // visible), so users with vestibular sensitivities get the still frame
