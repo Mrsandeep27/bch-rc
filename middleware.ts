@@ -110,10 +110,23 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
     const host = (request.headers.get("host") ?? "")
       .toLowerCase()
       .split(":")[0];
-    if (host === store16Host && request.nextUrl.pathname === "/") {
-      const url = request.nextUrl.clone();
-      url.pathname = "/16";
-      return NextResponse.rewrite(url);
+    const path = request.nextUrl.pathname;
+    if (host === store16Host) {
+      // On the 16 subdomain, serve the /16 store at the root.
+      if (path === "/") {
+        const url = request.nextUrl.clone();
+        url.pathname = "/16";
+        return NextResponse.rewrite(url);
+      }
+    } else if (path === "/16" || path.startsWith("/16/")) {
+      // On the MAIN domain (pocketrccars.com), the 16 store lives ONLY on its
+      // subdomain — permanently redirect the old /16 path there so it isn't a
+      // duplicate, indexable URL. (Inert in local/preview where STORE16_HOST is
+      // unset, so /16 stays reachable for development.)
+      return NextResponse.redirect(
+        `https://${store16Host}${path}${request.nextUrl.search}`,
+        308,
+      );
     }
   }
 
