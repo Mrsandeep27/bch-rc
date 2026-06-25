@@ -30,7 +30,12 @@ import {
 } from "@/db/schema";
 import { sql, eq, and } from "drizzle-orm";
 import { PRODUCTS } from "@/lib/products";
-import { OFFERS, bundleDiscountInr, computeCodConfirmationFee } from "@/lib/config";
+import {
+  OFFERS,
+  bundleDiscountInr,
+  computeCodConfirmationFee,
+  COD_CONFIRMATION_16_MAX_INR,
+} from "@/lib/config";
 import { razorpay } from "@/lib/razorpay";
 import { generateOrderId } from "@/lib/order-id";
 import { redeemCoupon, CouponError } from "@/lib/coupons";
@@ -262,8 +267,20 @@ export async function POST(req: Request) {
   //   • Before shipment dispatch  → REFUNDABLE (Razorpay refund on cancel)
   //   • After shipment dispatch   → NON-REFUNDABLE (anti-flake fee)
   //   • Exception                 → defective product = refundable post-ship
+  // 1:16 "Big" orders use the lighter ₹200 upfront cap; 1:64 keeps ₹300.
+  // Detected from the resolved line items so the client can't spoof a lower fee.
+  const is16Order =
+    lineItems.length > 0 &&
+    lineItems.every(
+      (li) => PRODUCTS.find((p) => p.id === li.skuId)?.scale === "1:16",
+    );
   const confirmationFee =
-    body.paymentMethod === "COD" ? computeCodConfirmationFee(subtotal) : 0;
+    body.paymentMethod === "COD"
+      ? computeCodConfirmationFee(
+          subtotal,
+          is16Order ? COD_CONFIRMATION_16_MAX_INR : undefined,
+        )
+      : 0;
   // Bundle bonus — auto-applied when the customer adds any 2+ cars.
   // Driven by TOTAL cart quantity so 2-of-the-same and 1-each-of-two both
   // qualify. Server-side authoritative so a client can't spoof the discount.

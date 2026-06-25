@@ -45,14 +45,22 @@ export const OFFERS = {
  * Result rounds UP to the nearest ₹50 so customers see clean numbers
  * (₹100 / ₹150 / ₹200 / ₹250 / ₹300) instead of ₹139.90.
  */
-export function computeCodConfirmationFee(subtotalInr: number): number {
+/**
+ * Upfront cap for the 1:16 "Big" store. Those cars are pricier (₹2,999–₹3,599),
+ * so the 10% rule would lock at the ₹300 max — too heavy. Capping the 1:16
+ * confirmation fee at ₹200 keeps the upfront light WITHOUT touching the 1:64
+ * store (which keeps the ₹300 cap). Passed as `maxInr` for 1:16 orders only.
+ */
+export const COD_CONFIRMATION_16_MAX_INR = 200;
+
+export function computeCodConfirmationFee(
+  subtotalInr: number,
+  maxInr: number = OFFERS.codConfirmationMaxINR,
+): number {
   const pct = (subtotalInr * OFFERS.codConfirmationPct) / 100;
   const round = OFFERS.codConfirmationRoundToINR;
   const rounded = Math.ceil(pct / round) * round;
-  return Math.min(
-    OFFERS.codConfirmationMaxINR,
-    Math.max(OFFERS.codConfirmationMinINR, rounded),
-  );
+  return Math.min(maxInr, Math.max(OFFERS.codConfirmationMinINR, rounded));
 }
 
 /**

@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Script from "next/script";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   CheckCircle2,
   ChevronLeft,
@@ -23,12 +23,14 @@ import { PayButton } from "@/components/PayButton";
 import { trackFunnel } from "@/lib/funnel-client";
 import {
   useCart,
+  useCart16,
   getCartLines,
   getCartSubtotal,
   getCartCount,
 } from "@/lib/cart-store";
 import {
   AUTO_COUPON,
+  COD_CONFIRMATION_16_MAX_INR,
   OFFERS,
   bundleDiscountInr,
   bundleTierLabel,
@@ -126,10 +128,21 @@ declare global {
   }
 }
 
-export default function CheckoutPage() {
+function CheckoutPageInner() {
   const router = useRouter();
-  const items = useCart((s) => s.items);
-  const hasHydrated = useCart((s) => s.hasHydrated);
+  // The /16 store checks out through this same page with ?store=16, driven by
+  // its own isolated cart (useCart16). Everything downstream — pricing, coupons,
+  // Razorpay/COD, the order API — is identical; only the cart source differs.
+  const searchParams = useSearchParams();
+  const is16 = searchParams.get("store") === "16";
+  const cartApi = is16 ? useCart16 : useCart;
+  const homeHref = is16 ? "/16" : "/";
+  const items64 = useCart((s) => s.items);
+  const items16 = useCart16((s) => s.items);
+  const items = is16 ? items16 : items64;
+  const hyd64 = useCart((s) => s.hasHydrated);
+  const hyd16 = useCart16((s) => s.hasHydrated);
+  const hasHydrated = is16 ? hyd16 : hyd64;
 
   const lines = getCartLines(items);
   const subtotal = getCartSubtotal(items);
@@ -246,9 +259,9 @@ export default function CheckoutPage() {
     // Wait for the persisted cart to rehydrate before treating it as empty —
     // otherwise a returning customer with a saved cart gets bounced home.
     if (hasHydrated && count === 0) {
-      router.push("/");
+      router.push(homeHref);
     }
-  }, [hasHydrated, count, router]);
+  }, [hasHydrated, count, router, homeHref]);
 
   // If an applied coupon's discount would now be invalid (e.g. user removed
   // items and the new subtotal drops below the minimum), revalidate against
@@ -412,7 +425,10 @@ export default function CheckoutPage() {
       : 0;
   // Partial-prepaid CoD upfront amount (10 % of subtotal, ₹100-300, ₹50 step).
   // Shown in the CoD option's right-side number + subtitle copy.
-  const codConfirmation = computeCodConfirmationFee(subtotal);
+  const codConfirmation = computeCodConfirmationFee(
+    subtotal,
+    is16 ? COD_CONFIRMATION_16_MAX_INR : undefined,
+  );
   const prepaidDiscount = payment === "upi" ? OFFERS.prepaidDiscountINR : 0;
   // Bundle bonus — mix ANY 2 cars = ₹298 off, ANY 3+ cars = ₹698 off.
   // Driven by TOTAL cart quantity, not distinct SKUs.
@@ -662,14 +678,14 @@ export default function CheckoutPage() {
             });
             const vData = await v.json().catch(() => ({}));
             if (!v.ok) throw new Error(vData.error || "Verification failed");
-            useCart.getState().clear();
+            cartApi.getState().clear();
             router.push(`/orders/${data.orderId}`);
           } catch {
             // Verify failed (network/timeout) but the money was taken. Wait for
             // the webhook to mark it captured, then take them to their order —
             // never show a "failed" state for a payment that actually went through.
             await waitForCapture(data.orderId);
-            useCart.getState().clear();
+            cartApi.getState().clear();
             router.push(`/orders/${data.orderId}`);
           } finally {
             submittingRef.current = false;
@@ -789,7 +805,7 @@ export default function CheckoutPage() {
       // legacy zero-confirmation-fee fallback skips Razorpay and lands at
       // the order page — that branch fires only on a server-side misconfig.
       if (data.paymentMethod === "COD" && !data.razorpayOrderId) {
-        useCart.getState().clear();
+        cartApi.getState().clear();
         router.push(`/orders/${data.orderId}`);
         return;
       }
@@ -836,7 +852,7 @@ export default function CheckoutPage() {
               if (typeof window !== "undefined" && window.history.length > 1) {
                 router.back();
               } else {
-                router.push("/");
+                router.push(homeHref);
               }
             }}
             aria-label="Go back"
@@ -866,11 +882,11 @@ export default function CheckoutPage() {
             <ul className="mt-4 space-y-3">
               {lines.map((l) => {
                 const dec = () =>
-                  useCart.getState().setQty(l.sku.id, l.variantSlug, l.qty - 1);
+                  cartApi.getState().setQty(l.sku.id, l.variantSlug, l.qty - 1);
                 const inc = () =>
-                  useCart.getState().setQty(l.sku.id, l.variantSlug, l.qty + 1);
+                  cartApi.getState().setQty(l.sku.id, l.variantSlug, l.qty + 1);
                 const rm = () =>
-                  useCart.getState().remove(l.sku.id, l.variantSlug);
+                  cartApi.getState().remove(l.sku.id, l.variantSlug);
                 const labelSuffix = l.variantName ? ` (${l.variantName})` : "";
                 return (
                   <li
@@ -1410,5 +1426,13 @@ export default function CheckoutPage() {
         </div>
       </main>
     </>
+  );
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense fallback={null}>
+      <CheckoutPageInner />
+    </Suspense>
   );
 }

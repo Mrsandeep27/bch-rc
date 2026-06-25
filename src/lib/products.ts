@@ -8,7 +8,7 @@
  * MRP carries a ~30-35% strikethrough.
  */
 
-export type Scale = "1:64" | "1:43" | "1:24";
+export type Scale = "1:64" | "1:43" | "1:24" | "1:16";
 
 export type ColorVariant = {
   /** Display name, e.g. "Blue", "Multi Colour", "Red & Orange" */
@@ -395,6 +395,150 @@ export const PRODUCTS: Sku[] = [
       drift: "Pro drift mode",
     },
   },
+  // ---- 1:16 "Big" series (the /16 storefront) ----
+  // Separate store, separate cart (useCart16), but the SAME order pipeline.
+  // Excluded from the 1:64 grid/PDP via the scale filter in getVisibleProducts
+  // and the /product PDP guard. Colourless SKUs (one colourway each) → inventory
+  // key "". Specs scraped from the 1:16 competitor listings. Images are
+  // placeholders until the real shoot lands.
+  {
+    id: "drift-inferno",
+    slug: "drift-inferno",
+    scale: "1:16",
+    name: "Drift Inferno",
+    tagline: "Pillar-box red · 4WD · 2.4 GHz full-proportional",
+    retailINR: 2999,
+    mrpINR: 3999,
+    bullets: [
+      "4WD drivetrain · up to ~25 km/h",
+      "2.4 GHz full-proportional — steer, throttle, brake + speed trim",
+      "ESP stability · rubber drift tyres + spare set",
+      "USB-C rechargeable · full LED · ready-to-run",
+    ],
+    badge: "NEW",
+    bodyShape: "1:16 drift car",
+    heroImage: "/store16-images/drift-inferno/1-hero.webp",
+    altImages: [
+      "/store16-images/drift-inferno/2-side.webp",
+      "/store16-images/drift-inferno/3-detail.webp",
+      "/store16-images/drift-inferno/4-lifestyle.webp",
+    ],
+    specs: { lengthMM: 280, drive: "4WD", topSpeedKmh: 25, batteryMin: 18, chargeMin: 90, rangeM: 30, minAge: 6, led: "Full LED", drift: "ESP-assisted" },
+  },
+  {
+    id: "drift-toxic",
+    slug: "drift-toxic",
+    scale: "1:16",
+    name: "Drift Toxic",
+    tagline: "Neon green · 4WD · 2.4 GHz full-proportional",
+    retailINR: 2999,
+    mrpINR: 3999,
+    bullets: [
+      "4WD drivetrain · up to ~25 km/h",
+      "2.4 GHz full-proportional — steer, throttle, brake + speed trim",
+      "ESP stability · rubber drift tyres + spare set",
+      "USB-C rechargeable · full LED · ready-to-run",
+    ],
+    bodyShape: "1:16 drift car",
+    heroImage: "/store16-images/drift-toxic/1-hero.webp",
+    altImages: [
+      "/store16-images/drift-toxic/2-side.webp",
+      "/store16-images/drift-toxic/3-detail.webp",
+      "/store16-images/drift-toxic/4-lifestyle.webp",
+    ],
+    specs: { lengthMM: 280, drive: "4WD", topSpeedKmh: 25, batteryMin: 18, chargeMin: 90, rangeM: 30, minAge: 6, led: "Full LED", drift: "ESP-assisted" },
+  },
+  {
+    id: "drift-phantom",
+    slug: "drift-phantom",
+    scale: "1:16",
+    name: "Drift Phantom",
+    tagline: "Murdered-out black · 4WD · 2.4 GHz full-proportional",
+    retailINR: 2999,
+    mrpINR: 3999,
+    bullets: [
+      "4WD drivetrain · up to ~25 km/h",
+      "2.4 GHz full-proportional — steer, throttle, brake + speed trim",
+      "ESP stability · rubber drift tyres + spare set",
+      "USB-C rechargeable · full LED · ready-to-run",
+    ],
+    bodyShape: "1:16 drift car",
+    heroImage: "/store16-images/drift-phantom/1-hero.webp",
+    altImages: [
+      "/store16-images/drift-phantom/2-side.webp",
+      "/store16-images/drift-phantom/3-detail.webp",
+      "/store16-images/drift-phantom/4-lifestyle.webp",
+    ],
+    specs: { lengthMM: 280, drive: "4WD", topSpeedKmh: 25, batteryMin: 18, chargeMin: 90, rangeM: 30, minAge: 6, led: "Full LED", drift: "ESP-assisted" },
+  },
+  {
+    id: "drift-carbon",
+    slug: "drift-carbon",
+    scale: "1:16",
+    name: "Drift Carbon",
+    tagline: "Carbon-fibre look · 4WD · 2.4 GHz full-proportional",
+    retailINR: 2999,
+    mrpINR: 3999,
+    bullets: [
+      "4WD drivetrain · up to ~25 km/h",
+      "2.4 GHz full-proportional — steer, throttle, brake + speed trim",
+      "ESP stability · rubber drift tyres + spare set",
+      "USB-C rechargeable · full LED · ready-to-run",
+    ],
+    bodyShape: "1:16 drift car",
+    heroImage: "/store16-images/drift-carbon/1-hero.webp",
+    altImages: [
+      "/store16-images/drift-carbon/2-side.webp",
+      "/store16-images/drift-carbon/3-detail.webp",
+      "/store16-images/drift-carbon/4-lifestyle.webp",
+    ],
+    specs: { lengthMM: 280, drive: "4WD", topSpeedKmh: 25, batteryMin: 18, chargeMin: 90, rangeM: 30, minAge: 6, led: "Full LED", drift: "ESP-assisted" },
+  },
+  {
+    id: "dares-azure",
+    slug: "dares-azure",
+    scale: "1:16",
+    name: "Dares Azure",
+    tagline: "White & blue race livery · flagship · 4WD",
+    retailINR: 3599,
+    mrpINR: 4999,
+    bullets: [
+      "Sharper, wider race-livery shell",
+      "4WD · up to ~25 km/h · 2.4 GHz full-proportional",
+      "ESP stability · rubber drift tyres + spare set",
+      "USB-C rechargeable · full LED · ready-to-run",
+    ],
+    badge: "PRO",
+    bodyShape: "1:16 race-livery drift car",
+    heroImage: "/store16-images/dares-azure/1-hero.webp",
+    altImages: [
+      "/store16-images/dares-azure/2-side.webp",
+      "/store16-images/dares-azure/3-detail.webp",
+      "/store16-images/dares-azure/4-lifestyle.webp",
+    ],
+    specs: { lengthMM: 280, drive: "4WD", topSpeedKmh: 25, batteryMin: 18, chargeMin: 90, rangeM: 30, minAge: 6, led: "Full LED", drift: "ESP-assisted" },
+  },
+  {
+    id: "dares-recon",
+    slug: "dares-recon",
+    scale: "1:16",
+    name: "Dares Recon",
+    tagline: "Green & grey stealth livery · flagship · 4WD",
+    retailINR: 3599,
+    mrpINR: 4999,
+    bullets: [
+      "Sharper, wider race-livery shell",
+      "4WD · up to ~25 km/h · 2.4 GHz full-proportional",
+      "ESP stability · rubber drift tyres + spare set",
+      "USB-C rechargeable · full LED · ready-to-run",
+    ],
+    badge: "PRO",
+    bodyShape: "1:16 race-livery drift car",
+    heroImage: "/hero-banners/2-monsoon-mumbai-night.png",
+    altImages: [],
+    specs: { lengthMM: 280, drive: "4WD", topSpeedKmh: 25, batteryMin: 18, chargeMin: 90, rangeM: 30, minAge: 6, led: "Full LED", drift: "ESP-assisted" },
+  },
+
   // -----------------------------------------------------------------------
   // INTERNAL QA SKU — accessible via /product/qa-1rs but excluded from the
   // catalog, sitemap, and static params. Priced so that subtotal (₹16) plus
@@ -453,16 +597,38 @@ const STOREFRONT_ORDER = [
   "pocket-bmw",
 ];
 
-/** Storefront grid — excludes anything flagged `hidden`, ordered per
+/** Storefront grid — the 1:64 store. Excludes `hidden`/`internal` AND the 1:16
+ *  "Big" series (which lives at /16 with its own cart), ordered per
  *  STOREFRONT_ORDER. */
 export function getVisibleProducts(): Sku[] {
   const rank = (id: string) => {
     const i = STOREFRONT_ORDER.indexOf(id);
     return i === -1 ? STOREFRONT_ORDER.length : i;
   };
-  return PRODUCTS.filter((p) => !p.hidden && !p.internal).sort(
-    (a, b) => rank(a.id) - rank(b.id)
-  );
+  return PRODUCTS.filter(
+    (p) => !p.hidden && !p.internal && p.scale === "1:64"
+  ).sort((a, b) => rank(a.id) - rank(b.id));
+}
+
+/** Display order for the 1:16 /16 lineup, by SKU id. */
+const STORE16_ORDER = [
+  "drift-inferno",
+  "drift-toxic",
+  "drift-phantom",
+  "drift-carbon",
+  "dares-azure",
+  "dares-recon",
+];
+
+/** The 1:16 "Big" series products, in lineup order. */
+export function getStore16Skus(): Sku[] {
+  const rank = (id: string) => {
+    const i = STORE16_ORDER.indexOf(id);
+    return i === -1 ? STORE16_ORDER.length : i;
+  };
+  return PRODUCTS.filter(
+    (p) => p.scale === "1:16" && !p.hidden && !p.internal
+  ).sort((a, b) => rank(a.id) - rank(b.id));
 }
 
 export function getHeroSku(): Sku {

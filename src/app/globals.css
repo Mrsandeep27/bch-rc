@@ -163,6 +163,72 @@ h4 {
   letter-spacing: normal;
 }
 
+/* ── 1:16 storefront ("Big" series) ─────────────────────────────────────────
+   Its own identity, scoped so it never touches the live 1:64 site. Remaps the
+   brand colour tokens the shared design language already uses: racing-red
+   accent → slate-blue (#3A5069), cream bg → #F5F5F5. Fonts are deliberately the
+   SAME as 1:64 (Nippo display + General Sans body — inherited from :root, not
+   overridden here). Same mechanism as .backend-ui above — pure CSS-variable
+   override, zero impact on the 1:64 components that read these tokens. */
+.store-16 {
+  /* Same colour theme as the 1:64 store — racing-red accent on warm cream.
+     These mirror the :root tokens exactly so /16 reads as the same brand. */
+  --brand-red: #e11d2a;
+  --brand-red-hover: #c4151f;
+  --brand-red-soft: #fef2f3;
+  --brand-cream: #faf8f5;
+  --brand-ink: #0a0a0a;
+  --brand-ink-soft: #3a3a3a;
+  --brand-line: #e5e5e5;
+  --gold: #d4a017;
+  background: var(--brand-cream);
+  color: var(--brand-ink);
+}
+
+/* Slice-fill CTA — a transparent button with an accent (slate-blue) border; on
+   hover a slanted panel wipes across from the left and the label flips to the
+   page colour. Used by the /16 store's primary CTAs. Reads the brand tokens, so
+   it inherits the .store-16 accent automatically.
+
+   The fill is an oversized, skewed bar (width 120%, offset -10%) so its tilted
+   leading/trailing edges still cover the full pill — including the rounded
+   corners — instead of leaving the triangular gaps a centred rotated box does
+   on a wide button. `isolation: isolate` keeps the z-index:-1 fill behind the
+   label without having to wrap the text in a span. */
+.cta-slice {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background-color: transparent;
+  border: 2px solid var(--brand-red);
+  color: var(--brand-red);
+  transition: color 450ms cubic-bezier(0.83, 0, 0.17, 1);
+}
+.cta-slice::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -10%;
+  width: 120%;
+  z-index: -1;
+  background-color: var(--brand-red);
+  transform: translateX(-115%) skewX(-12deg);
+  transition: transform 550ms cubic-bezier(0.83, 0, 0.17, 1);
+}
+.cta-slice:hover,
+.cta-slice:focus-visible {
+  color: var(--brand-cream);
+}
+.cta-slice:hover::before,
+.cta-slice:focus-visible::before {
+  transform: translateX(0) skewX(-12deg);
+}
+.cta-slice:active {
+  scale: 0.98;
+  filter: brightness(0.97);
+}
+
 /* Hero entrance — replaces framer-motion fade-up animations. Pure CSS keeps
    the LCP path framework-free and saves ~30 KB of hydration JS. */
 @keyframes hero-fade-up {
@@ -368,5 +434,119 @@ h4 {
   100% {
     opacity: 1;
     transform: scale(1) rotate(0deg);
+  }
+}
+
+/* ── 1:16 scroll-reveal "sliding images" gallery ─────────────────────────────
+   A pinned stage: one image starts large and centred; as the section scrolls,
+   eight more slide in from off-screen to complete a grid while the centre
+   shrinks into its cell. Pure CSS, scroll-driven via view-timeline (Chrome/Edge).
+   Browsers without animation-timeline fall back to the final static grid. */
+.slide-gallery {
+  position: relative;
+  height: 300vh; /* scroll distance for the card grid to slide in */
+  background: var(--brand-cream);
+}
+.slide-gallery__stage {
+  position: sticky;
+  top: 0;
+  height: 100svh;
+  overflow: hidden;
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.55rem;
+  background: var(--brand-cream);
+  grid-template-columns: 1fr 1fr clamp(150px, 18vw, 280px) 1fr 1fr;
+  grid-template-rows: 1fr 1fr 1fr;
+  grid-template-areas:
+    "one  two   center four  five"
+    "one  two   center four  five"
+    "six  seven center eight nine";
+}
+.slide-gallery__tile {
+  border-radius: 0.9rem;
+  overflow: hidden;
+  background-image: var(--bg);
+  background-repeat: no-repeat;
+  background-size: cover;
+  /* every cell is portrait/square now, so cover fills it — bias the crop a touch
+     up so the face and the RC car held in-hand both stay in frame */
+  background-position: center 40%;
+}
+.slide-gallery__tile.t1 { grid-area: one;   --sg-x: -320%; --sg-y: -120%; }
+.slide-gallery__tile.t2 { grid-area: two;   --sg-x: -120%; --sg-y: -220%; }
+.slide-gallery__tile.t3 { grid-area: four;  --sg-x:  120%; --sg-y: -220%; }
+.slide-gallery__tile.t4 { grid-area: five;  --sg-x:  320%; --sg-y: -120%; }
+.slide-gallery__tile.t5 { grid-area: six;   --sg-x: -320%; --sg-y:  160%; }
+.slide-gallery__tile.t6 { grid-area: seven; --sg-x: -120%; --sg-y:  220%; }
+.slide-gallery__tile.t7 { grid-area: eight; --sg-x:  120%; --sg-y:  220%; }
+.slide-gallery__tile.t8 { grid-area: nine;  --sg-x:  320%; --sg-y:  160%; }
+.slide-gallery__tile.center {
+  grid-area: center;
+  position: relative;
+  z-index: 2;
+}
+
+/* Mobile: the 5-column desktop layout collapses the side columns into tall
+   slivers on a phone. Re-flow the 8 tiles + centre into an even 3×3 grid
+   (centre in the middle) so it reads as a proper photo collage. */
+@media (max-width: 640px) {
+  .slide-gallery {
+    height: 220vh;
+  }
+  .slide-gallery__stage {
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: 1fr 1fr 1fr;
+    grid-template-areas:
+      "one   two    four"
+      "five  center six"
+      "seven eight  nine";
+  }
+}
+
+@supports (animation-timeline: view()) {
+  .slide-gallery {
+    view-timeline: --sg block;
+  }
+  .slide-gallery__tile:not(.center) {
+    animation: sg-slide linear both;
+    animation-timeline: --sg;
+    animation-range: cover 12% cover 78%;
+  }
+  @keyframes sg-slide {
+    0%,
+    8% {
+      translate: var(--sg-x) var(--sg-y);
+    }
+    100% {
+      translate: 0 0;
+    }
+  }
+  .slide-gallery__tile.center {
+    animation: sg-center linear both;
+    animation-timeline: --sg;
+    animation-range: cover 12% cover 78%;
+  }
+  @keyframes sg-center {
+    /* a card-sized centre — grows in gently, never a fullscreen takeover */
+    0%,
+    8% {
+      scale: 1.5;
+    }
+    100% {
+      scale: 1;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .slide-gallery__tile,
+    .slide-gallery__center-label {
+      animation: none;
+    }
+    .slide-gallery__tile:not(.center) {
+      translate: 0 0;
+    }
+    .slide-gallery__tile.center {
+      scale: 1;
+    }
   }
 }

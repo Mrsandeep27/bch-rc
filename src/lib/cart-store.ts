@@ -33,67 +33,82 @@ function sameLine(a: CartItem, skuId: string, variantSlug: string | null): boole
   return a.skuId === skuId && (a.variantSlug ?? null) === (variantSlug ?? null);
 }
 
-export const useCart = create<CartState>()(
-  persist(
-    (set) => ({
-      items: [],
-      isOpen: false,
-      hasHydrated: false,
-      setHasHydrated: (v) => set({ hasHydrated: v }),
-      add: (skuId, variantSlug, qty = 1) =>
-        set((s) => {
-          const existing = s.items.find((i) => sameLine(i, skuId, variantSlug));
-          if (existing) {
+/**
+ * Cart store factory. The 1:64 store and the 1:16 store each get their OWN
+ * isolated cart (separate localStorage key, separate zustand instance) so a
+ * customer's pocket-car cart and big-car cart never merge. Both resolve line
+ * items against the same PRODUCTS catalog and feed the identical /api/orders
+ * pipeline downstream — only the cart contents are kept apart.
+ */
+function createCartStore(persistName: string) {
+  return create<CartState>()(
+    persist(
+      (set) => ({
+        items: [],
+        isOpen: false,
+        hasHydrated: false,
+        setHasHydrated: (v) => set({ hasHydrated: v }),
+        add: (skuId, variantSlug, qty = 1) =>
+          set((s) => {
+            const existing = s.items.find((i) => sameLine(i, skuId, variantSlug));
+            if (existing) {
+              return {
+                items: s.items.map((i) =>
+                  sameLine(i, skuId, variantSlug) ? { ...i, qty: i.qty + qty } : i,
+                ),
+                isOpen: true,
+              };
+            }
             return {
-              items: s.items.map((i) =>
-                sameLine(i, skuId, variantSlug) ? { ...i, qty: i.qty + qty } : i,
-              ),
+              items: [...s.items, { skuId, variantSlug, qty }],
               isOpen: true,
             };
+          }),
+        remove: (skuId, variantSlug) =>
+          set((s) => ({
+            items: s.items.filter((i) => !sameLine(i, skuId, variantSlug)),
+          })),
+        setQty: (skuId, variantSlug, qty) =>
+          set((s) => ({
+            items:
+              qty <= 0
+                ? s.items.filter((i) => !sameLine(i, skuId, variantSlug))
+                : s.items.map((i) =>
+                    sameLine(i, skuId, variantSlug) ? { ...i, qty } : i,
+                  ),
+          })),
+        clear: () => set({ items: [] }),
+        open: () => set({ isOpen: true }),
+        close: () => set({ isOpen: false }),
+        toggle: () => set((s) => ({ isOpen: !s.isOpen })),
+      }),
+      {
+        // v2: variantSlug added. Older v1 carts are discarded by migrate().
+        name: persistName,
+        version: 2,
+        storage: createJSONStorage(() => localStorage),
+        partialize: (s) => ({ items: s.items }),
+        migrate: (_state, fromVersion) => {
+          if (fromVersion < 2) {
+            return { items: [], isOpen: false } as Partial<CartState>;
           }
-          return {
-            items: [...s.items, { skuId, variantSlug, qty }],
-            isOpen: true,
-          };
-        }),
-      remove: (skuId, variantSlug) =>
-        set((s) => ({
-          items: s.items.filter((i) => !sameLine(i, skuId, variantSlug)),
-        })),
-      setQty: (skuId, variantSlug, qty) =>
-        set((s) => ({
-          items:
-            qty <= 0
-              ? s.items.filter((i) => !sameLine(i, skuId, variantSlug))
-              : s.items.map((i) =>
-                  sameLine(i, skuId, variantSlug) ? { ...i, qty } : i,
-                ),
-        })),
-      clear: () => set({ items: [] }),
-      open: () => set({ isOpen: true }),
-      close: () => set({ isOpen: false }),
-      toggle: () => set((s) => ({ isOpen: !s.isOpen })),
-    }),
-    {
-      // v2: variantSlug added. Older v1 carts are discarded by migrate().
-      name: "prc-cart",
-      version: 2,
-      storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ items: s.items }),
-      migrate: (_state, fromVersion) => {
-        if (fromVersion < 2) {
-          return { items: [], isOpen: false } as Partial<CartState>;
-        }
-        return _state as Partial<CartState>;
+          return _state as Partial<CartState>;
+        },
+        // Fires after rehydration (even when there's nothing stored) — flip the
+        // flag so the UI knows the real cart is now loaded.
+        onRehydrateStorage: () => (state) => {
+          state?.setHasHydrated(true);
+        },
       },
-      // Fires after rehydration (even when there's nothing stored) — flip the
-      // flag so the UI knows the real cart is now loaded.
-      onRehydrateStorage: () => (state) => {
-        state?.setHasHydrated(true);
-      },
-    },
-  ),
-);
+    ),
+  );
+}
+
+/** 1:64 pocket-car store cart. */
+export const useCart = createCartStore("prc-cart");
+
+/** 1:16 big-car store cart — fully isolated from the 1:64 cart above. */
+export const useCart16 = createCartStore("prc-cart-16");
 
 export type CartLine = {
   sku: Sku;

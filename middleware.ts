@@ -100,6 +100,23 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
   const maintResponse = maintenanceCheck(request);
   if (maintResponse) return maintResponse;
 
+  // 1:16 "Big" store on its own subdomain. When a request arrives on the host
+  // named in STORE16_HOST (e.g. big.pocketrccars.com), serve the /16 store at
+  // the root. Env-gated → completely inert until the subdomain is configured in
+  // Vercel, so this is a no-op for the main site. Only the root path is
+  // rewritten; /16/*, /checkout, /api, /track etc. already resolve as-is.
+  const store16Host = process.env.STORE16_HOST?.trim().toLowerCase();
+  if (store16Host) {
+    const host = (request.headers.get("host") ?? "")
+      .toLowerCase()
+      .split(":")[0];
+    if (host === store16Host && request.nextUrl.pathname === "/") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/16";
+      return NextResponse.rewrite(url);
+    }
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(

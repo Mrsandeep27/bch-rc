@@ -227,6 +227,13 @@ export type CreateShipmentInput = {
   paymentMethod: "Prepaid" | "COD";
   /** Box dimensions in cm + weight in kg. Defaults to small RC car parcel. */
   dimensions?: { lengthCm: number; breadthCm: number; heightCm: number; weightKg: number };
+  /**
+   * When false, ONLY create the Shiprocket order — do NOT auto-assign a courier
+   * (AWB). The operator selects the courier and schedules pickup manually in the
+   * Shiprocket dashboard. Used by the 1:16 store. Defaults true (1:64 keeps the
+   * auto cheapest-surface assignment).
+   */
+  autoAssignAwb?: boolean;
 };
 
 export type ShiprocketOrderResponse = {
@@ -381,11 +388,13 @@ export async function createShipment(input: CreateShipmentInput): Promise<{
     );
   }
 
-  // If AWB wasn't auto-assigned (most cases), call assign AWB.
+  // If AWB wasn't auto-assigned (most cases), call assign AWB — UNLESS the
+  // caller opted out (autoAssignAwb === false, the 1:16 store), in which case
+  // the order is left courier-less on Shiprocket for manual selection + pickup.
   let awbCode = order.awb_code;
   let courierName = order.courier_name;
 
-  if (!awbCode && order.shipment_id) {
+  if (input.autoAssignAwb !== false && !awbCode && order.shipment_id) {
     try {
       // Pick the CHEAPEST SURFACE courier for the route. Without an explicit
       // courier_id, Shiprocket defaults to AIR (~₹200/parcel) instead of

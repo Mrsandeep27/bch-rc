@@ -107,6 +107,12 @@ export async function createShipmentForOrder(orderId: string): Promise<ShipmentR
   const result = await shiprocketCreate({
     orderId: order.id,
     orderPlacedAt: order.placedAt,
+    // Courier auto-assignment is OFF for EVERY order (both stores). The order is
+    // created on Shiprocket automatically, but the operator selects the courier
+    // and schedules pickup MANUALLY in the Shiprocket dashboard. Our
+    // sync-shipments cron + courier webhook pull the AWB/tracking back once it's
+    // assigned, so the customer still gets a tracking notification after.
+    autoAssignAwb: false,
     customer: {
       name: addr.fullName,
       phone: addr.phone,

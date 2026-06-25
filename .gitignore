@@ -93,3 +93,8 @@ public/invoice-preview.html
 
 .vercel
 .env*.local
+
+# 1:16 product image originals — only the .webp are used/deployed
+public/store16-images/**/*.png
+# competitor scrape output
+scripts/out/
