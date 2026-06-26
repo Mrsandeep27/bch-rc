@@ -486,12 +486,8 @@ export const PRODUCTS: Sku[] = [
       "USB-C rechargeable · full LED · ready-to-run",
     ],
     bodyShape: "1:16 drift car",
-    heroImage: "/store16-images/drift-carbon/1-hero.webp",
-    altImages: [
-      "/store16-images/drift-carbon/2-side.webp",
-      "/store16-images/drift-carbon/3-detail.webp",
-      "/store16-images/drift-carbon/4-lifestyle.webp",
-    ],
+    heroImage: "/hero-banners/dares-3-tunnel-light-streaks.png",
+    altImages: [],
     specs: { lengthMM: 280, drive: "4WD", topSpeedKmh: 25, batteryMin: 18, chargeMin: 90, rangeM: 30, minAge: 6, led: "Full LED", drift: "ESP-assisted" },
   },
   {
@@ -534,8 +530,12 @@ export const PRODUCTS: Sku[] = [
     ],
     badge: "PRO",
     bodyShape: "1:16 race-livery drift car",
-    heroImage: "/hero-banners/2-monsoon-mumbai-night.png",
-    altImages: [],
+    heroImage: "/store16-images/dares-recon/1-hero.webp",
+    altImages: [
+      "/store16-images/dares-recon/2-side.webp",
+      "/store16-images/dares-recon/3-detail.webp",
+      "/store16-images/dares-recon/4-lifestyle.webp",
+    ],
     specs: { lengthMM: 280, drive: "4WD", topSpeedKmh: 25, batteryMin: 18, chargeMin: 90, rangeM: 30, minAge: 6, led: "Full LED", drift: "ESP-assisted" },
   },
 
