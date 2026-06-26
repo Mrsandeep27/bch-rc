@@ -143,6 +143,13 @@ export type Store16Product = {
   heroImage?: string;
   /** PDP gallery: [hero, ...angles]. Undefined → placeholder. */
   images?: string[];
+  /**
+   * Optional 9:16 product box video for the PDP (Flipkart-style: shows as the
+   * first media tile with a play badge; tapping play opens a fullscreen player).
+   * `src` is a faststart MP4 (preload=none so it costs nothing until played);
+   * `poster` is a lightweight JPG shown until then. Undefined → no video tile.
+   */
+  boxVideo?: { src: string; poster: string };
   tagline: string; // one-liner for the card
   description: string; // PDP paragraph
   specs: string[];
@@ -192,6 +199,7 @@ export const STORE16_PRODUCTS: Store16Product[] = [
       "/store16-images/drift-inferno/3-detail.webp",
       "/store16-images/drift-inferno/4-lifestyle.webp",
     ],
+    boxVideo: { src: "/store16-video/drift-inferno.mp4", poster: "/store16-video/drift-inferno.jpg" },
     tagline: "Pillar-box red you'll spot mid-slide from across the room.",
     description:
       "The everyday slider in loud, look-at-me red. 4WD grip and rubber drift tyres mean it actually holds a line, and the 2.4 GHz proportional remote lets you feather every corner. Charge it over USB-C, hit a smooth floor, send it.",
@@ -214,6 +222,7 @@ export const STORE16_PRODUCTS: Store16Product[] = [
       "/store16-images/drift-toxic/3-detail.webp",
       "/store16-images/drift-toxic/4-lifestyle.webp",
     ],
+    boxVideo: { src: "/store16-video/drift-toxic.mp4", poster: "/store16-video/drift-toxic.jpg" },
     tagline: "Highlighter-green and loud about it — impossible to lose.",
     description:
       "Same everyday slider, dialled up in toxic neon green. 4WD, full-proportional steering and ESP stability keep the slides clean while the LED lights and rubber tyres do the showing off. USB-C charge, ready to run out of the box.",
@@ -236,6 +245,7 @@ export const STORE16_PRODUCTS: Store16Product[] = [
       "/store16-images/drift-phantom/3-detail.webp",
       "/store16-images/drift-phantom/4-lifestyle.webp",
     ],
+    boxVideo: { src: "/store16-video/drift-phantom.mp4", poster: "/store16-video/drift-phantom.jpg" },
     tagline: "Murdered-out black. Stealth in, sideways out.",
     description:
       "Blacked-out everyday slider for people who let the driving talk. 4WD drivetrain, rubber drift tyres and a 2.4 GHz proportional remote with speed trim — beginner-smooth or full-send, your call. USB-C rechargeable, ready to run.",
@@ -251,13 +261,16 @@ export const STORE16_PRODUCTS: Store16Product[] = [
     priceINR: 2999,
     swatch: "#33373B",
     imageKey: "drift-carbon",
-    heroImage: "/store16-images/drift-carbon/1-hero.webp",
+    // hero re-cropped (original was a tall portrait with the car crammed low;
+    // now square-framed). New filename (-v2) busts the browser/optimizer cache.
+    heroImage: "/store16-images/drift-carbon/1-hero-v2.webp",
     images: [
-      "/store16-images/drift-carbon/1-hero.webp",
+      "/store16-images/drift-carbon/1-hero-v2.webp",
       "/store16-images/drift-carbon/2-side.webp",
       "/store16-images/drift-carbon/3-detail.webp",
       "/store16-images/drift-carbon/4-lifestyle.webp",
     ],
+    boxVideo: { src: "/store16-video/drift-carbon.mp4", poster: "/store16-video/drift-carbon.jpg" },
     tagline: "Carbon-weave shell with a race-car finish — the quiet flex.",
     description:
       "The everyday slider in a carbon-fibre-look shell that reads way pricier than it is. Same 4WD grip, ESP-assisted drifts, full-proportional control and LED lighting. Charge over USB-C and it's ready straight from the box.",
@@ -281,6 +294,7 @@ export const STORE16_PRODUCTS: Store16Product[] = [
       "/store16-images/dares-azure/3-detail.webp",
       "/store16-images/dares-azure/4-lifestyle.webp",
     ],
+    boxVideo: { src: "/store16-video/dares-azure.mp4", poster: "/store16-video/dares-azure.jpg" },
     tagline: "Full race livery in white and blue — the flagship, dressed to win.",
     description:
       "The flagship Dares wears a proper white-and-blue race livery on a sharper, wider body with more presence on the floor. Underneath it's the same proven 4WD drift platform — proportional 2.4 GHz control, ESP stability, rubber tyres, LED lights and USB-C charging.",

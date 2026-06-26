@@ -96,5 +96,8 @@ public/invoice-preview.html
 
 # 1:16 product image originals — only the .webp are used/deployed
 public/store16-images/**/*.png
+# 1:16 raw box-video masters (.MOV) — only the optimized renditions under
+# public/store16-video/ are committed/deployed.
+public/store16-images/video/
 # competitor scrape output
 scripts/out/

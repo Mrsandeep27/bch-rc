@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { ShieldCheck, Truck, ArrowRight, Check, ShoppingBag } from "lucide-react";
 import { Placeholder16 } from "./Placeholder16";
+import BoxVideo16 from "./BoxVideo16";
 import { useCart16 } from "@/lib/cart-store";
 import { OFFERS } from "@/lib/config";
 import { formatINR16, type Store16Product } from "@/lib/store16";
@@ -53,8 +54,20 @@ export default function Pdp16({ product }: { product: Store16Product }) {
                 className="object-cover"
               />
             </div>
-            {gallery.length > 1 && (
-              <div className="mt-3 grid grid-cols-4 gap-2 sm:gap-3">
+            {(gallery.length > 1 || product.boxVideo) && (
+              <div
+                className={`mt-3 grid gap-2 sm:gap-3 ${
+                  product.boxVideo ? "grid-cols-5" : "grid-cols-4"
+                }`}
+              >
+                {/* Box video first (Flipkart-style) — tap opens the player */}
+                {product.boxVideo && (
+                  <BoxVideo16
+                    src={product.boxVideo.src}
+                    poster={product.boxVideo.poster}
+                    name={product.name}
+                  />
+                )}
                 {gallery.map((img, i) => (
                   <button
                     key={img}
