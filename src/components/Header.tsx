@@ -9,6 +9,7 @@ import { WhatsAppIcon } from "@/components/BrandIcons";
 import { THEME, waLink } from "@/lib/theme";
 import { useCart, getCartCount } from "@/lib/cart-store";
 import { trackFunnel } from "@/lib/funnel-client";
+import { getSizes, SizeRow, SIZE_TEASER } from "@/lib/store-sizes";
 import { cn } from "@/lib/utils";
 
 // FAQ moved out of the top nav (it still lives on the home page) and replaced
@@ -20,86 +21,8 @@ const NAV_BEFORE = [
 ];
 const NAV_AFTER = [{ label: "Track Order", href: "/track" }];
 
-type SizeItem = {
-  scale: string;
-  blurb: string;
-  /** present → live & clickable; absent → "Coming soon" */
-  href?: string;
-  /** full reload to another host (the 1:16 subdomain) */
-  external?: boolean;
-  badge?: string;
-};
-
-// Available scales link out; the rest tease as "Coming soon". 1:16 is the live
-// "Big" store on its own subdomain; 1:64 is this store (Shop section).
-const SIZES: SizeItem[] = [
-  { scale: "1:16", blurb: "Big series — 4WD drift, ~28 cm", href: "https://prc16.pocketrccars.com", external: true, badge: "Live" },
-  { scale: "1:64", blurb: "Pocket die-cast drift — ₹999", href: "/#sku", badge: "You're here" },
-  { scale: "1:10", blurb: "XL build" },
-  { scale: "1:18", blurb: "Display classic" },
-  { scale: "1:24", blurb: "Mid size" },
-  { scale: "1:32", blurb: "Compact" },
-];
-
-const SIZE_TEASER = "More sizes dropping soon — stay tuned for a lot more cars & offers.";
-
-/** One row in the "Shop by size" menu. Live scales are links (the 1:16 store
- *  is on its own subdomain, so it's a plain <a> full-reload); coming-soon
- *  scales render as a muted, non-clickable row with a "Soon" badge. */
-function SizeRow({ s, onNavigate }: { s: SizeItem; onNavigate?: () => void }) {
-  const live = !!s.href;
-  const badgeText = live ? s.badge : "Soon";
-  const badgeCls =
-    s.badge === "Live"
-      ? "bg-green-100 text-green-700"
-      : live
-        ? "bg-brand-red-soft text-brand-red"
-        : "bg-brand-line text-brand-ink-soft";
-
-  const body = (
-    <div
-      className={cn(
-        "flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors",
-        live ? "hover:bg-brand-cream" : "cursor-default opacity-55"
-      )}
-    >
-      <span
-        className={cn(
-          "grid h-9 w-11 shrink-0 place-items-center rounded-lg font-mono text-xs font-bold",
-          live ? "bg-brand-red text-white" : "bg-brand-line text-brand-ink-soft"
-        )}
-      >
-        {s.scale}
-      </span>
-      <span className="block flex-1 truncate text-sm font-medium text-brand-ink">
-        {s.blurb}
-      </span>
-      {badgeText && (
-        <span
-          className={cn(
-            "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-            badgeCls
-          )}
-        >
-          {badgeText}
-        </span>
-      )}
-    </div>
-  );
-
-  if (!live) return <div aria-disabled="true">{body}</div>;
-  if (s.external)
-    return (
-      <a href={s.href} onClick={onNavigate} className="block">
-        {body}
-      </a>
-    );
-  return (
-    <Link href={s.href!} onClick={onNavigate} className="block">
-      {body}
-    </Link>
-  );
-}
+// This store is the 1:64 "Pocket" store, so it marks 1:64 as "You're here".
+const SIZES = getSizes("1:64");
 
 export default function Header() {
   const items = useCart((s) => s.items);
@@ -131,7 +54,9 @@ export default function Header() {
 
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [mobileSizeOpen, setMobileSizeOpen] = useState(false);
+  // Mobile "Sizes" sheet — opened from an always-visible pill in the header bar
+  // so the size switcher is reachable without opening the hamburger.
+  const [sizeSheet, setSizeSheet] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
@@ -145,7 +70,7 @@ export default function Header() {
   // Also force solid style when the mobile menu is open — otherwise the
   // white logo / hamburger / cart icon are invisible against the open
   // white drawer, and the user has no way to close the menu.
-  const useSolidStyle = !isHomePage || scrolled || mobileOpen;
+  const useSolidStyle = !isHomePage || scrolled || mobileOpen || sizeSheet;
 
   return (
     <header
@@ -190,6 +115,31 @@ export default function Header() {
                 priority
               />
             </Link>
+
+            {/* Always-visible mobile size switcher — the desktop nav is hidden
+                behind the hamburger on mobile, so this pill keeps "Shop by size"
+                one tap away without opening the menu. */}
+            <button
+              type="button"
+              onClick={() => {
+                setSizeSheet((v) => !v);
+                setMobileOpen(false);
+              }}
+              aria-expanded={sizeSheet}
+              aria-label="Shop by size"
+              className={cn(
+                "lg:hidden inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-semibold transition-colors",
+                useSolidStyle
+                  ? "bg-brand-red-soft text-brand-red"
+                  : "bg-white/15 text-white backdrop-blur-sm"
+              )}
+            >
+              Sizes
+              <ChevronDown
+                size={14}
+                className={cn("transition-transform", sizeSheet && "rotate-180")}
+              />
+            </button>
           </div>
 
           {/* Desktop nav */}
@@ -299,7 +249,10 @@ export default function Header() {
 
             <button
               type="button"
-              onClick={() => setMobileOpen((v) => !v)}
+              onClick={() => {
+                setMobileOpen((v) => !v);
+                setSizeSheet(false);
+              }}
               className={cn(
                 "lg:hidden p-2.5 rounded-full transition-colors",
                 useSolidStyle
@@ -314,46 +267,38 @@ export default function Header() {
         </div>
       </div>
 
+      {/* Mobile size sheet — opened by the always-visible "Sizes" pill, full
+          width so every scale is clearly visible without opening the hamburger. */}
+      {sizeSheet && (
+        <>
+          <button
+            type="button"
+            aria-hidden
+            tabIndex={-1}
+            onClick={() => setSizeSheet(false)}
+            className="fixed inset-0 z-30 cursor-default lg:hidden"
+          />
+          <div className="relative z-40 lg:hidden bg-white border-t border-brand-line shadow-lg">
+            <div className="px-2.5 py-2">
+              <p className="px-3 pb-1 pt-1 font-mono text-[10px] uppercase tracking-widest text-brand-ink-soft">
+                Shop by size
+              </p>
+              {SIZES.map((s) => (
+                <SizeRow key={s.scale} s={s} onNavigate={() => setSizeSheet(false)} />
+              ))}
+              <p className="px-3 pt-2 text-[11px] leading-snug text-brand-ink-soft">
+                {SIZE_TEASER}
+              </p>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Mobile menu drawer */}
       {mobileOpen && (
         <div className="lg:hidden bg-white border-t border-brand-line shadow-lg">
           <nav className="px-4 py-3 flex flex-col">
-            {NAV_BEFORE.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => setMobileOpen(false)}
-                className="py-3 text-base font-medium text-brand-ink hover:text-brand-red border-b border-brand-line"
-              >
-                {link.label}
-              </Link>
-            ))}
-
-            {/* Shop by size — accordion */}
-            <button
-              type="button"
-              onClick={() => setMobileSizeOpen((v) => !v)}
-              aria-expanded={mobileSizeOpen}
-              className="flex items-center justify-between py-3 text-base font-medium text-brand-ink hover:text-brand-red border-b border-brand-line"
-            >
-              Shop by size
-              <ChevronDown
-                size={18}
-                className={cn("transition-transform", mobileSizeOpen && "rotate-180")}
-              />
-            </button>
-            {mobileSizeOpen && (
-              <div className="border-b border-brand-line py-2">
-                {SIZES.map((s) => (
-                  <SizeRow key={s.scale} s={s} onNavigate={() => setMobileOpen(false)} />
-                ))}
-                <p className="px-3 pt-2 text-[11px] leading-snug text-brand-ink-soft">
-                  {SIZE_TEASER}
-                </p>
-              </div>
-            )}
-
-            {NAV_AFTER.map((link) => (
+            {[...NAV_BEFORE, ...NAV_AFTER].map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
