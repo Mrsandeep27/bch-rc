@@ -251,6 +251,13 @@ export const STORE16_PRODUCTS: Store16Product[] = [
     priceINR: 2999,
     swatch: "#33373B",
     imageKey: "drift-carbon",
+    heroImage: "/store16-images/drift-carbon/1-hero.webp",
+    images: [
+      "/store16-images/drift-carbon/1-hero.webp",
+      "/store16-images/drift-carbon/2-side.webp",
+      "/store16-images/drift-carbon/3-detail.webp",
+      "/store16-images/drift-carbon/4-lifestyle.webp",
+    ],
     tagline: "Carbon-weave shell with a race-car finish — the quiet flex.",
     description:
       "The everyday slider in a carbon-fibre-look shell that reads way pricier than it is. Same 4WD grip, ESP-assisted drifts, full-proportional control and LED lighting. Charge over USB-C and it's ready straight from the box.",

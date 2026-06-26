@@ -67,7 +67,7 @@ export default function Pdp16({ product }: { product: Store16Product }) {
                         : "border-brand-line hover:border-brand-ink/30"
                     }`}
                   >
-                    <Image src={img} alt="" fill sizes="120px" className="object-cover" />
+                    <Image src={img} alt="" fill loading="lazy" sizes="120px" className="object-cover" />
                   </button>
                 ))}
               </div>

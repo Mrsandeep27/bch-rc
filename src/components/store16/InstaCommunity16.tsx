@@ -73,8 +73,7 @@ function ReelVideo({ reel, play }: { reel: Reel; play: boolean }) {
       muted
       loop
       playsInline
-      autoPlay
-      preload="metadata"
+      preload="none"
       className="h-full w-full object-cover"
     />
   );

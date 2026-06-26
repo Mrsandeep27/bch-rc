@@ -60,6 +60,7 @@ function Card16({ p, index }: { p: Store16Product; index: number }) {
               src={p.heroImage}
               alt={p.name}
               fill
+              loading="lazy"
               sizes="(max-width: 640px) 78vw, 260px"
               className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
             />
