@@ -6,7 +6,7 @@ import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { orders, customers, events, notificationsOutbox } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
-import { formatINR } from "@/lib/utils";
+import { formatINR, formatIST } from "@/lib/utils";
 import { OFFERS, bundleDiscountInr, bundleTierLabel } from "@/lib/config";
 import { orderConfirmationWaLink } from "@/lib/wa";
 import { ShipButton } from "./ShipButton";
@@ -78,12 +78,7 @@ export default async function AdminOrderDetail({
             {order.id}
           </h1>
           <p className="text-sm text-brand-ink-soft mt-1">
-            Placed{" "}
-            {new Date(order.placedAt).toLocaleString("en-IN", {
-              dateStyle: "medium",
-              timeStyle: "short",
-            })}{" "}
-            · Site: {order.siteId}
+            Placed {formatIST(order.placedAt)} · Site: {order.siteId}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -275,9 +270,7 @@ export default async function AdminOrderDetail({
                     className="flex items-baseline gap-3 border-l-2 border-brand-line pl-3"
                   >
                     <span className="font-mono text-brand-ink-soft shrink-0">
-                      {new Date(e.createdAt).toLocaleTimeString("en-IN", {
-                        hour12: false,
-                      })}
+                      {formatIST(e.createdAt, { timeStyle: "medium", hour12: false })}
                     </span>
                     <span className="font-mono font-semibold text-brand-ink uppercase tracking-widest">
                       {e.type}

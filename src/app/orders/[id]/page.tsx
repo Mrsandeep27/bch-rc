@@ -15,7 +15,7 @@ import PurchaseTrackingPing from "@/components/PurchaseTrackingPing";
 import { WhatsAppIcon } from "@/components/BrandIcons";
 import { THEME } from "@/lib/theme";
 import { waLink, OFFERS, bundleDiscountInr, bundleTierLabel } from "@/lib/config";
-import { formatINR } from "@/lib/utils";
+import { formatINR, formatIST } from "@/lib/utils";
 import { resolveServiceability } from "@/lib/serviceability";
 import { db } from "@/db";
 import { orders } from "@/db/schema";
@@ -68,7 +68,7 @@ export default async function OrderSuccessPage({
     ? resolveServiceability(shippingAddr.pincode).etaText
     : null;
   const paidAtText = order.paidAt
-    ? new Date(order.paidAt).toLocaleString("en-IN", {
+    ? formatIST(order.paidAt, {
         day: "numeric",
         month: "short",
         year: "numeric",

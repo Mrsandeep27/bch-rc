@@ -22,7 +22,7 @@ import { db } from "@/db";
 import { orders } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
 import { DataExport } from "./DataExport";
-import { formatINR } from "@/lib/utils";
+import { formatINR, formatIST } from "@/lib/utils";
 import { LIVE_WINDOW_MINUTES, SOURCE_LABEL, type TrafficSource } from "@/lib/analytics";
 
 // SKUs sold below this stock-count threshold appear in the Low-Stock card.
@@ -943,10 +943,7 @@ function RecentOrderGroup({
                     {o.id}
                   </div>
                   <div className="text-[10px] sm:text-xs text-brand-ink-soft mt-0.5">
-                    {new Date(o.placedAt).toLocaleString("en-IN", {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })}{" "}
+                    {formatIST(o.placedAt)}{" "}
                     · {o.paymentMethod}
                   </div>
                 </div>

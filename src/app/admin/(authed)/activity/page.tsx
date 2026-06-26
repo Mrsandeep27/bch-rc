@@ -4,6 +4,7 @@ import { and, desc, inArray, isNotNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { events } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
+import { formatIST } from "@/lib/utils";
 
 // Lightweight visual grouping for event types — green = good thing happened,
 // red = unhappy thing happened, gold = needs attention, slate = informational.
@@ -158,10 +159,7 @@ export default async function AdminActivity({
                   </div>
                   <div className="shrink-0 text-right">
                     <div className="text-xs text-brand-ink-soft font-mono tabular-nums">
-                      {new Date(e.createdAt).toLocaleString("en-IN", {
-                        dateStyle: "short",
-                        timeStyle: "short",
-                      })}
+                      {formatIST(e.createdAt, { dateStyle: "short", timeStyle: "short" })}
                     </div>
                     {e.source && (
                       <div className="text-[10px] font-mono uppercase tracking-widest text-brand-ink-soft mt-0.5">

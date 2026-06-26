@@ -4,7 +4,7 @@ import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { orders } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
-import { formatINR } from "@/lib/utils";
+import { formatINR, formatIST } from "@/lib/utils";
 
 // Status groupings driven by the WhatsApp brief:
 //   - LIVE_STATUSES: paid orders + confirmed COD + anything in fulfilment.
@@ -279,10 +279,7 @@ export default async function AdminOrdersList({
                         )}
                       </div>
                       <div className="text-xs text-brand-ink-soft mt-1">
-                        {new Date(o.placedAt).toLocaleString("en-IN", {
-                          dateStyle: "medium",
-                          timeStyle: "short",
-                        })}
+                        {formatIST(o.placedAt)}
                         {" · "}
                         {o.paymentMethod}
                         {o.paymentStatus !== "PENDING" &&

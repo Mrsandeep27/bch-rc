@@ -5,7 +5,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { customers, orders } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
-import { formatINR } from "@/lib/utils";
+import { formatINR, formatIST } from "@/lib/utils";
 
 type ShippingAddr = {
   fullName?: string;
@@ -145,10 +145,7 @@ export default async function AdminCustomerDetail({
         </div>
         {customer.createdAt && (
           <p className="text-xs text-brand-ink-soft font-mono uppercase tracking-widest mt-3">
-            Customer since{" "}
-            {new Date(customer.createdAt).toLocaleDateString("en-IN", {
-              dateStyle: "medium",
-            })}
+            Customer since {formatIST(customer.createdAt, { dateStyle: "medium" })}
           </p>
         )}
       </div>
@@ -236,10 +233,7 @@ export default async function AdminCustomerDetail({
                       <StatusBadge status={o.status} />
                     </div>
                     <div className="text-xs text-brand-ink-soft mt-1">
-                      {new Date(o.placedAt).toLocaleString("en-IN", {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      })}
+                      {formatIST(o.placedAt)}
                       {" · "}
                       {o.paymentMethod}
                     </div>
@@ -263,10 +257,7 @@ export default async function AdminCustomerDetail({
 
       {firstOrder && (
         <p className="text-xs text-brand-ink-soft text-center">
-          First order on{" "}
-          {new Date(firstOrder.placedAt).toLocaleDateString("en-IN", {
-            dateStyle: "medium",
-          })}
+          First order on {formatIST(firstOrder.placedAt, { dateStyle: "medium" })}
         </p>
       )}
     </div>

@@ -15,6 +15,7 @@
  */
 
 import { THEME } from "@/lib/theme";
+import { formatIST } from "@/lib/utils";
 
 export type InvoiceLine = {
   description: string;
@@ -203,7 +204,7 @@ export function computeInvoice(order: InvoiceInput): ComputedInvoice {
     // mint our own — the order ID is the reference id, this is the tax-doc id.
     invoiceNumber: order.invoiceNumber,
     isDraft: !order.invoiceNumber,
-    invoiceDate: order.placedAt.toLocaleDateString("en-IN", {
+    invoiceDate: formatIST(order.placedAt, {
       day: "2-digit",
       month: "short",
       year: "numeric",
