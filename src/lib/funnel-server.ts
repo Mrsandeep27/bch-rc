@@ -20,6 +20,20 @@ import { logError } from "@/lib/logger";
 
 const SITE_ID = process.env.DEFAULT_SITE_ID ?? "prc";
 
+/**
+ * Which store an event belongs to. The 1:16 store is served either on the
+ * STORE16_HOST subdomain (prod) or under the /16 path (local/preview), so a
+ * funnel event is prc16 if EITHER signal is present, else the default site.
+ */
+function resolveEventSiteId(host: string, path?: string | null): string {
+  const store16Host = process.env.STORE16_HOST?.trim().toLowerCase();
+  if (store16Host && host === store16Host) return "prc16";
+  if (path && (path === "/16" || path.startsWith("/16/") || path.startsWith("/16#"))) {
+    return "prc16";
+  }
+  return SITE_ID;
+}
+
 export type FunnelEventInput = {
   type: FunnelEventType | string;
   path?: string | null;
@@ -56,12 +70,13 @@ export async function recordFunnelEvents(
 ): Promise<void> {
   if (!items.length) return;
   const { sessionId, visitorId, isBot } = idsFromRequest(req);
+  const host = req.headers.get("host")?.toLowerCase() ?? "";
 
   const rows = items
     .filter((e) => isFunnelEvent(String(e.type)))
     .slice(0, 50)
     .map((e) => ({
-      siteId: SITE_ID,
+      siteId: resolveEventSiteId(host, e.path),
       sessionId,
       visitorId,
       type: String(e.type),

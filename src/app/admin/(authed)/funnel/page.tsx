@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AlertTriangle, TrendingDown, Activity } from "lucide-react";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getFunnelReport } from "@/lib/funnel-queries";
@@ -12,12 +13,14 @@ function pct(x: number): string {
 export default async function FunnelDashboard({
   searchParams,
 }: {
-  searchParams: Promise<{ window?: string }>;
+  searchParams: Promise<{ window?: string; site?: string }>;
 }) {
-  await requireAdmin();
+  const ctx = await requireAdmin();
   const sp = await searchParams;
   const windowDays = Number(sp.window) || 7;
-  const siteId = process.env.DEFAULT_SITE_ID ?? "prc";
+  // Funnel is per-store — pick the requested site, else the admin's first site.
+  const siteId =
+    sp.site && ctx.siteIds.includes(sp.site) ? sp.site : ctx.siteIds[0];
   const report = await getFunnelReport(siteId, windowDays);
 
   const top = report.stages[0]?.visitors ?? 0;
@@ -36,7 +39,26 @@ export default async function FunnelDashboard({
             Of everyone who visited, where they dropped off — and why.
           </p>
         </div>
-        <FunnelWindowTabs />
+        <div className="flex items-center gap-2 flex-wrap">
+          {ctx.siteIds.length > 1 && (
+            <div className="flex gap-1 bg-brand-cream rounded-full p-1">
+              {ctx.siteIds.map((s) => (
+                <Link
+                  key={s}
+                  href={`/admin/funnel?site=${s}&window=${windowDays}`}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium uppercase transition-colors ${
+                    s === siteId
+                      ? "bg-brand-ink text-white"
+                      : "text-brand-ink-soft hover:text-brand-ink"
+                  }`}
+                >
+                  {s}
+                </Link>
+              ))}
+            </div>
+          )}
+          <FunnelWindowTabs />
+        </div>
       </div>
 
       {/* Headline conversion */}

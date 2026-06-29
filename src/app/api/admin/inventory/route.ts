@@ -20,7 +20,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { inventory, events } from "@/db/schema";
 import { getAdminContext } from "@/lib/admin-auth";
-import { INVENTORY_SITE_ID, expectedInventoryKeys } from "@/lib/inventory";
+import { expectedInventoryKeys, siteIdForSku } from "@/lib/inventory";
 import { logError } from "@/lib/logger";
 
 const Body = z.object({
@@ -65,6 +65,10 @@ export async function POST(req: Request) {
     );
   }
 
+  // A SKU's inventory lives under its store (1:16 → prc16, else prc), so every
+  // read/write/audit below targets the resolved site, not a hardcoded one.
+  const siteId = siteIdForSku(body.skuId);
+
   try {
     const result = await db.transaction(async (tx) => {
       const [existing] = await tx
@@ -72,7 +76,7 @@ export async function POST(req: Request) {
         .from(inventory)
         .where(
           and(
-            eq(inventory.siteId, INVENTORY_SITE_ID),
+            eq(inventory.siteId, siteId),
             eq(inventory.skuId, body.skuId),
             eq(inventory.variantSlug, body.variantSlug),
           ),
@@ -86,7 +90,7 @@ export async function POST(req: Request) {
         const [row] = await tx
           .insert(inventory)
           .values({
-            siteId: INVENTORY_SITE_ID,
+            siteId,
             skuId: body.skuId,
             variantSlug: body.variantSlug,
             stock: body.value,
@@ -101,7 +105,7 @@ export async function POST(req: Request) {
         const [row] = await tx
           .insert(inventory)
           .values({
-            siteId: INVENTORY_SITE_ID,
+            siteId,
             skuId: body.skuId,
             variantSlug: body.variantSlug,
             stock: Math.max(0, body.value),
@@ -119,7 +123,7 @@ export async function POST(req: Request) {
       }
 
       await tx.insert(events).values({
-        siteId: INVENTORY_SITE_ID,
+        siteId,
         type: body.mode === "set" ? "INVENTORY_ADMIN_SET" : "INVENTORY_ADMIN_ADJUST",
         payload: {
           skuId: body.skuId,

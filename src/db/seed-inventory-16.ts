@@ -11,7 +11,7 @@ import { db } from ".";
 import { inventory } from "./schema";
 import { getStore16Skus } from "../lib/products";
 
-const SITE_ID = "prc";
+const SITE_ID = "prc16";
 const STOCK = 25;
 
 async function main() {

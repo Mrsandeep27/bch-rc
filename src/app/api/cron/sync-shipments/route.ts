@@ -28,9 +28,15 @@ const STATUS_NOTIFICATION = {
   DELIVERED: "DELIVERED",
 } as const;
 
-// Statuses where polling is still useful — terminal statuses (DELIVERED,
-// CANCELLED, RETURNED, REFUNDED) get skipped.
-const IN_FLIGHT_STATUSES = ["PACKED", "SHIPPED"] as const;
+// Statuses we still poll Shiprocket for. PAID is included so orders whose AWB
+// was assigned MANUALLY in the Shiprocket dashboard (auto-AWB is off, so they
+// never advanced past PAID at create time) get their AWB + status pulled back
+// here. Without PAID in this set those orders strand forever — invisible to
+// this cron because it only ever looked at PACKED/SHIPPED. The
+// `shiprocketShipmentId IS NOT NULL` guard below keeps brand-new PAID orders
+// (never pushed to Shiprocket) out. Terminal statuses (DELIVERED, CANCELLED,
+// RETURNED, REFUNDED) are excluded — nothing left to poll.
+const IN_FLIGHT_STATUSES = ["PAID", "PACKED", "SHIPPED"] as const;
 
 export const maxDuration = 60; // give the function room for N tracking calls
 
@@ -43,6 +49,14 @@ export async function GET(req: Request) {
     }
   }
 
+  // Silent catch-up mode. The first run after this fix ships will pull a
+  // backlog of long-stuck orders forward in one sweep; without a guard that
+  // sweep would fire a burst of "out for delivery"/"delivered" emails for old
+  // orders. Trigger once with ?backfill=1 to sync statuses + AWBs WITHOUT
+  // notifying, then let the scheduled cron notify only genuine go-forward
+  // transitions from then on.
+  const backfill = new URL(req.url).searchParams.get("backfill") === "1";
+
   const inFlight = await db
     .select({
       id: orders.id,
@@ -51,6 +65,7 @@ export async function GET(req: Request) {
       status: orders.status,
       shipmentId: orders.shiprocketShipmentId,
       awb: orders.awbCode,
+      packedAt: orders.packedAt,
       shippedAt: orders.shippedAt,
       deliveredAt: orders.deliveredAt,
       cancelledAt: orders.cancelledAt,
@@ -76,18 +91,35 @@ export async function GET(req: Request) {
     if (!o.shipmentId) continue;
     try {
       const status = await getShipmentStatus(o.shipmentId);
-      const mapped = mapShiprocketStatus(status.current_status);
+      const awbNow = status.awb ?? o.awb;
+      let mapped = mapShiprocketStatus(status.current_status);
 
-      const changed = !!mapped && mapped !== o.status;
-      if (changed && mapped) {
+      // Promotion rule: an AWB existing means the parcel is at least PACKED.
+      // Shiprocket's pre-pickup text ("AWB Assigned", "New", "Ready To Ship")
+      // doesn't always map, so a PAID order that just got a manual AWB would
+      // otherwise stay PAID. Treat "AWB now exists while still PAID" as PACKED
+      // so it leaves the PAID limbo and joins the normal SHIPPED/DELIVERED path.
+      if (!mapped && awbNow && o.status === "PAID") mapped = "PACKED";
+
+      const awbJustLanded = !!awbNow && !o.awb;
+      const statusChanged = !!mapped && mapped !== o.status;
+
+      if (statusChanged || awbJustLanded) {
         const now = new Date();
-        const updates: Partial<typeof orders.$inferInsert> = {
-          status: mapped,
-          updatedAt: now,
-        };
-        if (mapped === "SHIPPED" && !o.shippedAt) updates.shippedAt = now;
-        if (mapped === "DELIVERED" && !o.deliveredAt) updates.deliveredAt = now;
-        if (mapped === "CANCELLED" && !o.cancelledAt) updates.cancelledAt = now;
+        const updates: Partial<typeof orders.$inferInsert> = { updatedAt: now };
+        if (statusChanged && mapped) {
+          updates.status = mapped;
+          if (mapped === "PACKED" && !o.packedAt) updates.packedAt = now;
+          if (mapped === "SHIPPED" && !o.shippedAt) updates.shippedAt = now;
+          if (mapped === "DELIVERED" && !o.deliveredAt) updates.deliveredAt = now;
+          if (mapped === "CANCELLED" && !o.cancelledAt) updates.cancelledAt = now;
+        }
+        // Persist the AWB the instant Shiprocket reveals it, so the DB row and
+        // the customer's tracking link finally carry a real number.
+        if (awbJustLanded) {
+          updates.awbCode = awbNow;
+          updates.trackingUrl = `https://shiprocket.co/tracking/${awbNow}`;
+        }
 
         await db.update(orders).set(updates).where(eq(orders.id, o.id));
 
@@ -95,29 +127,42 @@ export async function GET(req: Request) {
           siteId: o.siteId,
           orderId: o.id,
           customerId: o.customerId,
-          type: `POLL_SHIPROCKET_${mapped}`,
+          type: statusChanged
+            ? `POLL_SHIPROCKET_${mapped}`
+            : "POLL_SHIPROCKET_AWB",
           payload: {
-            awb: status.awb ?? o.awb,
+            awb: awbNow,
             statusText: status.current_status,
             statusId: status.current_status_id,
             from: o.status,
-            to: mapped,
+            to: mapped ?? o.status,
+            backfill,
           },
           source: "cron",
         });
 
-        // Fire the matching customer notification on this transition. Guarded
-        // by `changed` so a steady-state poll never re-notifies.
-        const tpl = STATUS_NOTIFICATION[mapped as keyof typeof STATUS_NOTIFICATION];
-        if (tpl) await notifyOrderEvent(o.id, tpl);
+        // Customer notifications — suppressed during a ?backfill=1 catch-up so
+        // the one-time backlog sweep never blasts old customers.
+        if (!backfill && statusChanged) {
+          // First time an AWB appears and the order becomes PACKED → send the
+          // "shipped, here's your tracking" email. The manual-AWB flow never
+          // fired it at create time (no AWB existed then).
+          if (mapped === "PACKED" && awbJustLanded) {
+            await notifyOrderEvent(o.id, "SHIPMENT_CREATED");
+          }
+          const tpl = mapped
+            ? STATUS_NOTIFICATION[mapped as keyof typeof STATUS_NOTIFICATION]
+            : undefined;
+          if (tpl) await notifyOrderEvent(o.id, tpl);
+        }
       }
 
       results.push({
         orderId: o.id,
-        awb: status.awb ?? o.awb,
+        awb: awbNow,
         from: o.status,
         to: mapped,
-        changed,
+        changed: statusChanged || awbJustLanded,
       });
     } catch (err) {
       results.push({

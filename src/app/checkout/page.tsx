@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   CheckCircle2,
   ChevronLeft,
+  ChevronRight,
   Lock,
   MapPin,
   Minus,
@@ -163,6 +164,12 @@ function CheckoutPageInner() {
   // waiting for capture. Keeps the customer informed and blocks re-submits.
   const [confirming, setConfirming] = useState(false);
 
+  // Two-step checkout: "details" (contact + address) → "payment". Splitting the
+  // page lets us capture the buyer's contact the moment they finish step 1 (see
+  // saveLead below) so an abandoned checkout still leaves us a lead to call,
+  // and keeps the payment screen distraction-free.
+  const [step, setStep] = useState<"details" | "payment">("details");
+
   // Coupon UI state.
   const [couponCode, setCouponCode] = useState("");
   const [couponDiscountInr, setCouponDiscountInr] = useState(0);
@@ -278,7 +285,7 @@ function CheckoutPageInner() {
     (async () => {
       try {
         const r = await fetch(
-          `/api/coupons/validate?code=${encodeURIComponent(couponApplied)}&siteId=prc&subtotalInr=${subtotal}&shippingInr=${subtotal >= OFFERS.freeShippingMinINR ? 0 : 85}`,
+          `/api/coupons/validate?code=${encodeURIComponent(couponApplied)}&siteId=${is16 ? "prc16" : "prc"}&subtotalInr=${subtotal}&shippingInr=${subtotal >= OFFERS.freeShippingMinINR ? 0 : 85}`,
         );
         const data = (await r.json()) as {
           ok: boolean;
@@ -308,7 +315,7 @@ function CheckoutPageInner() {
     };
     // Re-runs when the cart subtotal OR the payment method changes, so the
     // shown discount + total always match what the server will compute.
-  }, [couponApplied, subtotal, payment]);
+  }, [couponApplied, subtotal, payment, is16]);
 
   // Threshold (metres) below which we trust the browser's geolocation result
   // enough to autofill an address. Real mobile GPS hardware delivers <30 m;
@@ -468,6 +475,15 @@ function CheckoutPageInner() {
     return null;
   }
 
+  // Step-1 gate. Same as validate() minus the payment-method checks (the buyer
+  // hasn't chosen one yet on the details step).
+  function validateDetails(): string | null {
+    for (const f of FIELD_ORDER) if (fieldErrors[f]) return fieldErrors[f];
+    if (svcActive && !svcActive.serviceable)
+      return svcActive.reason ?? "We don't deliver to this pincode yet.";
+    return null;
+  }
+
   // Show a field's error only once the buyer has touched it (or tried to submit).
   const showErr = (f: string) => (touched[f] ? fieldErrors[f] : undefined);
   const inputCls = (f: string) =>
@@ -486,7 +502,7 @@ function CheckoutPageInner() {
     if (!opts?.silent) setCouponMessage(null);
     try {
       const r = await fetch(
-        `/api/coupons/validate?code=${encodeURIComponent(code)}&siteId=prc&subtotalInr=${subtotal}&shippingInr=${shipping}`,
+        `/api/coupons/validate?code=${encodeURIComponent(code)}&siteId=${is16 ? "prc16" : "prc"}&subtotalInr=${subtotal}&shippingInr=${shipping}`,
       );
       const data = (await r.json()) as {
         ok: boolean;
@@ -533,7 +549,7 @@ function CheckoutPageInner() {
     (async () => {
       try {
         const r = await fetch(
-          `/api/coupons/validate?code=${AUTO_COUPON.code}&siteId=prc&subtotalInr=${subtotal}&shippingInr=${shipping}`,
+          `/api/coupons/validate?code=${AUTO_COUPON.code}&siteId=${is16 ? "prc16" : "prc"}&subtotalInr=${subtotal}&shippingInr=${shipping}`,
         );
         const data = (await r.json()) as {
           ok: boolean;
@@ -557,7 +573,7 @@ function CheckoutPageInner() {
     return () => {
       cancelled = true;
     };
-  }, [hasHydrated, subtotal, couponApplied, shipping]);
+  }, [hasHydrated, subtotal, couponApplied, shipping, is16]);
 
   // Live serviceability check when a full pincode is entered. All state is set
   // after the await; staleness on partial pincodes is handled by `svcActive`.
@@ -763,7 +779,7 @@ function CheckoutPageInner() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          siteId: "prc",
+          siteId: is16 ? "prc16" : "prc",
           idempotencyKey,
           items: items.map((i) => ({
             skuId: i.skuId,
@@ -821,6 +837,132 @@ function CheckoutPageInner() {
     }
   }
 
+  // ── Lead capture (step 1) ──────────────────────────────────────────
+  // We persist the buyer's contact + address the instant they finish the
+  // details step (and again if they leave the page mid-step-1), so an
+  // abandoned checkout still leaves us a callable lead — surfaced on
+  // /admin/recovery. Side-effect-free server-side: no stock hold, no order.
+  // Latest field values are mirrored into a ref so the pagehide listener
+  // (registered once) always reads current state without re-subscribing.
+  const leadStateRef = useRef({
+    step,
+    name,
+    phone,
+    email,
+    pincode,
+    line1,
+    line2,
+    city,
+    stateName,
+    items,
+  });
+  // Mirror the latest state into the ref after each render (not during) so the
+  // once-registered pagehide listener always reads current values.
+  useEffect(() => {
+    leadStateRef.current = {
+      step,
+      name,
+      phone,
+      email,
+      pincode,
+      line1,
+      line2,
+      city,
+      stateName,
+      items,
+    };
+  });
+
+  const buildLeadBody = useCallback(() => {
+    const s = leadStateRef.current;
+    return JSON.stringify({
+      siteId: is16 ? "prc16" : "prc",
+      address: {
+        fullName: s.name.trim(),
+        phone: s.phone,
+        email: s.email.trim(),
+        line1: s.line1.trim(),
+        line2: s.line2.trim(),
+        city: s.city.trim(),
+        state: s.stateName.trim(),
+        pincode: s.pincode,
+      },
+      items: s.items.map((i) => ({
+        skuId: i.skuId,
+        variantSlug: i.variantSlug,
+        qty: i.qty,
+      })),
+    });
+  }, [is16]);
+
+  // Enough to be a useful lead: a real name + a valid 10-digit phone.
+  const leadWorthSaving = useCallback(() => {
+    const s = leadStateRef.current;
+    return s.name.trim().length >= 2 && /^\d{10}$/.test(s.phone);
+  }, []);
+
+  const saveLead = useCallback(
+    async (opts?: { keepalive?: boolean }) => {
+      if (!leadWorthSaving()) return;
+      try {
+        await fetch("/api/checkout/lead", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: buildLeadBody(),
+          keepalive: opts?.keepalive ?? false,
+        });
+      } catch {
+        // Lead capture is best-effort — never block or surface to the buyer.
+      }
+    },
+    [buildLeadBody, leadWorthSaving],
+  );
+
+  // Capture the lead if the buyer leaves while still on the details step
+  // (closed the tab, hit back, navigated away) — the most important drop-off
+  // to recover. Registered once; reads live state via leadStateRef.
+  useEffect(() => {
+    const flush = () => {
+      if (paidRef.current || submittingRef.current) return;
+      if (leadStateRef.current.step !== "details") return;
+      void saveLead({ keepalive: true });
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", flush);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", flush);
+    };
+  }, [saveLead]);
+
+  // Step 1 → Step 2. Validate the address, persist the lead, then reveal the
+  // payment options.
+  async function handleContinueToPayment() {
+    setError(null);
+    setTouched({
+      name: true,
+      phone: true,
+      email: true,
+      pincode: true,
+      line1: true,
+      city: true,
+      stateName: true,
+    });
+    const validation = validateDetails();
+    if (validation) {
+      setError(validation);
+      return;
+    }
+    // Fire-and-forget — the lead is a safety net, not a gate on reaching payment.
+    void saveLead();
+    setError(null);
+    setStep("payment");
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   const ctaLabel = paymentCancelled
     ? `Retry payment · ${formatINR(total)}`
     : payment === "upi"
@@ -849,6 +991,14 @@ function CheckoutPageInner() {
           <button
             type="button"
             onClick={() => {
+              // On the payment step, "Back" returns to the details step rather
+              // than leaving checkout entirely.
+              if (step === "payment") {
+                setStep("details");
+                if (typeof window !== "undefined")
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                return;
+              }
               if (typeof window !== "undefined" && window.history.length > 1) {
                 router.back();
               } else {
@@ -859,14 +1009,68 @@ function CheckoutPageInner() {
             className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-ink-soft hover:text-brand-ink mb-4 -ml-1 px-2 py-1 rounded-md hover:bg-brand-ink/5 transition-colors"
           >
             <ChevronLeft size={18} strokeWidth={2.5} />
-            <span>Back</span>
+            <span>{step === "payment" ? "Back to details" : "Back"}</span>
           </button>
 
           <h1 className="text-3xl font-bold text-brand-ink">Checkout</h1>
           <p className="text-brand-ink-soft mt-2">
-            Pay securely via UPI, cards, or COD.
+            {step === "details"
+              ? "Step 1 of 2 — your delivery details."
+              : "Step 2 of 2 — choose how to pay."}
           </p>
 
+          {/* Step indicator. The completed step (1, once on payment) is
+              tappable to jump back and edit. */}
+          <div className="mt-5 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (step === "payment") {
+                  setStep("details");
+                  if (typeof window !== "undefined")
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                }
+              }}
+              className={`flex items-center gap-2 text-sm font-semibold ${
+                step === "payment"
+                  ? "text-brand-ink cursor-pointer"
+                  : "text-brand-ink cursor-default"
+              }`}
+              aria-current={step === "details" ? "step" : undefined}
+            >
+              <span
+                className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
+                  step === "payment"
+                    ? "bg-success text-white"
+                    : "bg-brand-ink text-white"
+                }`}
+              >
+                {step === "payment" ? <CheckCircle2 size={14} /> : "1"}
+              </span>
+              Details
+            </button>
+            <div className="h-px flex-1 bg-brand-line" />
+            <div
+              className={`flex items-center gap-2 text-sm font-semibold ${
+                step === "payment" ? "text-brand-ink" : "text-brand-ink-soft"
+              }`}
+              aria-current={step === "payment" ? "step" : undefined}
+            >
+              <span
+                className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
+                  step === "payment"
+                    ? "bg-brand-ink text-white"
+                    : "bg-brand-line text-brand-ink-soft"
+                }`}
+              >
+                2
+              </span>
+              Payment
+            </div>
+          </div>
+
+          {step === "details" && (
+          <>
           <div className="mt-6 bg-white rounded-2xl border border-brand-line p-5">
             <div className="flex justify-between items-baseline">
               <div className="font-semibold text-brand-ink">Order summary</div>
@@ -1161,6 +1365,52 @@ function CheckoutPageInner() {
               </div>
             </div>
           </div>
+          </>
+          )}
+
+          {step === "payment" && (
+          <>
+          {/* Step-2 delivery recap — confirms where it's going without the buyer
+              re-scanning the form. "Edit" jumps back to step 1. */}
+          <div className="mt-6 bg-white rounded-2xl border border-brand-line p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[11px] font-mono uppercase tracking-widest text-brand-ink-soft">
+                  Delivering to
+                </div>
+                <div className="font-semibold text-brand-ink mt-1 truncate">
+                  {name}
+                </div>
+                <div className="text-sm text-brand-ink-soft mt-0.5">
+                  {[line1, line2].filter(Boolean).join(", ")}
+                </div>
+                <div className="text-sm text-brand-ink-soft">
+                  {[city, stateName].filter(Boolean).join(", ")} {pincode}
+                </div>
+                <div className="text-sm text-brand-ink-soft mt-1">
+                  +91 {phone}
+                  {email ? ` · ${email}` : ""}
+                </div>
+                {svcActive?.serviceable && (
+                  <p className="mt-2 inline-flex items-center gap-1.5 text-sm text-success">
+                    <Truck size={14} aria-hidden />
+                    Delivery by {svcActive.etaText}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setStep("details");
+                  if (typeof window !== "undefined")
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                className="shrink-0 text-sm font-semibold text-brand-red hover:underline"
+              >
+                Edit
+              </button>
+            </div>
+          </div>
 
           <div className="mt-6 bg-white rounded-2xl border border-brand-line p-5">
             <h2 className="font-semibold text-brand-ink">
@@ -1384,6 +1634,8 @@ function CheckoutPageInner() {
               <span>{formatINR(total)}</span>
             </div>
           </div>
+          </>
+          )}
 
           <div className="sticky bottom-0 mt-6 -mx-5 px-5 sm:-mx-6 sm:px-6 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-brand-cream/95 backdrop-blur border-t border-brand-line lg:static lg:bg-transparent lg:border-0 lg:mx-0 lg:px-0 lg:py-0">
             {confirming ? (
@@ -1404,19 +1656,36 @@ function CheckoutPageInner() {
                 {error}
               </div>
             ) : null}
-            <PayButton
-              label={
-                confirming
-                  ? "Payment received — confirming…"
-                  : loading
-                    ? "Placing order..."
-                    : ctaLabel
-              }
-              onClick={handlePlaceOrder}
-              disabled={loading || confirming || notServiceable}
-              loading={loading || confirming}
-              className="w-full text-lg"
-            />
+            {step === "details" ? (
+              <button
+                type="button"
+                onClick={handleContinueToPayment}
+                disabled={notServiceable}
+                className="group w-full inline-flex items-center justify-center gap-2 rounded-xl bg-brand-ink px-6 py-4 text-lg font-bold text-white transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_5px_15px_rgba(0,0,0,0.4)] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+              >
+                Continue to payment
+                <ChevronRight
+                  size={20}
+                  strokeWidth={2.5}
+                  className="transition-transform group-hover:translate-x-0.5"
+                  aria-hidden
+                />
+              </button>
+            ) : (
+              <PayButton
+                label={
+                  confirming
+                    ? "Payment received — confirming…"
+                    : loading
+                      ? "Placing order..."
+                      : ctaLabel
+                }
+                onClick={handlePlaceOrder}
+                disabled={loading || confirming || notServiceable}
+                loading={loading || confirming}
+                className="w-full text-lg"
+              />
+            )}
             <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-brand-ink-soft text-center">
               <ShieldCheck size={13} className="text-success" aria-hidden />
               Secure checkout · 7-Day Free Replacement · Ships in 24 hrs from

@@ -22,8 +22,17 @@ import { db } from "@/db";
 import { orders } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
 import { DataExport } from "./DataExport";
+import { RangeTabs } from "./RangeTabs";
+import { StoreTabs } from "./StoreTabs";
 import { formatINR, formatIST } from "@/lib/utils";
 import { LIVE_WINDOW_MINUTES, SOURCE_LABEL, type TrafficSource } from "@/lib/analytics";
+
+export const dynamic = "force-dynamic";
+
+// Windows the operator can flip between via the RangeTabs control. Drives every
+// period-scoped metric on this page + the sales graph. "Today" and "Live now"
+// are real-time and intentionally ignore this.
+const ALLOWED_RANGES = [7, 14, 30] as const;
 
 // SKUs sold below this stock-count threshold appear in the Low-Stock card.
 // Tuned to the operator's lead time from Syed (≈48 hrs to top up).
@@ -53,27 +62,46 @@ type OrderItemForAgg = {
   lineTotalInr: number;
 };
 
-export default async function AdminOverview() {
+export default async function AdminOverview({
+  searchParams,
+}: {
+  searchParams: Promise<{ range?: string; site?: string }>;
+}) {
   const ctx = await requireAdmin();
+  const sp = await searchParams;
+  const rangeRaw = Number(sp.range);
+  const range: (typeof ALLOWED_RANGES)[number] = (
+    ALLOWED_RANGES as readonly number[]
+  ).includes(rangeRaw)
+    ? (rangeRaw as (typeof ALLOWED_RANGES)[number])
+    : 7;
+
+  // Store scope. Default ("All") = every site this admin manages — the existing
+  // combined view. If ?site= names one of the admin's sites, scope every metric
+  // on this page to just that store. An unknown/foreign site value falls back to
+  // "all" so the param can never widen access beyond ctx.siteIds.
+  const selectedSite =
+    sp.site && ctx.siteIds.includes(sp.site) ? sp.site : null;
+  const selectedSiteIds = selectedSite ? [selectedSite] : ctx.siteIds;
 
   const now = new Date();
   const today = new Date(now);
   today.setHours(0, 0, 0, 0);
-  const last7 = new Date(today);
-  last7.setDate(last7.getDate() - 7);
-  const last14 = new Date(today);
-  last14.setDate(last14.getDate() - 13); // inclusive of today → 14 buckets
-  const last30 = new Date(today);
-  last30.setDate(last30.getDate() - 30);
+  // Period window for the headline scalars (revenue, AOV, units, visitors,
+  // conversion, sources, top SKUs) — follows the selected range.
+  const periodStart = new Date(today);
+  periodStart.setDate(periodStart.getDate() - range);
+  // Graph window — `range` daily buckets inclusive of today.
+  const graphStart = new Date(today);
+  graphStart.setDate(graphStart.getDate() - (range - 1));
 
   // IMPORTANT: interpolate ISO strings, NOT Date objects, into the sql``
   // templates below. Drizzle's postgres-js driver cannot bind a raw Date inside
   // a sql`` fragment — it throws "The string argument must be of type string".
   // Postgres casts these ISO strings to timestamptz correctly.
   const todayIso = today.toISOString();
-  const last7Iso = last7.toISOString();
-  const last14Iso = last14.toISOString();
-  const last30Iso = last30.toISOString();
+  const periodStartIso = periodStart.toISOString();
+  const graphStartIso = graphStart.toISOString();
   const liveSinceIso = new Date(
     now.getTime() - LIVE_WINDOW_MINUTES * 60 * 1000,
   ).toISOString();
@@ -88,31 +116,33 @@ export default async function AdminOverview() {
     .select({
       todayCount: sql<number>`count(*) filter (where ${orders.placedAt} >= ${todayIso} and ${orders.status} in ('PAID','PACKED','SHIPPED','DELIVERED'))::int`,
       todayRevenue: sql<number>`coalesce(sum(${orders.totalInr}) filter (where ${orders.placedAt} >= ${todayIso} and ${orders.status} in ('PAID','PACKED','SHIPPED','DELIVERED')), 0)::int`,
-      weekCount: sql<number>`count(*) filter (where ${orders.placedAt} >= ${last7Iso} and ${orders.status} in ('PAID','PACKED','SHIPPED','DELIVERED'))::int`,
-      weekRevenue: sql<number>`coalesce(sum(${orders.totalInr}) filter (where ${orders.placedAt} >= ${last7Iso} and ${orders.status} in ('PAID','PACKED','SHIPPED','DELIVERED')), 0)::int`,
-      weekPaidCount: sql<number>`count(*) filter (where ${orders.placedAt} >= ${last7Iso} and ${orders.status} in ('PAID','PACKED','SHIPPED','DELIVERED'))::int`,
-      weekPaidRevenue: sql<number>`coalesce(sum(${orders.totalInr}) filter (where ${orders.placedAt} >= ${last7Iso} and ${orders.status} in ('PAID','PACKED','SHIPPED','DELIVERED')), 0)::int`,
+      weekCount: sql<number>`count(*) filter (where ${orders.placedAt} >= ${periodStartIso} and ${orders.status} in ('PAID','PACKED','SHIPPED','DELIVERED'))::int`,
+      weekRevenue: sql<number>`coalesce(sum(${orders.totalInr}) filter (where ${orders.placedAt} >= ${periodStartIso} and ${orders.status} in ('PAID','PACKED','SHIPPED','DELIVERED')), 0)::int`,
+      weekPaidCount: sql<number>`count(*) filter (where ${orders.placedAt} >= ${periodStartIso} and ${orders.status} in ('PAID','PACKED','SHIPPED','DELIVERED'))::int`,
+      weekPaidRevenue: sql<number>`coalesce(sum(${orders.totalInr}) filter (where ${orders.placedAt} >= ${periodStartIso} and ${orders.status} in ('PAID','PACKED','SHIPPED','DELIVERED')), 0)::int`,
       codPending: sql<number>`count(*) filter (where ${orders.status} = 'PENDING_COD_VERIFICATION')::int`,
       paidUnshipped: sql<number>`count(*) filter (where ${orders.status} = 'PAID' and ${orders.awbCode} is null)::int`,
     })
     .from(orders)
-    .where(inArray(orders.siteId, ctx.siteIds));
+    .where(inArray(orders.siteId, selectedSiteIds));
 
   // ── Query 2 of 5: every other scalar in one round-trip ──────────
-  // CROSS-JOIN of 4 single-row subqueries against 4 different tables.
-  // Postgres plans them in parallel and returns a single row of 5 ints.
-  // Was: customerAggP + lowStockAggP + stuckNotifsP + failedJobsP.
+  // CROSS-JOIN of single-row subqueries against several tables. Postgres plans
+  // them in parallel and returns a single row of ints. Every subquery is scoped
+  // to the selected store(s): customers via their orders (the customers table
+  // itself isn't site-scoped), inventory + outbox by site_id, failed shipment
+  // jobs by joining orders for the site.
   const siteIdsLiteral = sql`array[${sql.join(
-    ctx.siteIds.map((s) => sql`${s}`),
+    selectedSiteIds.map((s) => sql`${s}`),
     sql`, `,
   )}]::text[]`;
   const otherScalarsP = db.execute(sql`
     SELECT
-      (SELECT count(*)::int FROM customers) AS customers_total,
-      (SELECT count(*)::int FROM customers WHERE total_orders > 1) AS customers_returning,
+      (SELECT count(DISTINCT customer_id)::int FROM orders WHERE site_id = ANY(${siteIdsLiteral}) AND customer_id IS NOT NULL) AS customers_total,
+      (SELECT count(*)::int FROM (SELECT customer_id FROM orders WHERE site_id = ANY(${siteIdsLiteral}) AND customer_id IS NOT NULL GROUP BY customer_id HAVING count(*) > 1) t) AS customers_returning,
       (SELECT count(*)::int FROM inventory WHERE site_id = ANY(${siteIdsLiteral}) AND stock < ${LOW_STOCK_THRESHOLD}) AS low_stock,
-      (SELECT count(*)::int FROM notifications_outbox WHERE sent_at IS NULL AND attempts >= ${STUCK_NOTIF_ATTEMPTS}) AS stuck_notifs,
-      (SELECT count(*)::int FROM shipment_jobs WHERE status = 'FAILED') AS failed_jobs
+      (SELECT count(*)::int FROM notifications_outbox WHERE site_id = ANY(${siteIdsLiteral}) AND sent_at IS NULL AND attempts >= ${STUCK_NOTIF_ATTEMPTS}) AS stuck_notifs,
+      (SELECT count(*)::int FROM shipment_jobs sj JOIN orders o ON o.id = sj.order_id WHERE sj.status = 'FAILED' AND o.site_id = ANY(${siteIdsLiteral})) AS failed_jobs
   `);
 
   // ── Query 5 of 5: traffic aggs + sources merged via UNION ALL ───
@@ -135,8 +165,8 @@ export default async function AdminOverview() {
       'aggs'::text AS kind,
       NULL::text AS source,
       count(DISTINCT visitor_id) FILTER (WHERE started_at >= ${todayIso} AND is_bot = false)::int AS visitors_today,
-      count(DISTINCT visitor_id) FILTER (WHERE started_at >= ${last7Iso} AND is_bot = false)::int AS visitors_7d,
-      count(*) FILTER (WHERE started_at >= ${last7Iso} AND is_bot = false)::int AS sessions_7d,
+      count(DISTINCT visitor_id) FILTER (WHERE started_at >= ${periodStartIso} AND is_bot = false)::int AS visitors_7d,
+      count(*) FILTER (WHERE started_at >= ${periodStartIso} AND is_bot = false)::int AS sessions_7d,
       count(DISTINCT visitor_id) FILTER (WHERE last_seen_at >= ${liveSinceIso} AND is_bot = false)::int AS live_visitors,
       NULL::int AS sessions,
       NULL::int AS visitors_for_source
@@ -153,7 +183,7 @@ export default async function AdminOverview() {
       count(DISTINCT visitor_id)::int AS visitors_for_source
     FROM analytics_sessions
     WHERE site_id = ANY(${siteIdsLiteral})
-      AND started_at >= ${last7Iso}
+      AND started_at >= ${periodStartIso}
       AND is_bot = false
     GROUP BY source
     ORDER BY kind, sessions DESC NULLS LAST
@@ -170,8 +200,8 @@ export default async function AdminOverview() {
     .from(orders)
     .where(
       and(
-        sql`${orders.placedAt} >= ${last14Iso}`,
-        inArray(orders.siteId, ctx.siteIds),
+        sql`${orders.placedAt} >= ${graphStartIso}`,
+        inArray(orders.siteId, selectedSiteIds),
         inArray(orders.status, [...PAID_STATUSES]),
       ),
     )
@@ -186,8 +216,8 @@ export default async function AdminOverview() {
     .from(orders)
     .where(
       and(
-        sql`${orders.placedAt} >= ${last30Iso}`,
-        inArray(orders.siteId, ctx.siteIds),
+        sql`${orders.placedAt} >= ${periodStartIso}`,
+        inArray(orders.siteId, selectedSiteIds),
         inArray(orders.status, [...PAID_STATUSES]),
       ),
     )
@@ -204,7 +234,7 @@ export default async function AdminOverview() {
       placedAt: orders.placedAt,
     })
     .from(orders)
-    .where(inArray(orders.siteId, ctx.siteIds))
+    .where(inArray(orders.siteId, selectedSiteIds))
     .orderBy(desc(orders.placedAt))
     .limit(40);
 
@@ -217,7 +247,7 @@ export default async function AdminOverview() {
   }>(sql`
     SELECT
       coalesce(sum((item->>'qty')::int) FILTER (WHERE o.placed_at >= ${todayIso}), 0)::int AS today_units,
-      coalesce(sum((item->>'qty')::int) FILTER (WHERE o.placed_at >= ${last7Iso}), 0)::int AS week_units
+      coalesce(sum((item->>'qty')::int) FILTER (WHERE o.placed_at >= ${periodStartIso}), 0)::int AS week_units
     FROM orders o
     CROSS JOIN LATERAL jsonb_array_elements(o.items) AS item
     WHERE o.site_id = ANY(${siteIdsLiteral})
@@ -386,8 +416,8 @@ export default async function AdminOverview() {
   );
   const dailyBuckets: Array<{ date: Date; revenue: number; orderCount: number }> =
     [];
-  for (let i = 0; i < 14; i++) {
-    const d = new Date(last14);
+  for (let i = 0; i < range; i++) {
+    const d = new Date(graphStart);
     d.setDate(d.getDate() + i);
     const key = ymd(d);
     const row = daysMap.get(key);
@@ -398,7 +428,7 @@ export default async function AdminOverview() {
     });
   }
   const maxRevenue = Math.max(1, ...dailyBuckets.map((b) => b.revenue));
-  const total14dRevenue = dailyBuckets.reduce((s, b) => s + b.revenue, 0);
+  const totalPeriodRevenue = dailyBuckets.reduce((s, b) => s + b.revenue, 0);
 
   // Traffic sources → percentages.
   const sourcesTotal = trafficSources.reduce((s, r) => s + r.sessions, 0);
@@ -505,15 +535,23 @@ export default async function AdminOverview() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-2xl sm:text-3xl font-bold text-brand-ink">
-          Welcome back{ctx.name ? `, ${ctx.name}` : ""}.
-        </h1>
-        <p className="text-sm text-brand-ink-soft mt-1">
-          {ctx.siteIds.length === 1
-            ? `Managing ${ctx.siteIds[0]}.`
-            : `Managing ${ctx.siteIds.length} sites.`}
-        </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-brand-ink">
+            Welcome back{ctx.name ? `, ${ctx.name}` : ""}.
+          </h1>
+          <p className="text-sm text-brand-ink-soft mt-1">
+            {ctx.siteIds.length === 1
+              ? `Managing ${ctx.siteIds[0]}.`
+              : selectedSite
+                ? `Showing ${selectedSite} · ${ctx.siteIds.length} sites total`
+                : `Managing all ${ctx.siteIds.length} sites.`}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {ctx.siteIds.length > 1 && <StoreTabs sites={ctx.siteIds} />}
+          <RangeTabs />
+        </div>
       </div>
 
       <DataExport />
@@ -525,15 +563,17 @@ export default async function AdminOverview() {
           value={todayStats.orderCount}
           sub={`${formatINR(todayStats.revenue)} revenue`}
           icon={Package}
+          href="/admin/orders?view=live"
         />
         <StatCard
-          label="Last 7 days"
+          label={`Last ${range} days`}
           value={weekStats.orderCount}
           sub={`${formatINR(weekStats.revenue)} revenue`}
           icon={IndianRupee}
+          href="/admin/orders?view=live"
         />
         <StatCard
-          label="AOV (7d, paid)"
+          label={`AOV (${range}d, paid)`}
           value={formatINR(aov)}
           sub={
             aovStats.orderCount
@@ -541,25 +581,28 @@ export default async function AdminOverview() {
               : "No paid orders yet"
           }
           icon={TrendingUp}
+          href="/admin/analytics"
         />
         <StatCard
-          label="Products sold (7d)"
+          label={`Products sold (${range}d)`}
           value={weekUnits}
           sub={`${todayUnits} today · units, paid only`}
           icon={ShoppingBag}
+          href="/admin/inventory"
         />
       </div>
 
       {/* Row 2 — traffic + conversion */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
         <StatCard
-          label="Visitors (7d)"
+          label={`Visitors (${range}d)`}
           value={visitors7d}
           sub={`${visitorsToday} today`}
           icon={Eye}
+          href="/admin/analytics"
         />
         <StatCard
-          label="Conversion (7d)"
+          label={`Conversion (${range}d)`}
           value={conversionPct === null ? "—" : `${conversionPct}%`}
           sub={
             sessions7d
@@ -567,6 +610,7 @@ export default async function AdminOverview() {
               : "No sessions tracked yet"
           }
           icon={Percent}
+          href="/admin/funnel"
         />
         <div className="bg-white rounded-2xl border border-brand-line p-4 sm:p-5">
           <div className="flex items-center justify-between gap-2">
@@ -600,6 +644,7 @@ export default async function AdminOverview() {
           value={customerStats.total}
           sub="Unique phone numbers"
           icon={Users}
+          href="/admin/customers"
         />
         <StatCard
           label="Returning customers"
@@ -610,6 +655,7 @@ export default async function AdminOverview() {
               : "Need first orders to compute"
           }
           icon={Repeat}
+          href="/admin/customers"
         />
         <Link
           href="/admin/inventory"
@@ -649,11 +695,11 @@ export default async function AdminOverview() {
             <h2 className="font-semibold text-brand-ink">
               Sales{" "}
               <span className="text-brand-ink-soft font-normal">
-                — last 14 days, paid
+                — last {range} days, paid
               </span>
             </h2>
             <span className="text-sm font-semibold text-brand-ink tabular-nums">
-              {formatINR(total14dRevenue)}
+              {formatINR(totalPeriodRevenue)}
             </span>
           </header>
           <div className="p-5">
@@ -765,7 +811,7 @@ export default async function AdminOverview() {
           <h2 className="font-semibold text-brand-ink">
             Traffic sources{" "}
             <span className="text-brand-ink-soft font-normal">
-              — last 7 days
+              — last {range} days
             </span>
           </h2>
           <Link
@@ -817,7 +863,7 @@ export default async function AdminOverview() {
           <h2 className="font-semibold text-brand-ink">
             Top SKUs{" "}
             <span className="text-brand-ink-soft font-normal">
-              — last 30 days, paid only
+              — last {range} days, paid only
             </span>
           </h2>
           <Link
@@ -829,7 +875,7 @@ export default async function AdminOverview() {
         </div>
         {topSkus.length === 0 ? (
           <p className="px-5 py-10 text-center text-sm text-brand-ink-soft">
-            No paid orders in the last 30 days yet.
+            No paid orders in the last {range} days yet.
           </p>
         ) : (
           <ul className="divide-y divide-brand-line">
@@ -965,24 +1011,50 @@ function StatCard({
   value,
   sub,
   icon: Icon,
+  href,
 }: {
   label: string;
   value: number | string;
   sub: string;
   icon: React.ComponentType<{ size?: number }>;
+  href?: string;
 }) {
-  return (
-    <div className="bg-white rounded-2xl border border-brand-line p-4 sm:p-5">
+  const inner = (
+    <>
       <div className="flex items-center justify-between gap-2">
         <p className="text-[10px] sm:text-xs font-mono font-bold uppercase tracking-widest text-brand-ink-soft truncate">
           {label}
         </p>
-        <Icon size={16} />
+        {href ? (
+          <ArrowUpRight
+            size={16}
+            className="text-brand-ink-soft group-hover:text-brand-red transition-colors"
+          />
+        ) : (
+          <Icon size={16} />
+        )}
       </div>
       <p className="font-display text-2xl sm:text-3xl font-bold text-brand-ink mt-2 break-words">
         {value}
       </p>
       <p className="text-xs text-brand-ink-soft mt-1">{sub}</p>
+    </>
+  );
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className="group block bg-white rounded-2xl border border-brand-line p-4 sm:p-5 hover:border-brand-red hover:shadow-sm transition-all"
+      >
+        {inner}
+      </Link>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-brand-line p-4 sm:p-5">
+      {inner}
     </div>
   );
 }

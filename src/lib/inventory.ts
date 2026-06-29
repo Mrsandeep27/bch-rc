@@ -16,6 +16,21 @@ import { PRODUCTS } from "@/lib/products";
 
 export const INVENTORY_SITE_ID = "prc";
 
+/** Every site whose inventory this module spans. A SKU lives under exactly one. */
+export const ALL_SITE_IDS = ["prc", "prc16"] as const;
+
+/** A SKU's store is fixed by its scale: 1:16 → prc16, everything else → prc. */
+function siteIdForScale(scale: string): string {
+  return scale === "1:16" ? "prc16" : "prc";
+}
+
+const SKU_SITE = new Map(PRODUCTS.map((p) => [p.id, siteIdForScale(p.scale)]));
+
+/** Resolve which site's inventory keyspace a SKU belongs to. */
+export function siteIdForSku(skuId: string): string {
+  return SKU_SITE.get(skuId) ?? INVENTORY_SITE_ID;
+}
+
 /** Low-stock nudge threshold for both storefront badges and admin health. */
 export const LOW_STOCK_THRESHOLD = 5;
 
@@ -38,10 +53,12 @@ export type ExpectedKey = {
  * the `inventory` table MUST cover for checkout to work — anything missing here
  * will be rejected at order create.
  */
-export function expectedInventoryKeys(): ExpectedKey[] {
+export function expectedInventoryKeys(siteId?: string): ExpectedKey[] {
   const out: ExpectedKey[] = [];
   for (const sku of PRODUCTS) {
     if (sku.hidden) continue;
+    // When scoped to a site, only that store's SKUs are "expected" there.
+    if (siteId && siteIdForScale(sku.scale) !== siteId) continue;
     if (sku.colors && sku.colors.length > 0) {
       for (const c of sku.colors) {
         out.push({
@@ -71,6 +88,10 @@ export function expectedInventoryKeys(): ExpectedKey[] {
  * returned map means "no inventory row configured" (callers treat as 0/unknown).
  */
 export async function getStockMap(skuIds?: string[]): Promise<Record<string, number>> {
+  // Span both stores. A SKU lives under exactly one site (by scale), and the
+  // map key is sku:variant, so merging prc + prc16 rows is unambiguous — and it
+  // means the 1:16 storefront sees its stock (now under prc16) without each
+  // caller having to know which store a SKU belongs to.
   const rows = await db
     .select({
       skuId: inventory.skuId,
@@ -81,10 +102,10 @@ export async function getStockMap(skuIds?: string[]): Promise<Record<string, num
     .where(
       skuIds && skuIds.length > 0
         ? and(
-            eq(inventory.siteId, INVENTORY_SITE_ID),
+            inArray(inventory.siteId, [...ALL_SITE_IDS]),
             inArray(inventory.skuId, skuIds),
           )
-        : eq(inventory.siteId, INVENTORY_SITE_ID),
+        : inArray(inventory.siteId, [...ALL_SITE_IDS]),
     );
 
   const map: Record<string, number> = {};
@@ -118,8 +139,10 @@ export type InventoryHealth = {
  * low-stock variants, and orphan rows. Powers the admin health page and the
  * /api/health/inventory monitor endpoint.
  */
-export async function getInventoryHealth(): Promise<InventoryHealth> {
-  const expected = expectedInventoryKeys();
+export async function getInventoryHealth(
+  siteId: string = INVENTORY_SITE_ID,
+): Promise<InventoryHealth> {
+  const expected = expectedInventoryKeys(siteId);
   const rows = await db
     .select({
       skuId: inventory.skuId,
@@ -127,7 +150,7 @@ export async function getInventoryHealth(): Promise<InventoryHealth> {
       stock: inventory.stock,
     })
     .from(inventory)
-    .where(eq(inventory.siteId, INVENTORY_SITE_ID));
+    .where(eq(inventory.siteId, siteId));
 
   const rowMap = new Map(rows.map((r) => [`${r.skuId}:${r.variantSlug}`, r.stock]));
 

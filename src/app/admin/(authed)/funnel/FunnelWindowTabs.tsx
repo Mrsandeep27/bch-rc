@@ -19,13 +19,20 @@ export function FunnelWindowTabs() {
   const sp = useSearchParams();
   const current = Number(sp.get("window")) || 7;
 
+  function go(days: number) {
+    // Preserve ?site= so the window + store selectors compose.
+    const params = new URLSearchParams(sp.toString());
+    params.set("window", String(days));
+    router.push(`/admin/funnel?${params.toString()}`);
+  }
+
   return (
     <div className="flex gap-1 bg-brand-cream rounded-full p-1">
       {WINDOWS.map((w) => (
         <button
           key={w.d}
           type="button"
-          onClick={() => router.push(`/admin/funnel?window=${w.d}`)}
+          onClick={() => go(w.d)}
           aria-pressed={current === w.d}
           className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
             current === w.d

@@ -18,14 +18,12 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { and, desc, eq, gte } from "drizzle-orm";
+import { and, desc, eq, gte, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { orders, customers, funnelEvents } from "@/db/schema";
 import { getAdminContext } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
-
-const SITE_ID = process.env.DEFAULT_SITE_ID ?? "prc";
 
 // Hard caps so a runaway export can't try to stream the whole table into
 // memory. Orders are low-volume (keep all); funnel events are high-volume.
@@ -57,13 +55,16 @@ function field(obj: unknown, key: string): unknown {
   return undefined;
 }
 
-async function exportOrders(sinceDays: number | null): Promise<string> {
+async function exportOrders(
+  sinceDays: number | null,
+  siteIds: string[],
+): Promise<string> {
   const where = sinceDays
     ? and(
-        eq(orders.siteId, SITE_ID),
+        inArray(orders.siteId, siteIds),
         gte(orders.placedAt, new Date(Date.now() - sinceDays * 86_400_000)),
       )
-    : eq(orders.siteId, SITE_ID);
+    : inArray(orders.siteId, siteIds);
 
   const rows = await db
     .select({ o: orders, c: customers })
@@ -149,13 +150,16 @@ async function exportOrders(sinceDays: number | null): Promise<string> {
   return toCsv(headers, data);
 }
 
-async function exportFunnel(sinceDays: number): Promise<string> {
+async function exportFunnel(
+  sinceDays: number,
+  siteIds: string[],
+): Promise<string> {
   const rows = await db
     .select()
     .from(funnelEvents)
     .where(
       and(
-        eq(funnelEvents.siteId, SITE_ID),
+        inArray(funnelEvents.siteId, siteIds),
         gte(
           funnelEvents.createdAt,
           new Date(Date.now() - sinceDays * 86_400_000),
@@ -200,14 +204,20 @@ export async function GET(req: NextRequest) {
   const daysRaw = req.nextUrl.searchParams.get("days");
   const days = daysRaw ? Math.min(Math.max(Number(daysRaw) || 0, 1), 365) : null;
 
+  // Export covers the admin's stores. ?site=<id> narrows to one (validated
+  // against the admin's sites so it can't widen access); default = all of them.
+  const siteParam = req.nextUrl.searchParams.get("site");
+  const siteIds =
+    siteParam && ctx.siteIds.includes(siteParam) ? [siteParam] : ctx.siteIds;
+
   let csv: string;
   let name: string;
   if (dataset === "orders") {
-    csv = await exportOrders(days);
+    csv = await exportOrders(days, siteIds);
     name = "orders";
   } else if (dataset === "funnel") {
     // Funnel is high-volume — always windowed. Default 30 days.
-    csv = await exportFunnel(days ?? 30);
+    csv = await exportFunnel(days ?? 30, siteIds);
     name = "funnel-events";
   } else {
     return NextResponse.json(
