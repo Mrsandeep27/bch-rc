@@ -27,6 +27,7 @@ import {
   events,
   inventory,
   notificationsOutbox,
+  checkoutLeads,
 } from "@/db/schema";
 import { sql, eq, and } from "drizzle-orm";
 import { PRODUCTS } from "@/lib/products";
@@ -632,6 +633,22 @@ export async function POST(req: Request) {
 
   const { customerId, customerName, customerEmail, customerPhone, total } = txnResult;
   orderId = txnResult.orderId;
+
+  // This customer reached payment — close their open step-1 lead so the cart
+  // recovery list never shows someone already represented by an order row.
+  // Best-effort, past the response: lead bookkeeping must never fail an order.
+  after(() =>
+    db
+      .update(checkoutLeads)
+      .set({ status: "CONVERTED", convertedOrderId: orderId, updatedAt: new Date() })
+      .where(
+        and(
+          eq(checkoutLeads.customerId, customerId),
+          eq(checkoutLeads.status, "OPEN"),
+        ),
+      )
+      .catch((err) => logError("order:create:lead-convert", err, { orderId })),
+  );
 
   // ── 4. Create the Razorpay order ─────────────────────────────────
   //

@@ -1,7 +1,7 @@
-import { and, desc, gte, inArray, lt } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt } from "drizzle-orm";
 import { LifeBuoy, MessageCircle, Phone, Snowflake } from "lucide-react";
 import { db } from "@/db";
-import { orders } from "@/db/schema";
+import { orders, checkoutLeads } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
 import { formatINR } from "@/lib/utils";
 
@@ -30,6 +30,9 @@ type Addr = { fullName?: string; phone?: string; city?: string; state?: string }
 type Item = { skuId?: string; name?: string; qty?: number };
 type Cart = {
   id: string;
+  // "order" = a created-but-unpaid order. "lead" = a step-1 detail capture
+  // (customer entered contact + address but never reached payment).
+  kind: "order" | "lead";
   status: string;
   items: unknown;
   shippingAddress: unknown;
@@ -54,14 +57,27 @@ function e164(phone: string): string {
   return digits.length === 10 ? `91${digits}` : digits;
 }
 
-/** WhatsApp deep link to the CUSTOMER (not the store) with a recovery nudge. */
-function recoveryWaLink(phone: string, name: string, orderId: string, totalInr: number): string {
+/** WhatsApp deep link to the CUSTOMER (not the store) with a recovery nudge.
+ *  `kind` tailors the copy: an order-cart got as far as a payment attempt; a
+ *  lead only filled their details and never reached payment. */
+function recoveryWaLink(
+  phone: string,
+  name: string,
+  ref: string,
+  totalInr: number,
+  kind: "order" | "lead",
+): string {
   const first = (name || "there").split(" ")[0];
   const msg =
-    `Hi ${first}! This is Pocket RC Cars 🏎️ — you started an order ` +
-    `(${orderId}) for ${formatINR(totalInr)} but the payment didn't go ` +
-    `through. Want me to help you finish it? You can also pay Cash on ` +
-    `Delivery if that's easier. Just reply here 🙂`;
+    kind === "lead"
+      ? `Hi ${first}! This is Pocket RC Cars 🏎️ — you were ordering with us ` +
+        `(${formatINR(totalInr)}) but didn't finish. Want me to help you ` +
+        `complete it? You can pay online or Cash on Delivery, whichever is ` +
+        `easier. Just reply here 🙂`
+      : `Hi ${first}! This is Pocket RC Cars 🏎️ — you started an order ` +
+        `(${ref}) for ${formatINR(totalInr)} but the payment didn't go ` +
+        `through. Want me to help you finish it? You can also pay Cash on ` +
+        `Delivery if that's easier. Just reply here 🙂`;
   return `https://wa.me/${e164(phone)}?text=${encodeURIComponent(msg)}`;
 }
 
@@ -112,13 +128,79 @@ export default async function RecoveryPage() {
   ]);
 
   const paidSet = new Set(paidRows.map((r) => r.customerId));
+
+  // Step-1 leads: customers who entered their details but never reached the
+  // payment step (no order row was ever created). status stays OPEN until they
+  // create any order, at which point order/create flips it to CONVERTED — so an
+  // OPEN lead means "filled details, never paid". Same age window as carts.
+  const leadRows = (await db
+    .select({
+      id: checkoutLeads.id,
+      items: checkoutLeads.items,
+      fullName: checkoutLeads.fullName,
+      phone: checkoutLeads.phone,
+      city: checkoutLeads.city,
+      state: checkoutLeads.state,
+      subtotalInr: checkoutLeads.subtotalInr,
+      customerId: checkoutLeads.customerId,
+      createdAt: checkoutLeads.createdAt,
+    })
+    .from(checkoutLeads)
+    .where(
+      and(
+        inArray(checkoutLeads.siteId, ctx.siteIds),
+        eq(checkoutLeads.status, "OPEN"),
+        gte(checkoutLeads.createdAt, since),
+        lt(checkoutLeads.createdAt, until),
+      ),
+    )
+    .orderBy(desc(checkoutLeads.createdAt))
+    .limit(500)) as {
+    id: string;
+    items: unknown;
+    fullName: string | null;
+    phone: string | null;
+    city: string | null;
+    state: string | null;
+    subtotalInr: number;
+    customerId: string;
+    createdAt: Date;
+  }[];
+
+  // Normalise leads to the same shape as order-carts so they render in one list.
+  const leadCarts: Cart[] = leadRows.map((l) => ({
+    id: l.id,
+    kind: "lead",
+    status: "OPEN",
+    items: l.items,
+    shippingAddress: {
+      fullName: l.fullName ?? undefined,
+      phone: l.phone ?? undefined,
+      city: l.city ?? undefined,
+      state: l.state ?? undefined,
+    },
+    totalInr: l.subtotalInr,
+    paymentMethod: "",
+    source: "web",
+    customerId: l.customerId,
+    placedAt: l.createdAt,
+  }));
+
+  // Merge order-carts (richer, take precedence) ahead of leads, newest first.
+  // An order row already covers a customer who reached payment, so when the
+  // same customer also has a lead the order row wins the per-customer dedup.
+  const merged = [
+    ...(carts as Omit<Cart, "kind">[]).map((c) => ({ ...c, kind: "order" as const })),
+    ...leadCarts,
+  ].sort((a, b) => b.placedAt.getTime() - a.placedAt.getTime());
+
   // Show a lead only if they NEVER succeeded, and only ONCE — their latest
-  // unpaid attempt. `carts` is ordered by placedAt desc, so the first row we
+  // unpaid attempt. `merged` is ordered by placedAt desc, so the first row we
   // see per customer is the most recent; later (older) retries are collapsed.
   // Net effect: a FAILED order appears only if the customer hasn't paid and
   // hasn't already been listed via a newer attempt.
   const seenCustomer = new Set<string>();
-  const recoverable = (carts as Cart[]).filter((c) => {
+  const recoverable = merged.filter((c) => {
     if (paidSet.has(c.customerId)) return false;
     const key = c.customerId ?? c.id;
     if (seenCustomer.has(key)) return false;
@@ -137,9 +219,11 @@ export default async function RecoveryPage() {
           <LifeBuoy size={24} className="text-brand-red" /> Cart recovery
         </h1>
         <p className="text-sm text-brand-ink-soft mt-1">
-          Orders that were created but never paid — with one-tap Call + WhatsApp
-          to the customer. Hides carts under {MIN_AGE_MIN} min old (still
-          checking out) and customers who already paid since.
+          Orders created but never paid — plus customers who filled their
+          details at checkout but never reached payment (tagged{" "}
+          <span className="text-brand-red font-semibold">Didn&apos;t reach payment</span>)
+          — each with one-tap Call + WhatsApp. Hides carts under {MIN_AGE_MIN}{" "}
+          min old (still checking out) and customers who already paid since.
         </p>
       </div>
 
@@ -210,6 +294,8 @@ function CartRow({ c, nowMs }: { c: Cart; nowMs: number }) {
     .join(", ");
   const phone = addr.phone ?? "";
 
+  const isLead = c.kind === "lead";
+
   return (
     <li className="flex flex-col sm:flex-row sm:items-center gap-3 px-5 py-4">
       <div className="flex-1 min-w-0">
@@ -217,10 +303,18 @@ function CartRow({ c, nowMs }: { c: Cart; nowMs: number }) {
           <span className="font-semibold text-brand-ink">
             {addr.fullName ?? "Unknown"}
           </span>
-          <span className="text-xs font-mono text-brand-ink-soft">{c.id}</span>
-          <span className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-brand-cream text-brand-ink-soft">
-            {c.paymentMethod} · {c.source}
-          </span>
+          {isLead ? (
+            <span className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-brand-red-soft text-brand-red font-bold">
+              Didn&apos;t reach payment
+            </span>
+          ) : (
+            <>
+              <span className="text-xs font-mono text-brand-ink-soft">{c.id}</span>
+              <span className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-brand-cream text-brand-ink-soft">
+                {c.paymentMethod} · {c.source}
+              </span>
+            </>
+          )}
         </div>
         <div className="text-sm text-brand-ink-soft truncate mt-0.5">
           {itemSummary || "—"}
@@ -245,7 +339,7 @@ function CartRow({ c, nowMs }: { c: Cart; nowMs: number }) {
               <Phone size={14} /> Call
             </a>
             <a
-              href={recoveryWaLink(phone, addr.fullName ?? "", c.id, c.totalInr)}
+              href={recoveryWaLink(phone, addr.fullName ?? "", c.id, c.totalInr, c.kind)}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 bg-whatsapp-green hover:bg-whatsapp-green-hover text-white px-3 py-2 rounded-full text-sm font-semibold transition-colors"

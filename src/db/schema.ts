@@ -830,6 +830,66 @@ export const webhooksInbound = pgTable(
 );
 
 // ============================================================
+// 11b. CHECKOUT LEADS — step-1 contact capture (pre-payment)
+// ============================================================
+// Written when a customer completes the DETAILS step of the 2-step checkout —
+// i.e. they've entered name/phone/address — BEFORE they pay. This closes the
+// gap where a lead was only ever captured once an order row existed (on the
+// Pay click). Lets the team call / WhatsApp people who entered their contact
+// yet never reached or completed payment.
+//
+// One OPEN row per customer (upsert on customer_id). Flipped to CONVERTED the
+// moment that customer creates ANY order (paid OR payment-attempted), so the
+// recovery list never double-counts someone already represented by an order
+// row. Deliberately side-effect-free, unlike orders/create: NO stock hold, NO
+// coupon redemption, NO Razorpay order — a half-filled lead must never touch
+// inventory or money.
+export const checkoutLeadStatusEnum = pgEnum("checkout_lead_status", [
+  "OPEN",
+  "CONVERTED",
+]);
+
+export const checkoutLeads = pgTable(
+  "checkout_leads",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: text("site_id")
+      .notNull()
+      .references(() => sites.id),
+    /** Shared customer identity (phone-keyed). UNIQUE → one lead per customer,
+     *  upserted on each step-1 completion. */
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "cascade" })
+      .unique(),
+    fullName: text("full_name").notNull(),
+    phone: text("phone").notNull(),
+    email: text("email"),
+    line1: text("line1"),
+    line2: text("line2"),
+    city: text("city"),
+    state: text("state"),
+    pincode: text("pincode"),
+    /** Snapshot of the cart at the moment details were filled. */
+    items: jsonb("items").notNull().default([]),
+    subtotalInr: integer("subtotal_inr").notNull().default(0),
+    status: checkoutLeadStatusEnum("status").notNull().default("OPEN"),
+    /** Order this lead turned into, if any (set when status → CONVERTED). */
+    convertedOrderId: text("converted_order_id"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("checkout_leads_site_created_idx").on(t.siteId, t.createdAt),
+    index("checkout_leads_status_idx").on(t.status),
+  ],
+);
+
+// ============================================================
 // 12. ADMINS — cross-site dashboard access
 // ============================================================
 
@@ -881,3 +941,5 @@ export type CustomerCouponRedemption = typeof customerCouponRedemptions.$inferSe
 export type NewCustomerCouponRedemption = typeof customerCouponRedemptions.$inferInsert;
 export type AnalyticsSession = typeof analyticsSessions.$inferSelect;
 export type NewAnalyticsSession = typeof analyticsSessions.$inferInsert;
+export type CheckoutLead = typeof checkoutLeads.$inferSelect;
+export type NewCheckoutLead = typeof checkoutLeads.$inferInsert;
