@@ -39,11 +39,23 @@ import { logError, logWarn } from "@/lib/logger";
 const connectionString =
   process.env.DATABASE_URL_POOLED ?? process.env.DATABASE_URL;
 
-if (!connectionString) {
+// During `next build`, env-bound secrets can legitimately be absent — e.g. a
+// Vercel *Preview* build where DATABASE_URL isn't set for that environment.
+// The build only IMPORTS this module to collect route metadata; it never runs
+// a query. So in build phase we tolerate a missing DSN and fall back to a
+// non-connecting placeholder (postgres-js connects lazily, only on first
+// query), letting the build succeed. At RUNTIME a missing DSN still throws
+// loudly — a real serverless function with no DB config must fail fast.
+const isBuildPhase = process.env.NEXT_PHASE === "phase-production-build";
+
+if (!connectionString && !isBuildPhase) {
   throw new Error(
     "DATABASE_URL_POOLED or DATABASE_URL must be set (see .env.local).",
   );
 }
+
+const effectiveDsn =
+  connectionString ?? "postgresql://build:build@127.0.0.1:5432/build";
 
 /**
  * PHASE 6 — startup validation of the runtime connection string.
@@ -99,10 +111,9 @@ function validateRuntimeDsn(dsn: string): string[] {
   return problems;
 }
 
-{
+if (connectionString) {
   const problems = validateRuntimeDsn(connectionString);
   if (problems.length > 0) {
-    const isBuildPhase = process.env.NEXT_PHASE === "phase-production-build";
     const summary = `Invalid database connection configuration:\n - ${problems.join("\n - ")}`;
     if (isBuildPhase) {
       // Don't break the build on a deployment-specific DSN; surface loudly in logs.
@@ -141,7 +152,7 @@ const globalForDb = globalThis as unknown as {
 
 const queryClient =
   globalForDb.__pgClient ??
-  postgres(connectionString, {
+  postgres(effectiveDsn, {
     prepare: false,
     max: 3,
     idle_timeout: 20,
