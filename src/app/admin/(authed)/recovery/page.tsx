@@ -133,29 +133,12 @@ export default async function RecoveryPage() {
   // payment step (no order row was ever created). status stays OPEN until they
   // create any order, at which point order/create flips it to CONVERTED — so an
   // OPEN lead means "filled details, never paid". Same age window as carts.
-  const leadRows = (await db
-    .select({
-      id: checkoutLeads.id,
-      items: checkoutLeads.items,
-      fullName: checkoutLeads.fullName,
-      phone: checkoutLeads.phone,
-      city: checkoutLeads.city,
-      state: checkoutLeads.state,
-      subtotalInr: checkoutLeads.subtotalInr,
-      customerId: checkoutLeads.customerId,
-      createdAt: checkoutLeads.createdAt,
-    })
-    .from(checkoutLeads)
-    .where(
-      and(
-        inArray(checkoutLeads.siteId, ctx.siteIds),
-        eq(checkoutLeads.status, "OPEN"),
-        gte(checkoutLeads.createdAt, since),
-        lt(checkoutLeads.createdAt, until),
-      ),
-    )
-    .orderBy(desc(checkoutLeads.createdAt))
-    .limit(500)) as {
+  //
+  // Wrapped defensively: if the checkout_leads migration (0016) hasn't been
+  // applied to this environment yet, treat it as "no leads" rather than hard-
+  // failing the whole recovery page. Lets the code deploy ahead of the
+  // migration safely.
+  type LeadRow = {
     id: string;
     items: unknown;
     fullName: string | null;
@@ -165,7 +148,35 @@ export default async function RecoveryPage() {
     subtotalInr: number;
     customerId: string;
     createdAt: Date;
-  }[];
+  };
+  let leadRows: LeadRow[] = [];
+  try {
+    leadRows = (await db
+      .select({
+        id: checkoutLeads.id,
+        items: checkoutLeads.items,
+        fullName: checkoutLeads.fullName,
+        phone: checkoutLeads.phone,
+        city: checkoutLeads.city,
+        state: checkoutLeads.state,
+        subtotalInr: checkoutLeads.subtotalInr,
+        customerId: checkoutLeads.customerId,
+        createdAt: checkoutLeads.createdAt,
+      })
+      .from(checkoutLeads)
+      .where(
+        and(
+          inArray(checkoutLeads.siteId, ctx.siteIds),
+          eq(checkoutLeads.status, "OPEN"),
+          gte(checkoutLeads.createdAt, since),
+          lt(checkoutLeads.createdAt, until),
+        ),
+      )
+      .orderBy(desc(checkoutLeads.createdAt))
+      .limit(500)) as LeadRow[];
+  } catch {
+    leadRows = [];
+  }
 
   // Normalise leads to the same shape as order-carts so they render in one list.
   const leadCarts: Cart[] = leadRows.map((l) => ({
