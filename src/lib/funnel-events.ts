@@ -26,6 +26,11 @@ export const FUNNEL_EVENTS = [
   // --- engagement / leak signals (not funnel stages) ---
   "hero_cta_click", // tapped the hero primary CTA (metadata.variant)
   "whatsapp_click", // left to WhatsApp chat (metadata.placement: fab|header)
+  // --- spin-wheel lead capture (hub "drift for your discount") ---
+  "wheel_open", // popup shown (metadata.via: auto|tab)
+  "wheel_spin", // tapped HIT THE THROTTLE (drifted)
+  "wheel_lead", // claimed the code (metadata.code) — NO raw phone stored here
+  "wheel_wa_claim", // tapped "send code to WhatsApp"
 ] as const;
 
 export type FunnelEventType = (typeof FUNNEL_EVENTS)[number];
@@ -47,15 +52,20 @@ export type FunnelStage = {
   events: FunnelEventType[];
 };
 
+// The top four stages are distinct-visitor counts from funnel_events; the bottom
+// two ("order", "paid") are sourced from the ORDERS TABLE in getFunnelReport
+// (authoritative — order_submitted/purchase events undercount real orders, which
+// made the funnel show a false checkout→order cliff). The old "pincode" and
+// "pay_open" event stages were dropped from the linear funnel: serviceability
+// has its own panel, and "opened payment" was a noisy intermediate that broke
+// the funnel shape once orders became real counts.
 export const FUNNEL_STAGES: FunnelStage[] = [
   { key: "visit", label: "Visited site", events: ["page_view"] },
   { key: "product", label: "Viewed a product", events: ["product_view"] },
   { key: "cart", label: "Added to cart", events: ["add_to_cart"] },
   { key: "checkout", label: "Started checkout", events: ["checkout_started"] },
-  { key: "pincode", label: "Pincode serviceable", events: ["serviceability_checked"] },
-  { key: "order", label: "Placed order (created)", events: ["order_submitted"] },
-  { key: "pay_open", label: "Opened payment", events: ["razorpay_opened"] },
-  { key: "paid", label: "Paid / purchased", events: ["payment_succeeded", "purchase"] },
+  { key: "order", label: "Placed order", events: ["order_submitted"] },
+  { key: "paid", label: "Paid", events: ["payment_succeeded", "purchase"] },
 ];
 
 /** Max events accepted in a single ingest batch (abuse guard). */

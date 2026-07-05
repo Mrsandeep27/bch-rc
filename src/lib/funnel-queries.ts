@@ -41,23 +41,32 @@ export async function getFunnelReport(
 ): Promise<FunnelReport> {
   const days = Math.max(1, Math.min(90, Math.floor(windowDays)));
 
-  // One pass for all stage counts (conditional DISTINCT aggregation).
+  // Top of funnel — distinct-visitor counts from the event stream.
   const stageRows = (await db.execute(sql`
     SELECT
       count(DISTINCT visitor_id) FILTER (WHERE type = 'page_view') AS visit,
       count(DISTINCT visitor_id) FILTER (WHERE type = 'product_view') AS product,
       count(DISTINCT visitor_id) FILTER (WHERE type = 'add_to_cart') AS cart,
-      count(DISTINCT visitor_id) FILTER (WHERE type = 'checkout_started') AS checkout,
-      count(DISTINCT visitor_id) FILTER (WHERE type = 'serviceability_checked' AND metadata->>'serviceable' = 'true') AS pincode,
-      count(DISTINCT visitor_id) FILTER (WHERE type = 'order_submitted') AS "order",
-      count(DISTINCT visitor_id) FILTER (WHERE type = 'razorpay_opened') AS pay_open,
-      count(DISTINCT visitor_id) FILTER (WHERE type IN ('payment_succeeded','purchase')) AS paid
+      count(DISTINCT visitor_id) FILTER (WHERE type = 'checkout_started') AS checkout
     FROM funnel_events
     WHERE is_bot = false AND site_id = ${siteId}
       AND created_at > now() - make_interval(days => ${days})
   `)) as unknown as Array<Record<string, unknown>>;
 
-  const counts = stageRows[0] ?? {};
+  // Bottom of funnel — from the ORDERS TABLE (ground truth). The
+  // order_submitted / purchase EVENTS undercount real orders by ~40% (COD,
+  // manual, ad-blocked, navigated-away), which made the funnel display a false
+  // checkout→order cliff. Orders are the authoritative count.
+  const orderRows = (await db.execute(sql`
+    SELECT
+      count(*) AS "order",
+      count(*) FILTER (WHERE status IN ('PAID','PACKED','SHIPPED','DELIVERED')) AS paid
+    FROM orders
+    WHERE site_id = ${siteId}
+      AND placed_at > now() - make_interval(days => ${days})
+  `)) as unknown as Array<Record<string, unknown>>;
+
+  const counts = { ...(stageRows[0] ?? {}), ...(orderRows[0] ?? {}) };
   const top = n(counts["visit"]);
 
   let prev = 0;
