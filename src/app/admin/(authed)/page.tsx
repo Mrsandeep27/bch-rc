@@ -85,15 +85,24 @@ export default async function AdminOverview({
   const selectedSiteIds = selectedSite ? [selectedSite] : ctx.siteIds;
 
   const now = new Date();
-  const today = new Date(now);
-  today.setHours(0, 0, 0, 0);
+  // Day boundaries are IST, NOT the server's timezone (UTC on Vercel). Without
+  // this, "Today" and the range windows begin at midnight UTC = 5:30 AM IST, so
+  // orders placed 00:00–05:30 IST land in the previous day and the numbers
+  // disagree with the IST dates shown in the orders list ("2 today" vs 4 on the
+  // list). India has no DST, so a fixed +5:30 offset is exact. `today` is the
+  // UTC instant that corresponds to IST midnight of the current IST day.
+  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+  const istMidnight = new Date(now.getTime() + IST_OFFSET_MS);
+  istMidnight.setUTCHours(0, 0, 0, 0);
+  const today = new Date(istMidnight.getTime() - IST_OFFSET_MS);
   // Period window for the headline scalars (revenue, AOV, units, visitors,
-  // conversion, sources, top SKUs) — follows the selected range.
+  // conversion, sources, top SKUs) — follows the selected range. setUTCDate
+  // keeps the day math tied to the IST-midnight instant regardless of server TZ.
   const periodStart = new Date(today);
-  periodStart.setDate(periodStart.getDate() - range);
+  periodStart.setUTCDate(periodStart.getUTCDate() - range);
   // Graph window — `range` daily buckets inclusive of today.
   const graphStart = new Date(today);
-  graphStart.setDate(graphStart.getDate() - (range - 1));
+  graphStart.setUTCDate(graphStart.getUTCDate() - (range - 1));
 
   // IMPORTANT: interpolate ISO strings, NOT Date objects, into the sql``
   // templates below. Drizzle's postgres-js driver cannot bind a raw Date inside
@@ -193,7 +202,7 @@ export default async function AdminOverview({
   // that had orders; we pad the gaps below.
   const dailyRevenueP = db
     .select({
-      day: sql<string>`to_char(date_trunc('day', ${orders.placedAt}), 'YYYY-MM-DD')`,
+      day: sql<string>`to_char(date_trunc('day', ${orders.placedAt} AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM-DD')`,
       revenue: sql<number>`coalesce(sum(${orders.totalInr}), 0)::int`,
       orderCount: sql<number>`count(*)::int`,
     })
@@ -205,8 +214,8 @@ export default async function AdminOverview({
         inArray(orders.status, [...PAID_STATUSES]),
       ),
     )
-    .groupBy(sql`date_trunc('day', ${orders.placedAt})`)
-    .orderBy(sql`date_trunc('day', ${orders.placedAt})`);
+    .groupBy(sql`date_trunc('day', ${orders.placedAt} AT TIME ZONE 'Asia/Kolkata')`)
+    .orderBy(sql`date_trunc('day', ${orders.placedAt} AT TIME ZONE 'Asia/Kolkata')`);
 
   // (orderTasks, stuckNotifs, failedJobs are now folded into otherScalarsP /
   //  ordersScalarsP above — no separate query needed.)
@@ -418,7 +427,7 @@ export default async function AdminOverview({
     [];
   for (let i = 0; i < range; i++) {
     const d = new Date(graphStart);
-    d.setDate(d.getDate() + i);
+    d.setUTCDate(d.getUTCDate() + i);
     const key = ymd(d);
     const row = daysMap.get(key);
     dailyBuckets.push({
@@ -734,7 +743,7 @@ export default async function AdminOverview({
                           : "text-brand-ink-soft"
                       }`}
                     >
-                      {b.date.getDate()}
+                      {new Date(b.date.getTime() + IST_OFFSET_MS).getUTCDate()}
                     </span>
                   </div>
                 );
@@ -933,12 +942,15 @@ export default async function AdminOverview({
   );
 }
 
+// IST calendar date of an instant, as YYYY-MM-DD. Matches the graph's SQL
+// buckets, which are date_trunc'd in Asia/Kolkata — so keys line up.
 function ymd(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const ist = new Date(d.getTime() + 5.5 * 60 * 60 * 1000);
+  return `${ist.getUTCFullYear()}-${String(ist.getUTCMonth() + 1).padStart(2, "0")}-${String(ist.getUTCDate()).padStart(2, "0")}`;
 }
 
 function shortDate(d: Date): string {
-  return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
+  return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", timeZone: "Asia/Kolkata" });
 }
 
 // One labelled bucket of recent orders (Online / COD / Failed). Renders a
