@@ -23,6 +23,7 @@ import { customers, checkoutLeads } from "@/db/schema";
 import { sql } from "drizzle-orm";
 import { PRODUCTS } from "@/lib/products";
 import { logError } from "@/lib/logger";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -51,6 +52,14 @@ const BodySchema = z.object({
 });
 
 export async function POST(req: Request) {
+  // Unauthenticated write that upserts the global customers table — cap per-IP
+  // to stop record-tampering floods and recovery-queue spam. Kept generous:
+  // the client now autosaves as the buyer fills the form (deduped, so only a
+  // handful of saves per checkout), and many real buyers share one carrier IP
+  // behind CGNAT — a tight cap would silently drop legitimate leads.
+  const limited = rateLimit(req, { scope: "checkout:lead", limit: 60 });
+  if (limited) return limited;
+
   let body: z.infer<typeof BodySchema>;
   try {
     body = BodySchema.parse(await req.json());

@@ -9,6 +9,7 @@ import { STORE16, STORE16_PRODUCTS, formatINR16, type Store16Product } from "@/l
 import { useCart16 } from "@/lib/cart-store";
 import { OFFERS } from "@/lib/config";
 import { calcDiscountPct } from "@/lib/utils";
+import { trackFunnel } from "@/lib/funnel-client";
 import { Placeholder16 } from "./Placeholder16";
 
 const PICK_REASONS: Record<string, string> = {
@@ -30,12 +31,16 @@ function Card16({ p, index }: { p: Store16Product; index: number }) {
   const onlinePrice = p.priceINR - OFFERS.prepaidDiscountINR;
   const pct = calcDiscountPct(mrpINR, p.priceINR);
 
+  const trackAdd = () =>
+    trackFunnel("add_to_cart", { skuId: p.slug, qty: 1, valueInr: p.priceINR });
   const buyNow = () => {
     useCart16.getState().add(p.slug, null);
+    trackAdd();
     router.push("/checkout?store=16");
   };
   const addToCart = () => {
     useCart16.getState().add(p.slug, null); // opens the drawer
+    trackAdd();
   };
 
   return (
@@ -159,7 +164,7 @@ function Card16({ p, index }: { p: Store16Product; index: number }) {
 
 export function Lineup16() {
   return (
-    <section id="lineup" className="bg-brand-cream py-10 sm:py-14">
+    <section id="lineup" className="bg-brand-cream py-7 sm:py-14">
       <div className="mx-auto max-w-7xl px-5 sm:px-10">
         <div className="mb-6 text-center sm:mb-8">
           <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-brand-red">

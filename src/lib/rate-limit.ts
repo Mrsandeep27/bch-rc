@@ -14,6 +14,7 @@
  * the same signature — every call site already treats this as a black box.
  */
 
+import { NextResponse } from "next/server";
 import { logWarn } from "./logger";
 
 export type RateLimitResult = {
@@ -110,4 +111,84 @@ export function checkLimits(
     return { blocked: true, ...blocked };
   }
   return { blocked: false };
+}
+
+/**
+ * Best-effort client IP for rate-limit bucketing. Prefers `x-real-ip` — on
+ * Vercel this is set by the platform to the actual connecting peer and is NOT
+ * overridable by a client-supplied header, so it can't be spoofed to mint a
+ * fresh bucket per request. We only fall back to the LEFTMOST `x-forwarded-for`
+ * token (and finally "unknown") for non-Vercel/local environments where
+ * `x-real-ip` may be absent.
+ *
+ * The previous per-route copies trusted `x-forwarded-for[0]` first, which a
+ * caller can spoof (Vercel appends the real IP, so the leftmost value is
+ * attacker-controlled). Centralising here fixes that uniformly.
+ */
+export function clientIp(req: Request): string {
+  const real = req.headers.get("x-real-ip")?.trim();
+  if (real) return real;
+  const xff = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  if (xff) return xff;
+  return "unknown";
+}
+
+export type RouteRateLimitOptions = {
+  /** Scope label for logs, e.g. "coupons:validate". Also the default bucket. */
+  scope: string;
+  /** Max requests allowed per window for a single client IP. */
+  limit: number;
+  /** Window length in ms. Defaults to 60_000 (1 minute). */
+  windowMs?: number;
+  /** Optional bucket namespace override (defaults to `scope`). */
+  bucket?: string;
+  /**
+   * When true, an over-limit caller gets a silent empty 204 instead of a 429
+   * JSON body. Use for fire-and-forget telemetry endpoints whose contract is
+   * "never surface an error to the page" (e.g. /api/track/*).
+   */
+  silent?: boolean;
+};
+
+/**
+ * One-call per-IP rate-limit guard for route handlers. Returns a ready-to-send
+ * response when the caller is over the limit, or `null` when the request is
+ * allowed (so the handler proceeds).
+ *
+ *   export async function POST(req: Request) {
+ *     const limited = rateLimit(req, { scope: "reviews:submit", limit: 10 });
+ *     if (limited) return limited;
+ *     ...
+ *   }
+ *
+ * In-process fixed-window (see module header): a real per-instance speed bump
+ * for floods/enumeration, not a distributed guarantee. Swap the backing
+ * `hit()` for Redis/Upstash to make the limit global without touching callers.
+ */
+export function rateLimit(
+  req: Request,
+  opts: RouteRateLimitOptions,
+): NextResponse | null {
+  const windowMs = opts.windowMs ?? 60_000;
+  const ip = clientIp(req);
+  const result = checkLimits(opts.scope, Date.now(), [
+    {
+      key: `${opts.bucket ?? opts.scope}:ip:${ip}`,
+      limit: opts.limit,
+      windowMs,
+      dimension: "ip",
+    },
+  ]);
+  if (!result.blocked) return null;
+
+  if (opts.silent) {
+    return new NextResponse(null, { status: 204 });
+  }
+  return NextResponse.json(
+    {
+      ok: false,
+      error: "Too many requests. Please slow down and try again shortly.",
+    },
+    { status: 429, headers: { "Retry-After": String(result.retryAfterSec) } },
+  );
 }

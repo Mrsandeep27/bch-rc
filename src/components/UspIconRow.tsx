@@ -10,7 +10,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
 
 export default function UspIconRow() {
   return (
-    <section className="py-10 sm:py-14 bg-white border-b border-brand-line">
+    <section className="py-6 sm:py-14 bg-white border-b border-brand-line">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6 max-w-6xl mx-auto px-4">
         {USPS.map((usp) => {
           const Icon = ICON_MAP[usp.iconKey] ?? Zap;

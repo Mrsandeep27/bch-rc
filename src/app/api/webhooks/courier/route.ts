@@ -42,7 +42,12 @@ type ShiprocketEvent = {
   awb?: string;
   current_status?: string;
   current_status_id?: number;
-  order_id?: string;
+  /** Shiprocket's OWN numeric order id (not ours). */
+  order_id?: string | number;
+  /** OUR order id (PRC-XXXX) — what we sent as order_id at shipment create. */
+  channel_order_id?: string;
+  sr_order_id?: string | number;
+  courier_name?: string;
   shipment_status?: string;
   scans?: Array<{ date: string; activity: string }>;
 };
@@ -70,6 +75,10 @@ export async function POST(req: Request) {
     return ok();
   }
   if (req.headers.get("x-api-key") !== expected) {
+    // Ack 200 (validator tolerance) but leave a trace: a wrong token pasted in
+    // the Shiprocket dashboard is otherwise indistinguishable from "never
+    // configured" — every real event silently vanishes.
+    logWarn("courier:webhook", "POST with missing/wrong x-api-key — event dropped");
     return ok();
   }
 
@@ -87,7 +96,8 @@ export async function POST(req: Request) {
   // Real-event path. Dedup on our ORDER ID first (globally unique per order) so
   // an AWB-less event for one order can't collide with another order's event;
   // fall back to AWB only when no order id is present.
-  const dedupSubject = event.order_id ?? event.awb ?? "unknown";
+  const dedupSubject =
+    event.channel_order_id ?? event.order_id ?? event.awb ?? "unknown";
   const externalId = `${dedupSubject}::${event.current_status ?? event.shipment_status ?? "unknown"}::${event.current_status_id ?? 0}`;
 
   try {
@@ -110,6 +120,11 @@ export async function POST(req: Request) {
   }
 
   try {
+    // Match priority: AWB → channel_order_id (OUR PRC-XXXX id, which we sent
+    // as order_id at shipment create) → order_id as ours (legacy/tests) →
+    // order_id as Shiprocket's own id via orders.shiprocket_order_id. Real
+    // Shiprocket payloads put THEIR numeric id in order_id, so pre-AWB events
+    // only match through the last two paths.
     let order = null;
     if (event.awb) {
       [order] = await db
@@ -117,11 +132,23 @@ export async function POST(req: Request) {
         .from(orders)
         .where(eq(orders.awbCode, event.awb));
     }
+    if (!order && event.channel_order_id) {
+      [order] = await db
+        .select()
+        .from(orders)
+        .where(eq(orders.id, String(event.channel_order_id)));
+    }
     if (!order && event.order_id) {
       [order] = await db
         .select()
         .from(orders)
-        .where(eq(orders.id, event.order_id));
+        .where(eq(orders.id, String(event.order_id)));
+    }
+    if (!order && event.order_id) {
+      [order] = await db
+        .select()
+        .from(orders)
+        .where(eq(orders.shiprocketOrderId, String(event.order_id)));
     }
 
     if (!order) {
@@ -148,8 +175,16 @@ export async function POST(req: Request) {
       if (mapped === "SHIPPED" && !order.shippedAt) updates.shippedAt = now;
       if (mapped === "DELIVERED" && !order.deliveredAt)
         updates.deliveredAt = now;
+      // A shipment can jump straight to DELIVERED between events — never
+      // leave shipped_at NULL on a delivered order.
+      if (mapped === "DELIVERED" && !order.shippedAt) updates.shippedAt = now;
       if (mapped === "CANCELLED" && !order.cancelledAt)
         updates.cancelledAt = now;
+      // Backfill shipment facts the order row is missing (empty string counts
+      // as missing — Shiprocket's create response persists "" couriers).
+      if (event.awb && !order.awbCode) updates.awbCode = event.awb;
+      if (event.courier_name && !(order.courierName ?? "").trim())
+        updates.courierName = event.courier_name;
       await db.update(orders).set(updates).where(eq(orders.id, order.id));
 
       // Fire the matching customer notification on this transition.

@@ -12,6 +12,7 @@ import {
   getCartCount,
 } from "@/lib/cart-store";
 import { formatINR } from "@/lib/utils";
+import { trackFunnel } from "@/lib/funnel-client";
 
 /**
  * 1:16 cart drawer — same chrome as the 1:64 <CartDrawer>, but bound to the
@@ -28,6 +29,13 @@ export default function CartDrawer16() {
   const lines = getCartLines(items);
   const subtotal = getCartSubtotal(items);
   const count = getCartCount(items);
+
+  // Funnel: `view_cart` fires once each time the 1:16 drawer opens.
+  useEffect(() => {
+    if (!isOpen) return;
+    trackFunnel("view_cart", { cartValueInr: subtotal, itemCount: count });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   // Escape closes; scroll-lock while open.
   const panelRef = useRef<HTMLElement | null>(null);

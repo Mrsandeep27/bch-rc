@@ -16,7 +16,8 @@
  *   8. ENQUEUE order confirmation email (outbox row)
  */
 
-import { NextResponse, after } from "next/server";
+import { NextResponse, after, type NextRequest } from "next/server";
+import { recordServerFunnelEvent } from "@/lib/funnel-server";
 import { cookies } from "next/headers";
 import { z } from "zod";
 import { db } from "@/db";
@@ -38,6 +39,7 @@ import {
   COD_CONFIRMATION_16_MAX_INR,
 } from "@/lib/config";
 import { razorpay } from "@/lib/razorpay";
+import { INVENTORY_SITE_ID } from "@/lib/inventory";
 import { generateOrderId } from "@/lib/order-id";
 import { redeemCoupon, CouponError } from "@/lib/coupons";
 import { sendOutboxRow } from "@/lib/notifications/drain";
@@ -46,6 +48,7 @@ import { verifyServiceabilityLive } from "@/lib/serviceability";
 import { logError } from "@/lib/logger";
 import { resolveOrderAttribution } from "@/lib/attribution";
 import { VISITOR_COOKIE, SESSION_COOKIE } from "@/lib/analytics";
+import { rateLimit } from "@/lib/rate-limit";
 
 const PaymentMethod = z.enum(["UPI", "CARD", "NETBANKING", "WALLET", "COD"]);
 
@@ -85,7 +88,13 @@ type OrderItemSnapshot = {
   lineTotalInr: number;
 };
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  // DoS backstop on the most expensive endpoint (DB txn + live Razorpay order
+  // creation). Generous cap — idempotency already covers legitimate retries, so
+  // a real buyer never trips this; a flood from one IP does.
+  const limited = rateLimit(req, { scope: "orders:create", limit: 30 });
+  if (limited) return limited;
+
   let body: z.infer<typeof BodySchema>;
   try {
     const json = await req.json();
@@ -283,10 +292,11 @@ export async function POST(req: Request) {
         )
       : 0;
   // Bundle bonus — auto-applied when the customer adds any 2+ cars.
-  // Driven by TOTAL cart quantity so 2-of-the-same and 1-each-of-two both
-  // qualify. Server-side authoritative so a client can't spoof the discount.
+  // Now a PERCENTAGE of the subtotal (2→5% · 3→10% · 4/5→15% · 6+→20%), driven
+  // by TOTAL cart quantity so 2-of-the-same and 1-each-of-two both qualify.
+  // Server-side authoritative so a client can't spoof the discount.
   const cartQty = body.items.reduce((n, i) => n + i.qty, 0);
-  const bundleDiscount = bundleDiscountInr(cartQty);
+  const bundleDiscount = bundleDiscountInr(cartQty, subtotal);
 
   // ── 2b. Resolve marketing attribution (first-touch) from the visitor's
   //        analytics session, to snapshot onto the order. Best-effort and
@@ -326,6 +336,9 @@ export async function POST(req: Request) {
         // 3a. Atomic stock decrement. UPDATE returns the new stock row only
         //     when the gate (`stock >= $qty`) holds. Zero rows back → reject.
         //     Empty variantSlug ("") is the row for colourless SKUs.
+        //     ONE single inventory: every row lives under INVENTORY_SITE_ID,
+        //     regardless of which storefront posted the order — a hub cart can
+        //     mix any scales and every line hits the same keyspace.
         for (const item of body.items) {
           const variantKey = item.variantSlug ?? "";
           const sku = PRODUCTS.find((p) => p.id === item.skuId);
@@ -335,7 +348,7 @@ export async function POST(req: Request) {
             .set({ stock: sql`${inventory.stock} - ${item.qty}`, updatedAt: new Date() })
             .where(
               and(
-                eq(inventory.siteId, body.siteId),
+                eq(inventory.siteId, INVENTORY_SITE_ID),
                 eq(inventory.skuId, item.skuId),
                 eq(inventory.variantSlug, variantKey),
                 sql`${inventory.stock} >= ${item.qty}`,
@@ -351,7 +364,7 @@ export async function POST(req: Request) {
               .from(inventory)
               .where(
                 and(
-                  eq(inventory.siteId, body.siteId),
+                  eq(inventory.siteId, INVENTORY_SITE_ID),
                   eq(inventory.skuId, item.skuId),
                   eq(inventory.variantSlug, variantKey),
                 ),
@@ -633,6 +646,31 @@ export async function POST(req: Request) {
 
   const { customerId, customerName, customerEmail, customerPhone, total } = txnResult;
   orderId = txnResult.orderId;
+
+  // Fire `order_submitted` from the SERVER — authoritative, so it captures 100%
+  // of created orders (incl. COD, manual/admin, ad-blocked users, or tabs that
+  // navigate away before the client beacon flushes). The client no longer fires
+  // this event (would double-count). Best-effort + deferred past the response;
+  // telemetry must never block an order. The path hint carries the store so a
+  // 1:16 order attributes to prc16 in the funnel.
+  {
+    const submittedOrderId = orderId;
+    after(() =>
+      recordServerFunnelEvent(
+        req,
+        "order_submitted",
+        {
+          totalInr: total,
+          paymentMethod: body.paymentMethod,
+          pincode: body.address.pincode,
+        },
+        {
+          path: body.siteId === "prc16" ? "/16/checkout" : "/checkout",
+          orderId: submittedOrderId,
+        },
+      ),
+    );
+  }
 
   // This customer reached payment — close their open step-1 lead so the cart
   // recovery list never shows someone already represented by an order row.

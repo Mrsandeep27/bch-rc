@@ -12,6 +12,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { submitReview } from "@/lib/reviews";
+import { rateLimit } from "@/lib/rate-limit";
 
 const Body = z.object({
   siteId: z.string().min(1).max(40).default("prc"),
@@ -22,9 +23,15 @@ const Body = z.object({
   body: z.string().max(2000).optional(),
   customerName: z.string().max(80).optional(),
   customerCity: z.string().max(80).optional(),
+  images: z.array(z.string().url()).max(6).optional(),
 });
 
 export async function POST(req: Request) {
+  // Review submission is unauthenticated (gated only by a valid order id) — cap
+  // per-IP to stop bulk spoofed submissions flooding the moderation queue.
+  const limited = rateLimit(req, { scope: "reviews:submit", limit: 10 });
+  if (limited) return limited;
+
   let parsed;
   try {
     const json = await req.json();

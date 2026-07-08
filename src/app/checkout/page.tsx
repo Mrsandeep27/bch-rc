@@ -32,14 +32,16 @@ import {
 import {
   AUTO_COUPON,
   COD_CONFIRMATION_16_MAX_INR,
+  EMI,
   OFFERS,
   bundleDiscountInr,
   bundleTierLabel,
   computeCodConfirmationFee,
+  emiMonthlyInr,
 } from "@/lib/config";
 import { formatINR } from "@/lib/utils";
 
-type PaymentMethod = "upi" | "cod";
+type PaymentMethod = "upi" | "cod" | "emi";
 
 // Note: delivery ETA + serviceability now come from /api/serviceability
 // (src/lib/serviceability.ts) — the same source the server gates orders with.
@@ -285,7 +287,7 @@ function CheckoutPageInner() {
     (async () => {
       try {
         const r = await fetch(
-          `/api/coupons/validate?code=${encodeURIComponent(couponApplied)}&siteId=${is16 ? "prc16" : "prc"}&subtotalInr=${subtotal}&shippingInr=${subtotal >= OFFERS.freeShippingMinINR ? 0 : 85}`,
+          `/api/coupons/validate?code=${encodeURIComponent(couponApplied)}&siteId=${"prc"}&subtotalInr=${subtotal}&shippingInr=${subtotal >= OFFERS.freeShippingMinINR ? 0 : 85}`,
         );
         const data = (await r.json()) as {
           ok: boolean;
@@ -436,15 +438,36 @@ function CheckoutPageInner() {
     subtotal,
     is16 ? COD_CONFIRMATION_16_MAX_INR : undefined,
   );
-  const prepaidDiscount = payment === "upi" ? OFFERS.prepaidDiscountINR : 0;
-  // Bundle bonus — mix ANY 2 cars = ₹298 off, ANY 3+ cars = ₹698 off.
-  // Driven by TOTAL cart quantity, not distinct SKUs.
-  const bundleDiscount = bundleDiscountInr(count);
+  // Prepaid discount applies to any online method (UPI *or* EMI) — EMI is a
+  // card charge, so it's prepaid too. Only COD forgoes the ₹100 off.
+  const prepaidDiscount = payment !== "cod" ? OFFERS.prepaidDiscountINR : 0;
+  // Bundle bonus — a PERCENTAGE off the subtotal by cart quantity
+  // (2→5% · 3→10% · 4/5→15% · 6+→20%). Driven by TOTAL cart quantity, not
+  // distinct SKUs.
+  const bundleDiscount = bundleDiscountInr(count, subtotal);
   const bundleLabel = bundleTierLabel(count);
   const total = Math.max(
     0,
     subtotal + shipping + codFee - prepaidDiscount - bundleDiscount - couponDiscountInr,
   );
+
+  // No-Cost EMI — a prepaid card charge. The amount financed is the same online
+  // total a UPI buyer would pay (full ₹100-off prepaid total, no COD fee). The
+  // Razorpay modal exposes the bank/tenure picker; we only surface the "from
+  // ₹X/mo" hook + a selectable option so buyers KNOW EMI exists (Amazon-style).
+  // Gated on EMI.minInr so it never shows below the bank EMI floor (~₹3,000).
+  const emiTotal = Math.max(
+    0,
+    subtotal + shipping - OFFERS.prepaidDiscountINR - bundleDiscount - couponDiscountInr,
+  );
+  const emiMonthly = emiMonthlyInr(emiTotal);
+  const emiEligible = emiMonthly > 0;
+
+  // If the cart drops below the EMI floor while EMI is selected, fall back to UPI
+  // so the buyer isn't stuck on an option that no longer applies.
+  useEffect(() => {
+    if (!emiEligible) setPayment((p) => (p === "emi" ? "upi" : p));
+  }, [emiEligible]);
 
   // Per-field validity, recomputed live. Drives both the inline red borders /
   // messages and the submit gate.
@@ -502,7 +525,7 @@ function CheckoutPageInner() {
     if (!opts?.silent) setCouponMessage(null);
     try {
       const r = await fetch(
-        `/api/coupons/validate?code=${encodeURIComponent(code)}&siteId=${is16 ? "prc16" : "prc"}&subtotalInr=${subtotal}&shippingInr=${shipping}`,
+        `/api/coupons/validate?code=${encodeURIComponent(code)}&siteId=${"prc"}&subtotalInr=${subtotal}&shippingInr=${shipping}`,
       );
       const data = (await r.json()) as {
         ok: boolean;
@@ -549,7 +572,7 @@ function CheckoutPageInner() {
     (async () => {
       try {
         const r = await fetch(
-          `/api/coupons/validate?code=${AUTO_COUPON.code}&siteId=${is16 ? "prc16" : "prc"}&subtotalInr=${subtotal}&shippingInr=${shipping}`,
+          `/api/coupons/validate?code=${AUTO_COUPON.code}&siteId=${"prc"}&subtotalInr=${subtotal}&shippingInr=${shipping}`,
         );
         const data = (await r.json()) as {
           ok: boolean;
@@ -779,7 +802,7 @@ function CheckoutPageInner() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          siteId: is16 ? "prc16" : "prc",
+          siteId: "prc",
           idempotencyKey,
           items: items.map((i) => ({
             skuId: i.skuId,
@@ -796,7 +819,8 @@ function CheckoutPageInner() {
             state: stateName.trim(),
             pincode,
           },
-          paymentMethod: payment === "upi" ? "UPI" : "COD",
+          paymentMethod:
+            payment === "cod" ? "COD" : payment === "emi" ? "CARD" : "UPI",
           couponCode: couponApplied || undefined,
         }),
       });
@@ -805,15 +829,9 @@ function CheckoutPageInner() {
         throw new Error(data.error || "Failed to create order");
       }
 
-      trackFunnel(
-        "order_submitted",
-        {
-          totalInr: total,
-          paymentMethod: payment === "upi" ? "UPI" : "COD",
-          pincode,
-        },
-        { orderId: data.orderId, immediate: true },
-      );
+      // NOTE: `order_submitted` is now fired SERVER-SIDE from /api/orders/create
+      // so it captures 100% of orders (incl. COD / ad-blocked / navigated-away).
+      // Firing it here too would double-count — intentionally omitted.
 
       // Both UPI (full prepaid) and CoD (partial-prepaid confirmation fee)
       // now hand off to Razorpay. The CoD flow charges the upfront
@@ -876,7 +894,7 @@ function CheckoutPageInner() {
   const buildLeadBody = useCallback(() => {
     const s = leadStateRef.current;
     return JSON.stringify({
-      siteId: is16 ? "prc16" : "prc",
+      siteId: "prc",
       address: {
         fullName: s.name.trim(),
         phone: s.phone,
@@ -893,7 +911,7 @@ function CheckoutPageInner() {
         qty: i.qty,
       })),
     });
-  }, [is16]);
+  }, []);
 
   // Enough to be a useful lead: a real name + a valid 10-digit phone.
   const leadWorthSaving = useCallback(() => {
@@ -901,22 +919,59 @@ function CheckoutPageInner() {
     return s.name.trim().length >= 2 && /^\d{10}$/.test(s.phone);
   }, []);
 
+  // Serialized body of the last lead we successfully POSTed. Lets saveLead skip
+  // a re-send when nothing has changed since — so the debounced autosave and
+  // the pagehide/visibilitychange flushes don't spam identical rows or burn the
+  // per-IP rate budget.
+  const lastSavedBodyRef = useRef<string | null>(null);
+
   const saveLead = useCallback(
     async (opts?: { keepalive?: boolean }) => {
       if (!leadWorthSaving()) return;
+      const body = buildLeadBody();
+      // Nothing changed since the last save — don't re-POST.
+      if (body === lastSavedBodyRef.current) return;
+      lastSavedBodyRef.current = body;
       try {
         await fetch("/api/checkout/lead", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: buildLeadBody(),
+          body,
           keepalive: opts?.keepalive ?? false,
         });
       } catch {
-        // Lead capture is best-effort — never block or surface to the buyer.
+        // Best-effort — never block or surface to the buyer. Drop the dedup
+        // marker so a transient failure retries on the next change / flush.
+        lastSavedBodyRef.current = null;
       }
     },
     [buildLeadBody, leadWorthSaving],
   );
+
+  // Autosave the lead to the backend AS the buyer fills the details step —
+  // debounced so we persist shortly after they stop typing, NOT only when they
+  // click "Continue to payment". Together with the pagehide flush below this
+  // means a half-filled checkout is captured the moment name + phone are valid,
+  // even if the buyer never advances a step or the tab is killed without firing
+  // an unload event. saveLead() dedupes, so an unchanged form doesn't re-POST.
+  useEffect(() => {
+    if (step !== "details" || !leadWorthSaving()) return;
+    const t = setTimeout(() => void saveLead(), 1200);
+    return () => clearTimeout(t);
+  }, [
+    step,
+    name,
+    phone,
+    email,
+    pincode,
+    line1,
+    line2,
+    city,
+    stateName,
+    items,
+    saveLead,
+    leadWorthSaving,
+  ]);
 
   // Capture the lead if the buyer leaves while still on the details step
   // (closed the tab, hit back, navigated away) — the most important drop-off
@@ -965,9 +1020,11 @@ function CheckoutPageInner() {
 
   const ctaLabel = paymentCancelled
     ? `Retry payment · ${formatINR(total)}`
-    : payment === "upi"
-      ? `Pay ${formatINR(total)} via UPI`
-      : `Pay ${formatINR(codConfirmation)} now · ${formatINR(total - codConfirmation)} on delivery`;
+    : payment === "cod"
+      ? `Pay ${formatINR(codConfirmation)} now · ${formatINR(total - codConfirmation)} on delivery`
+      : payment === "emi"
+        ? `Continue to EMI · ${formatINR(total)}`
+        : `Pay ${formatINR(total)} via UPI`;
 
   const freeShipGap = Math.max(0, OFFERS.freeShippingMinINR - subtotal);
   // COD is offered unless we've confirmed this pincode can't do COD.
@@ -1428,7 +1485,10 @@ function CheckoutPageInner() {
                   type="radio"
                   name="payment"
                   checked={payment === "upi"}
-                  onChange={() => setPayment("upi")}
+                  onChange={() => {
+                    setPayment("upi");
+                    trackFunnel("payment_method_selected", { method: "UPI" });
+                  }}
                   className="mt-1 accent-brand-red"
                 />
                 <div className="flex-1">
@@ -1446,6 +1506,51 @@ function CheckoutPageInner() {
                 </div>
               </label>
 
+              {emiEligible && (
+                <label
+                  className={
+                    payment === "emi"
+                      ? "rounded-xl border border-brand-red p-4 cursor-pointer ring-2 ring-brand-red bg-brand-red-soft flex items-start gap-3"
+                      : "rounded-xl border border-brand-line p-4 cursor-pointer flex items-start gap-3"
+                  }
+                >
+                  <input
+                    type="radio"
+                    name="payment"
+                    checked={payment === "emi"}
+                    onChange={() => {
+                      setPayment("emi");
+                      trackFunnel("payment_method_selected", { method: "EMI" });
+                    }}
+                    className="mt-1 accent-brand-red"
+                  />
+                  <div className="flex-1 flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-brand-ink">
+                          Pay in EMI
+                        </span>
+                        <span className="bg-brand-ink text-white text-xs px-2 py-0.5 rounded-full">
+                          No-Cost EMI
+                        </span>
+                      </div>
+                      <div className="text-sm text-brand-ink-soft mt-1">
+                        Credit / Debit card EMI · pick your bank & tenure in the
+                        next step
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="font-bold text-brand-ink tabular-nums">
+                        {formatINR(emiMonthly)}
+                      </div>
+                      <div className="text-[10px] font-mono uppercase tracking-wider text-brand-ink-soft mt-0.5">
+                        /mo × {EMI.tenureMonths}
+                      </div>
+                    </div>
+                  </div>
+                </label>
+              )}
+
               <label
                 className={
                   codDisabled
@@ -1459,7 +1564,10 @@ function CheckoutPageInner() {
                   type="radio"
                   name="payment"
                   checked={payment === "cod"}
-                  onChange={() => setPayment("cod")}
+                  onChange={() => {
+                    setPayment("cod");
+                    trackFunnel("payment_method_selected", { method: "COD" });
+                  }}
                   disabled={codDisabled}
                   className="mt-1 accent-brand-red"
                 />
@@ -1503,7 +1611,7 @@ function CheckoutPageInner() {
                 Secure
               </span>
               <span aria-hidden>·</span>
-              <span>UPI · Cards · Net Banking</span>
+              <span>UPI · Cards · {emiEligible ? "EMI · " : ""}Net Banking</span>
               <span aria-hidden>·</span>
               <span>Razorpay</span>
             </div>

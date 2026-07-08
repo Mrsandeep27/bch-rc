@@ -16,7 +16,7 @@ export default function RelatedProducts16({ currentSlug }: { currentSlug: string
   if (others.length === 0) return null;
 
   return (
-    <section className="border-t border-brand-line bg-brand-cream py-10 sm:py-14">
+    <section className="border-t border-brand-line bg-brand-cream py-7 sm:py-14">
       <div className="mx-auto max-w-7xl px-5 sm:px-10">
         <div className="mb-6 text-center sm:mb-8">
           <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-brand-red">

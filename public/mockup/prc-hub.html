@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PRC Cars — Main Landing (Hub)</title>
+<meta name="robots" content="noindex" />
+<!--
+  PRC main landing HUB mockup. Job: (1) route cold traffic into the right store
+  (Mini / 1:16 / …), (2) capture leads (spin-wheel) for telecalling.
+  Image-heavy per sir. All visuals = placeholders (Alok's media slots in).
+  Flow: Hero split → Trust → Categories → Highest Drifted → Drift video →
+  Perfect gift → Good humans → Toy vs PRC → Reviews → Why us → Build-your-own → Specialist footer.
+-->
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = { theme: { extend: {
+    colors: { red:{DEFAULT:'#e11d2a',dark:'#c4151f',soft:'#fdecec'}, ink:{DEFAULT:'#0a0a0a',soft:'#3a3a3a'}, cream:'#faf8f5', gold:'#f59e0b' },
+    fontFamily: { display:['Archivo','system-ui','sans-serif'], sans:['system-ui','sans-serif'], mono:['"JetBrains Mono"','monospace'] }
+  } } };
+</script>
+<style>
+  body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif}
+  .font-display{font-family:'Archivo',sans-serif;letter-spacing:-.02em}
+  .font-mono{font-family:'JetBrains Mono',monospace}
+  .ph{background-image:repeating-linear-gradient(45deg,#efefef,#efefef 9px,#e4e4e4 9px,#e4e4e4 18px);
+      display:grid;place-items:center;color:#9a9a9a;font-size:11px;font-weight:600;letter-spacing:.03em;text-align:center;padding:6px}
+  .ph-dark{background-image:repeating-linear-gradient(45deg,#161616,#161616 9px,#1f1f1f 9px,#1f1f1f 18px);color:#666}
+  @keyframes marq{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+  .marq{animation:marq 22s linear infinite;white-space:nowrap;display:inline-flex}
+  .no-sb::-webkit-scrollbar{display:none}.no-sb{scrollbar-width:none}
+  #wheelModal{transition:opacity .3s}#wheelModal.hidden{opacity:0;pointer-events:none}
+  .wheel-wrap{width:280px;height:280px}@media(max-width:380px){.wheel-wrap{width:240px;height:240px}}
+  #wheelSpin{transition:transform 4.2s cubic-bezier(.15,.66,.13,1)}
+  .lbl{position:absolute;inset:0;display:flex;align-items:flex-start;justify-content:center}
+  .lbl span{margin-top:17px;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:#fff;text-transform:uppercase;text-shadow:0 1px 3px rgba(0,0,0,.45);white-space:nowrap}
+  #stickyBuy{transform:translateY(120%);transition:transform .3s}#stickyBuy.show{transform:translateY(0)}
+</style>
+</head>
+<body class="bg-white text-ink">
+
+<!-- toolbar (mockup only) -->
+<div class="fixed right-2 top-2 z-[100] flex gap-2">
+  <button onclick="resetAndOpen()" class="rounded-full bg-red px-3 py-1.5 font-mono text-[11px] font-bold uppercase text-white shadow hover:bg-red-dark">🎡 Replay wheel</button>
+</div>
+
+<!-- 0 · announcement bar -->
+<div class="bg-ink text-white">
+  <div class="overflow-hidden py-2 text-[12px] font-semibold uppercase tracking-wide">
+    <div class="marq">
+      <span class="px-6">🚚 Free delivery on every order</span><span class="px-6 text-red">💳 Pay online → save ₹300</span><span class="px-6">🔁 7-day replacement</span><span class="px-6">💵 COD pan-India</span><span class="px-6">🇮🇳 Made in India</span>
+      <span class="px-6">🚚 Free delivery on every order</span><span class="px-6 text-red">💳 Pay online → save ₹300</span><span class="px-6">🔁 7-day replacement</span><span class="px-6">💵 COD pan-India</span><span class="px-6">🇮🇳 Made in India</span>
+    </div>
+  </div>
+</div>
+
+<!-- 1 · header -->
+<header class="sticky top-0 z-40 border-b border-gray-200 bg-white/95 backdrop-blur">
+  <div class="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6">
+    <div class="flex items-center gap-2">
+      <span class="grid h-9 w-9 place-items-center rounded-lg bg-red font-black text-white">PRC</span>
+      <span class="font-display text-lg font-extrabold">PRC CARS</span>
+    </div>
+    <nav class="ml-auto hidden items-center gap-6 font-mono text-[12px] font-semibold uppercase text-ink md:flex">
+      <a href="#cats" class="hover:text-red">Shop by size</a>
+      <a href="#drifted" class="hover:text-red">Best sellers</a>
+      <a href="#why" class="hover:text-red">Why PRC</a>
+      <a href="#specialist" class="hover:text-red">Talk to us</a>
+    </nav>
+    <div class="ml-auto flex items-center gap-3 md:ml-0">
+      <a href="#" class="hidden rounded-full bg-[#25d366] px-3 py-1.5 text-[12px] font-bold text-white sm:block">WhatsApp</a>
+      <a href="#" class="relative text-xl">🛒<span class="absolute -right-2 -top-2 grid h-4 w-4 place-items-center rounded-full bg-red text-[10px] font-bold text-white">0</span></a>
+    </div>
+  </div>
+</header>
+
+<!-- 2 · HERO SPLIT — Mini | 1:16 -->
+<section class="mx-auto max-w-[1400px]">
+  <div class="grid gap-1 sm:grid-cols-2">
+    <!-- Mini RC -->
+    <a href="#" class="group relative block overflow-hidden bg-ink text-white">
+      <div class="ph ph-dark aspect-[4/5] w-full sm:aspect-[4/3]">Mini RC hero image<br>(landscape desktop · AI portrait phone)</div>
+      <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent"></div>
+      <div class="absolute inset-x-0 bottom-0 p-6 sm:p-8">
+        <span class="font-mono text-[11px] uppercase tracking-widest text-red">1:64 Pocket</span>
+        <h2 class="mt-1 font-display text-3xl font-extrabold sm:text-4xl">Mini RC Drift</h2>
+        <p class="mt-1 text-white/80">Pocket-size, impulse-fun. From <b>₹999</b>.</p>
+        <span class="mt-4 inline-flex items-center gap-2 rounded-full bg-red px-6 py-3 font-bold group-hover:bg-red-dark">Shop Now →</span>
+      </div>
+    </a>
+    <!-- 1:16 -->
+    <a href="#" class="group relative block overflow-hidden bg-ink text-white">
+      <div class="ph ph-dark aspect-[4/5] w-full sm:aspect-[4/3]">1:16 hero image<br>(landscape desktop · AI portrait phone)</div>
+      <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent"></div>
+      <div class="absolute inset-x-0 bottom-0 p-6 sm:p-8">
+        <span class="font-mono text-[11px] uppercase tracking-widest text-red">1:16 Big Series</span>
+        <h2 class="mt-1 font-display text-3xl font-extrabold sm:text-4xl">Send it Sideways</h2>
+        <p class="mt-1 text-white/80">Big-series, 4WD, proportional steer. From <b>₹2,899</b>.</p>
+        <span class="mt-4 inline-flex items-center gap-2 rounded-full bg-red px-6 py-3 font-bold group-hover:bg-red-dark">Shop Now →</span>
+      </div>
+    </a>
+  </div>
+  <!-- moving usage text on hero (sir: 4 lines R→L) -->
+  <div class="overflow-hidden bg-red py-2.5 text-white">
+    <div class="marq text-[13px] font-semibold">
+      <span class="px-8">🏎️ Real 4WD drift — slide it like the movies</span><span class="px-8">⚡ USB-C charge · back on the floor in minutes</span><span class="px-8">🎮 Full proportional steering — you control every slide</span><span class="px-8">🛡️ Rubber tyres + lifetime warranty</span>
+      <span class="px-8">🏎️ Real 4WD drift — slide it like the movies</span><span class="px-8">⚡ USB-C charge · back on the floor in minutes</span><span class="px-8">🎮 Full proportional steering — you control every slide</span><span class="px-8">🛡️ Rubber tyres + lifetime warranty</span>
+    </div>
+  </div>
+</section>
+
+<!-- 3 · trust strip -->
+<section class="border-b border-gray-200 bg-white">
+  <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-6 gap-y-2 px-4 py-3 text-center text-[13px] font-medium text-ink-soft sm:px-6">
+    <span class="font-bold text-ink"><span class="text-gold">★</span> 4.8</span><span class="text-gray-300">|</span>
+    <span>12,000+ orders across India</span><span class="text-gray-300">|</span>
+    <span>Ships in 24h from Bangalore</span><span class="text-gray-300">|</span>
+    <span class="flex items-center gap-1.5">
+      <span class="rounded bg-cream px-1.5 py-0.5 font-mono text-[10px] ring-1 ring-gray-200">UPI</span>
+      <span class="rounded bg-cream px-1.5 py-0.5 font-mono text-[10px] ring-1 ring-gray-200">RuPay</span>
+      <span class="rounded bg-cream px-1.5 py-0.5 font-mono text-[10px] ring-1 ring-gray-200">Cards</span>
+      <span class="rounded bg-cream px-1.5 py-0.5 font-mono text-[10px] ring-1 ring-gray-200">COD</span>
+    </span>
+  </div>
+</section>
+
+<!-- 4 · CATEGORY SECTION (2 imgs + Visit Virtual Store) -->
+<section id="cats" class="mx-auto max-w-7xl px-4 py-14 sm:px-6">
+  <div class="mb-8 text-center">
+    <span class="font-mono text-[11px] uppercase tracking-[0.25em] text-red">Shop by size</span>
+    <h2 class="mt-2 font-display text-3xl font-extrabold sm:text-4xl">Pick your scale.</h2>
+    <p class="mx-auto mt-2 max-w-md text-ink-soft">Each size = its own virtual store. Tap in.</p>
+  </div>
+  <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3" id="catGrid"></div>
+</section>
+
+<!-- 5 · HIGHEST DRIFTED (best sellers) -->
+<section id="drifted" class="bg-gray-50 py-14">
+  <div class="mx-auto max-w-7xl px-4 sm:px-6">
+    <div class="mb-8 text-center">
+      <span class="font-mono text-[11px] uppercase tracking-[0.25em] text-red">Most drifted</span>
+      <h2 class="mt-2 font-display text-3xl font-extrabold sm:text-4xl">Highest Drifted Cars 🏁</h2>
+      <p class="mx-auto mt-2 max-w-md text-ink-soft">The best from every size — our top-selling machines.</p>
+    </div>
+    <div class="grid grid-cols-2 gap-4 sm:grid-cols-4" id="prodGrid"></div>
+    <!-- AI showcase row (3 AI images from you) -->
+    <div class="mt-6 grid grid-cols-3 gap-4">
+      <div class="ph aspect-video rounded-2xl">AI showcase 1</div>
+      <div class="ph aspect-video rounded-2xl">AI showcase 2</div>
+      <div class="ph aspect-video rounded-2xl">AI showcase 3</div>
+    </div>
+  </div>
+</section>
+
+<!-- 6 · DRIFT VIDEO (from Alok) -->
+<section class="bg-ink py-14 text-white">
+  <div class="mx-auto max-w-4xl px-4 text-center sm:px-6">
+    <span class="font-mono text-[11px] uppercase tracking-[0.25em] text-red">See it move</span>
+    <h2 class="mt-2 font-display text-3xl font-extrabold sm:text-4xl">It really drifts.</h2>
+    <div class="mx-auto mt-6 grid aspect-video max-w-2xl place-items-center rounded-2xl ph ph-dark">
+      <div class="flex flex-col items-center gap-2"><div class="grid h-16 w-16 place-items-center rounded-full bg-red text-2xl">▶</div><span class="font-mono text-[11px] uppercase tracking-widest text-white/60">Alok's real drift video here</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- (Perfect-gift & Are-we-good-humans sections removed per request) -->
+
+<!-- 9 · TOY vs PRC (lifetime warranty) -->
+<section class="mx-auto max-w-6xl px-4 py-14 sm:px-6">
+  <div class="mb-8 text-center">
+    <span class="font-mono text-[11px] uppercase tracking-[0.25em] text-red">Not a ₹800 toy</span>
+    <h2 class="mt-2 font-display text-3xl font-extrabold sm:text-4xl">Cheap toy vs PRC.</h2>
+  </div>
+  <div class="grid gap-4 md:grid-cols-2">
+    <div class="rounded-3xl border border-gray-200 p-6">
+      <div class="ph aspect-video mb-4 rounded-xl">₹800 plastic toy photo</div>
+      <div class="font-display text-xl font-bold text-gray-500">₹800 Market Toy</div>
+      <ul class="mt-3 space-y-1.5 text-sm text-gray-500">
+        <li>✖ Breaks in a week</li><li>✖ On/off steering only</li><li>✖ Hard plastic tyres</li><li>✖ No warranty, no support</li><li>✖ Nobody to call</li>
+      </ul>
+    </div>
+    <div class="rounded-3xl border-2 border-red bg-red-soft p-6">
+      <div class="ph aspect-video mb-4 rounded-xl">PRC car photo</div>
+      <div class="font-display text-xl font-bold text-red">PRC Cars</div>
+      <ul class="mt-3 space-y-1.5 text-sm font-medium text-ink">
+        <li>✔ <b>Lifetime service warranty</b></li><li>✔ Full proportional 4WD steer</li><li>✔ Real rubber drift tyres</li><li>✔ 7-day replacement + genuine spares</li><li>✔ Real humans in Bangalore to call</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 10 · REVIEWS -->
+<section class="bg-gray-50 py-14">
+  <div class="mx-auto max-w-7xl px-4 sm:px-6">
+    <div class="mb-8 text-center">
+      <div class="text-gold">★★★★★</div>
+      <h2 class="mt-1 font-display text-3xl font-extrabold sm:text-4xl">Trusted by real drifters.</h2>
+      <p class="mt-2 text-ink-soft">★ 4.8 from 1,200+ owners across India.</p>
+    </div>
+    <div class="flex gap-4 overflow-x-auto no-sb" id="revRail"></div>
+  </div>
+</section>
+
+<!-- 11 · WHY PRC (differentiators) -->
+<section id="why" class="mx-auto max-w-7xl px-4 py-14 sm:px-6">
+  <div class="mb-8 text-center"><h2 class="font-display text-3xl font-extrabold sm:text-4xl">Why buy from PRC?</h2></div>
+  <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+    <div class="rounded-2xl border border-gray-200 p-5 text-center"><div class="text-3xl">🛡️</div><div class="mt-2 font-bold">Lifetime Warranty</div><div class="text-[13px] text-gray-500">Service-backed, not a toy</div></div>
+    <div class="rounded-2xl border border-gray-200 p-5 text-center"><div class="text-3xl">🇮🇳</div><div class="mt-2 font-bold">Made in India</div><div class="text-[13px] text-gray-500">Packed & shipped from Bangalore</div></div>
+    <div class="rounded-2xl border border-gray-200 p-5 text-center"><div class="text-3xl">💬</div><div class="mt-2 font-bold">Real Support</div><div class="text-[13px] text-gray-500">WhatsApp real humans</div></div>
+    <div class="rounded-2xl border border-gray-200 p-5 text-center"><div class="text-3xl">💵</div><div class="mt-2 font-bold">COD + Free Ship</div><div class="text-[13px] text-gray-500">Pay online, save ₹300</div></div>
+  </div>
+</section>
+
+<!-- 12 · BUILD YOUR OWN PRC (coming soon) -->
+<section class="mx-auto max-w-6xl px-4 pb-14 sm:px-6">
+  <div class="relative overflow-hidden rounded-3xl bg-ink p-8 text-center text-white">
+    <span class="font-mono text-[11px] uppercase tracking-[0.25em] text-red">Coming soon</span>
+    <h2 class="mt-2 font-display text-3xl font-extrabold sm:text-4xl">Build your own PRC 🛠️</h2>
+    <p class="mx-auto mt-2 max-w-md text-white/70">Pick the body, the livery, the wheels — design your own drift car. Dropping soon.</p>
+    <button class="mt-5 rounded-full border border-white/30 px-6 py-3 font-bold hover:bg-white/10">Notify me when it's live</button>
+  </div>
+</section>
+
+<!-- 13 · FOOTER — talk to a specialist -->
+<footer id="specialist" class="bg-[#0f0f0f] text-white/70">
+  <div class="mx-auto max-w-6xl px-4 py-12 text-center sm:px-6">
+    <span class="font-mono text-[11px] uppercase tracking-[0.25em] text-red">Still deciding?</span>
+    <h2 class="mt-2 font-display text-3xl font-extrabold text-white sm:text-4xl">Talk to a PRC specialist.</h2>
+    <p class="mx-auto mt-2 max-w-md">Not sure which car? Message a real human — we'll help you pick in 2 minutes.</p>
+    <div class="mt-5 flex flex-wrap justify-center gap-3">
+      <a href="#" class="rounded-full bg-[#25d366] px-6 py-3 font-bold text-white">💬 WhatsApp us</a>
+      <a href="#" class="rounded-full border border-white/30 px-6 py-3 font-bold text-white">📞 Call the specialist</a>
+    </div>
+  </div>
+  <div class="border-t border-white/10">
+    <div class="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:grid-cols-2 sm:px-6 lg:grid-cols-4">
+      <div><div class="flex items-center gap-2 text-white"><span class="grid h-8 w-8 place-items-center rounded-lg bg-red font-black">PRC</span><span class="font-display font-extrabold">PRC CARS</span></div><p class="mt-3 text-sm">India's hobby-grade RC drift cars. Built to send it.</p></div>
+      <div><div class="font-mono text-[11px] font-bold uppercase tracking-widest text-white/40">Shop</div><ul class="mt-3 space-y-1.5 text-sm"><li>1:64 Pocket</li><li>1:16 Big Series</li><li>Best Sellers</li><li>New Arrivals</li></ul></div>
+      <div><div class="font-mono text-[11px] font-bold uppercase tracking-widest text-white/40">Help</div><ul class="mt-3 space-y-1.5 text-sm"><li>Track Order</li><li>7-day Replacement</li><li>Lifetime Warranty</li><li>Contact</li></ul></div>
+      <div><div class="font-mono text-[11px] font-bold uppercase tracking-widest text-white/40">Pay with</div><div class="mt-3 flex flex-wrap gap-2 font-mono text-[11px]"><span class="rounded bg-white/10 px-2 py-1">UPI</span><span class="rounded bg-white/10 px-2 py-1">RuPay</span><span class="rounded bg-white/10 px-2 py-1">Cards</span><span class="rounded bg-white/10 px-2 py-1">COD</span></div></div>
+    </div>
+    <div class="mx-auto max-w-7xl border-t border-white/10 px-4 py-5 text-xs text-white/40 sm:px-6">© 2026 PRC Cars · A Pocket RC Cars brand · Bangalore</div>
+  </div>
+</footer>
+
+<!-- sticky mobile CTA -->
+<div id="stickyBuy" class="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 p-3 shadow-[0_-8px_30px_rgba(0,0,0,.12)] backdrop-blur sm:hidden">
+  <div class="flex items-center justify-between gap-3">
+    <div class="text-sm font-bold">Pick your scale →</div>
+    <div class="flex gap-2">
+      <a href="#cats" class="rounded-full border border-red px-4 py-2 text-sm font-bold text-red">Mini ₹999</a>
+      <a href="#cats" class="rounded-full bg-red px-4 py-2 text-sm font-bold text-white">1:16 ₹2,899</a>
+    </div>
+  </div>
+</div>
+<a href="#" title="WhatsApp" class="fixed bottom-20 right-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-[#25d366] text-2xl text-white shadow-xl sm:bottom-5">💬</a>
+
+<!-- SPIN-TO-WIN (lead capture on the hub) -->
+<div id="wheelModal" class="hidden fixed inset-0 z-[90] grid place-items-center bg-black/70 p-4 backdrop-blur-sm">
+  <div class="relative w-full max-w-sm overflow-hidden rounded-3xl bg-white p-6 text-center shadow-2xl">
+    <button onclick="closeWheel()" class="absolute right-3 top-3 z-30 grid h-8 w-8 place-items-center rounded-full bg-ink/5 text-ink-soft hover:bg-ink/10">✕</button>
+    <div id="wStep1">
+      <div class="font-mono text-[11px] uppercase tracking-widest text-red">Before you go…</div>
+      <h3 class="mt-1 font-display text-2xl font-extrabold">Spin to win 🎡</h3>
+      <p class="mt-1 text-sm text-ink-soft">One spin, one prize. Unlock it with your number.</p>
+      <div class="relative mx-auto my-5 wheel-wrap">
+        <div class="absolute left-1/2 top-[-4px] z-20 h-0 w-0 -translate-x-1/2" style="border-left:11px solid transparent;border-right:11px solid transparent;border-top:19px solid #0a0a0a"></div>
+        <div id="wheelSpin" class="absolute inset-0 rounded-full ring-4 ring-ink shadow-xl" style="background:conic-gradient(#e11d2a 0 60deg,#0a0a0a 60deg 120deg,#e11d2a 120deg 180deg,#0a0a0a 180deg 240deg,#e11d2a 240deg 300deg,#0a0a0a 300deg 360deg)"></div>
+        <div class="absolute left-1/2 top-1/2 z-10 grid h-11 w-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-lg ring-4 ring-ink">🏁</div>
+      </div>
+      <button onclick="spin()" id="spinBtn" class="w-full rounded-full bg-red px-6 py-3.5 font-bold text-white shadow-lg hover:bg-red-dark active:scale-95">SPIN</button>
+    </div>
+    <div id="wStep2" class="hidden">
+      <div class="text-4xl">🎉</div><h3 class="mt-2 font-display text-2xl font-extrabold">You won <span class="text-red">25% OFF!</span></h3>
+      <p class="mt-1 text-sm text-ink-soft">Drop your number — we'll unlock your code.</p>
+      <form onsubmit="unlock(event)" class="mt-4 space-y-3 text-left">
+        <div class="flex items-center rounded-xl border border-gray-200 focus-within:border-red"><span class="pl-3 font-mono text-ink-soft">+91</span>
+          <input required type="tel" pattern="[0-9]{10}" maxlength="10" placeholder="10-digit mobile" class="w-full bg-transparent px-3 py-3 font-mono text-lg outline-none"></div>
+        <label class="flex items-start gap-2 text-[12px] text-ink-soft"><input required type="checkbox" class="mt-0.5"><span>Send my code &amp; updates on WhatsApp/call.</span></label>
+        <button class="w-full rounded-full bg-red px-6 py-3.5 font-bold text-white hover:bg-red-dark">Unlock my 25% →</button>
+      </form>
+      <p class="mt-3 text-[11px] text-ink-soft">Valid on your first order over ₹4,999 (≈ 2 cars) · max ₹900 off · 48 hrs.</p>
+    </div>
+    <div id="wStep3" class="hidden">
+      <div class="text-4xl">✅</div><h3 class="mt-2 font-display text-2xl font-extrabold">Unlocked!</h3>
+      <p class="mt-1 text-sm text-ink-soft">Copy this code — we've WhatsApp'd it too.</p>
+      <div class="my-4 rounded-xl border-2 border-dashed border-red bg-red-soft px-4 py-3 font-mono text-2xl font-extrabold tracking-[0.2em] text-red">SPIN25</div>
+      <a href="#cats" onclick="closeWheel()" class="mt-2 inline-flex w-full items-center justify-center rounded-full bg-red px-6 py-3.5 font-bold text-white hover:bg-red-dark">Shop now →</a>
+    </div>
+  </div>
+</div>
+
+<script>
+  const inr=n=>'₹'+Number(n).toLocaleString('en-IN');
+
+  // categories — 2 image slots + Visit Virtual Store
+  const cats=[
+    {name:'1:64 Pocket',from:'₹999',badge:'Live'},
+    {name:'1:16 Big Series',from:'₹2,899',badge:'Live'},
+    {name:'1:24 Scale',from:'from ₹— (confirm)',badge:'Soon'},
+    {name:'1:43 Scale',from:'from ₹— (confirm)',badge:'Soon'},
+    {name:'Hobby Grade',from:'from ₹— (confirm)',badge:'Soon'},
+    {name:'Bundles',from:'Save more',badge:'Live'},
+  ];
+  document.getElementById('catGrid').innerHTML=cats.map(c=>`
+    <div class="group overflow-hidden rounded-3xl border border-gray-200 bg-white transition hover:shadow-lg">
+      <div class="grid grid-cols-2 gap-1">
+        <div class="ph aspect-square">${c.name} img 1</div>
+        <div class="ph aspect-square">${c.name} img 2 / 2-sec drift GIF</div>
+      </div>
+      <div class="p-4 text-center">
+        <div class="flex items-center justify-center gap-2"><span class="font-display text-lg font-extrabold">${c.name}</span>
+          <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${c.badge==='Live'?'bg-green-100 text-green-700':'bg-gray-100 text-gray-500'}">${c.badge}</span></div>
+        <div class="mt-0.5 font-mono text-xs uppercase tracking-wide text-ink-soft">${c.from}</div>
+        <a href="#" class="mt-3 inline-flex w-full items-center justify-center rounded-full bg-ink px-4 py-2.5 text-sm font-bold text-white group-hover:bg-red">Visit virtual store →</a>
+      </div>
+    </div>`).join('');
+
+  // highest drifted — best from all sizes
+  const prods=[
+    ['PRC Dares Azure — 1:16 Pro',3299,4999],
+    ['PRC Drift Inferno — 1:16',2699,3999],
+    ['PRC Pocket Pro — 1:64',1299,1999],
+    ['PRC Drift Phantom — 1:16',2699,3999],
+  ];
+  const off=(p,m)=>Math.round((1-p/m)*100);
+  document.getElementById('prodGrid').innerHTML=prods.map(([n,p,m],i)=>`
+    <div class="group overflow-hidden rounded-2xl border border-gray-200 bg-white transition hover:shadow-lg">
+      <div class="relative"><div class="ph aspect-square">Product image</div>
+        <span class="absolute left-2 top-2 rounded-full bg-ink px-2 py-0.5 text-[11px] font-bold text-white">${off(p,m)}% OFF</span>
+        ${i===0?'<span class="absolute right-2 top-2 rounded-full bg-red px-2 py-0.5 text-[11px] font-bold text-white">#1 Drifted</span>':''}</div>
+      <div class="p-3"><div class="text-[12px] text-gold">★★★★★ <span class="text-gray-400">(${240-i*40})</span></div>
+        <h3 class="mt-1 min-h-[2.5rem] text-sm font-bold leading-snug">${n}</h3>
+        <div class="mt-1 flex items-baseline gap-2"><span class="text-lg font-extrabold">${inr(p)}</span><span class="text-sm text-gray-400 line-through">${inr(m)}</span></div>
+        <button class="mt-3 w-full rounded-full bg-red px-3 py-2 text-sm font-bold text-white hover:bg-red-dark">Add to cart</button></div>
+    </div>`).join('');
+
+  // reviews
+  const revs=[['Rahul, Bengaluru','Proportional steer is a different league. COD made it easy to trust.'],
+    ['Amit, Delhi','Full kit in the box — spares, cones, USB-C. Replacement was hassle-free.'],
+    ['Sneha, Pune','Bought it for my brother. Way above marketplace toys.'],
+    ['Vikram, Chennai','Drifts like crazy on the tiles. My son is obsessed.']];
+  document.getElementById('revRail').innerHTML=revs.map(([w,t])=>`
+    <div class="w-72 shrink-0 rounded-2xl bg-white p-5 shadow-sm">
+      <div class="text-gold">★★★★★</div><p class="mt-2 text-sm text-gray-700">"${t}"</p>
+      <div class="mt-3 flex items-center gap-2"><span class="ph h-9 w-9 rounded-full"></span><span class="text-sm font-bold">${w}</span></div>
+    </div>`).join('');
+
+  // spin wheel
+  const SEG=['25% OFF','₹200 OFF','FREE CONES','5% OFF','FREE TYRES','₹100 OFF'];
+  const spinEl=document.getElementById('wheelSpin');
+  spinEl.insertAdjacentHTML('beforeend',SEG.map((s,i)=>`<div class="lbl" style="transform:rotate(${i*60+30}deg)"><span>${s}</span></div>`).join(''));
+  let spun=false;
+  function openWheel(){document.getElementById('wheelModal').classList.remove('hidden')}
+  function closeWheel(){document.getElementById('wheelModal').classList.add('hidden');try{localStorage.setItem('prc_hub_wheel','1')}catch(e){}}
+  function spin(){if(spun)return;spun=true;const b=document.getElementById('spinBtn');b.disabled=true;b.textContent='Spinning…';b.classList.add('opacity-60');
+    spinEl.style.transform=`rotate(${360*6+(360-30)}deg)`;
+    setTimeout(()=>{document.getElementById('wStep1').classList.add('hidden');document.getElementById('wStep2').classList.remove('hidden')},4400);}
+  function unlock(e){e.preventDefault();document.getElementById('wStep2').classList.add('hidden');document.getElementById('wStep3').classList.remove('hidden')}
+  function resetAndOpen(){spun=false;spinEl.style.transition='none';spinEl.style.transform='rotate(0deg)';
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{spinEl.style.transition=''}));
+    document.getElementById('wStep1').classList.remove('hidden');document.getElementById('wStep2').classList.add('hidden');document.getElementById('wStep3').classList.add('hidden');
+    const b=document.getElementById('spinBtn');b.disabled=false;b.textContent='SPIN';b.classList.remove('opacity-60');openWheel();}
+  setTimeout(()=>{try{if(!localStorage.getItem('prc_hub_wheel'))openWheel()}catch(e){openWheel()}},8000);
+
+  // sticky mobile CTA
+  addEventListener('scroll',()=>document.getElementById('stickyBuy').classList.toggle('show',scrollY>innerHeight*0.9),{passive:true});
+</script>
+</body>
+</html>

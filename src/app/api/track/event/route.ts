@@ -12,6 +12,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { recordFunnelEvents, type FunnelEventInput } from "@/lib/funnel-server";
 import { MAX_FUNNEL_BATCH } from "@/lib/funnel-events";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +20,12 @@ export const dynamic = "force-dynamic";
 type Body = { events?: FunnelEventInput[] };
 
 export async function POST(req: NextRequest) {
+  // Shed floods that would bloat funnel_events. Silent 204 keeps the
+  // "never surface an error to the page" telemetry contract. Generous cap so
+  // real batched browsing is never throttled.
+  const limited = rateLimit(req, { scope: "track:event", limit: 120, silent: true });
+  if (limited) return limited;
+
   let body: Body;
   try {
     // sendBeacon sends as text/plain; parse defensively regardless of header.

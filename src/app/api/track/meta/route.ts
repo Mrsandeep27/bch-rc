@@ -22,6 +22,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createHash } from "node:crypto";
 import { logError } from "@/lib/logger";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -69,6 +70,11 @@ function normalisePhone(raw: string): string {
 }
 
 export async function POST(req: NextRequest) {
+  // Cap per-IP so the configured CAPI relay can't be driven to flood Meta with
+  // fabricated conversions. Silent 204 keeps the best-effort telemetry contract.
+  const limited = rateLimit(req, { scope: "track:meta", limit: 120, silent: true });
+  if (limited) return limited;
+
   const pixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID;
   const token = process.env.META_CAPI_TOKEN;
   // Both must be set or we silently no-op. Lets us merge this code today

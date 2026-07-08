@@ -120,6 +120,13 @@
       "when": 1781470800000,
       "tag": "0016_checkout_leads",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1783535400000,
+      "tag": "0017_enable_rls_late_tables",
+      "breakpoints": true
     }
   ]
 }

@@ -1,44 +1,16 @@
 /**
- * Seed inventory for the 1:16 "Big" series (the /16 storefront) at 25 units
- * each. Colourless SKUs → variant_slug = ''. Idempotent (ON CONFLICT DO
- * NOTHING) so re-running never clobbers stock already decremented by orders.
+ * DEPRECATED (2026-07-08) — ONE single inventory now.
  *
- * Usage: `npx tsx src/db/seed-inventory-16.ts`
+ * The 1:16 store's separate "prc16" inventory keyspace is gone: all rows were
+ * re-keyed to site_id "prc" and every scale seeds from the one catalog-driven
+ * seeder. Running the old version of this script would have recreated prc16
+ * rows that nothing reads and the admin health page can't see.
+ *
+ * Use instead: `npm run db:seed-inventory` (src/db/seed-inventory.ts).
  */
 
-import { sql } from "drizzle-orm";
-import { db } from ".";
-import { inventory } from "./schema";
-import { getStore16Skus } from "../lib/products";
-
-const SITE_ID = "prc16";
-const STOCK = 25;
-
-async function main() {
-  let inserted = 0;
-  let skipped = 0;
-
-  for (const sku of getStore16Skus()) {
-    const result = await db
-      .insert(inventory)
-      .values({ siteId: SITE_ID, skuId: sku.id, variantSlug: "", stock: STOCK })
-      .onConflictDoNothing()
-      .returning({ skuId: inventory.skuId });
-    if (result.length > 0) {
-      inserted++;
-      console.log(`  + ${sku.id} stock=${STOCK}`);
-    } else {
-      skipped++;
-      console.log(`  = ${sku.id} (already seeded — unchanged)`);
-    }
-  }
-
-  console.log(`\nSeeded 1:16 inventory: ${inserted} new, ${skipped} unchanged.`);
-  await db.execute(sql`SELECT 1`);
-  process.exit(0);
-}
-
-main().catch((err) => {
-  console.error("seed-inventory-16 failed:", err instanceof Error ? err.message : err);
-  process.exit(1);
-});
+console.error(
+  "seed-inventory-16 is deprecated: inventory is single-site ('prc') now.\n" +
+    "Run `npm run db:seed-inventory` instead — it seeds every scale, 1:16 included.",
+);
+process.exit(1);

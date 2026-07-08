@@ -2,11 +2,16 @@
  * POST /api/track — first-party pageview ingestion.
  *
  * Called SERVER-TO-SERVER by the edge middleware (never by the browser), so
- * ad-blockers can't intercept it. One UPSERT per pageview into
- * analytics_sessions: a new session row on first hit, then last_seen_at +
- * pageview_count bumps for the rest of the 30-min window. First-touch
- * attribution (source/referrer/utm) is set only on insert and never
- * overwritten.
+ * ad-blockers can't intercept it. The middleware fires this ONCE per session —
+ * on session start — to INSERT the session row with first-touch attribution
+ * (source/referrer/utm, set only on insert and never overwritten). This is the
+ * ad-blocker-proof, dashboard-of-record signal.
+ *
+ * Per-navigation liveness (last_seen_at) and the pageview tally are bumped
+ * separately by the batched /api/track/event handler (recordFunnelEvents), so
+ * an engaged visit costs one server round-trip at the start rather than one per
+ * navigation. The ON CONFLICT branch below still bumps last_seen_at /
+ * pageview_count defensively for the rare case the same sid is re-inserted.
  *
  * This endpoint is best-effort: it must never throw back to the middleware
  * (which is in the critical path of every page load). All failures are logged

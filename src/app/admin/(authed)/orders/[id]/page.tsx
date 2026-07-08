@@ -147,7 +147,7 @@ export default async function AdminOrderDetail({
                 const cartQty = items.reduce((n, i) => n + i.qty, 0);
                 const prepaidBonus =
                   order.paymentMethod !== "COD" ? OFFERS.prepaidDiscountINR : 0;
-                const bundleBonus = bundleDiscountInr(cartQty);
+                const bundleBonus = bundleDiscountInr(cartQty, order.subtotalInr);
                 const bundleName = bundleTierLabel(cartQty);
                 const couponBonus = Math.max(
                   0,

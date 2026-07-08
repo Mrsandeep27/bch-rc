@@ -12,11 +12,17 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { orders } from "@/db/schema";
 import { resolveServiceability } from "@/lib/serviceability";
+import { rateLimit } from "@/lib/rate-limit";
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  // Order IDs are random nanoids, but this is public + unauthenticated, so cap
+  // per-IP to blunt ID enumeration / scraping of order contents.
+  const limited = rateLimit(req, { scope: "orders:get", limit: 60 });
+  if (limited) return limited;
+
   const { id } = await params;
 
   const [order] = await db.select().from(orders).where(eq(orders.id, id));

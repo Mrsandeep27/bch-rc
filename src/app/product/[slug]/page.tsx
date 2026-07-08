@@ -8,12 +8,19 @@ import Footer from "@/components/Footer";
 import PdpFloatingUi from "@/components/PdpFloatingUi";
 import PDPClient from "@/components/PDPClient";
 import { THEME } from "@/lib/theme";
-import { OFFERS } from "@/lib/config";
-import { getReviewAggregateForSku } from "@/lib/reviews";
+import { OFFERS, TRUST } from "@/lib/config";
+import {
+  getApprovedReviewsForSku,
+  getReviewAggregateForSku,
+  type ReviewAggregate,
+} from "@/lib/reviews";
+
+/** Single hub store: all reviews are keyed under the one site id. */
+const REVIEWS_SITE_ID = "prc";
 
 /** Build a Google-readable schema.org @graph blob for a SKU.
  *  Combines Product + BreadcrumbList in one script tag — Google parses both. */
-function productJsonLd(sku: Sku) {
+function productJsonLd(sku: Sku, agg: ReviewAggregate) {
   const url = `https://${THEME.domain}/product/${sku.slug}`;
   const images = [sku.heroImage, ...sku.altImages]
     .filter(Boolean)
@@ -29,6 +36,19 @@ function productJsonLd(sku: Sku) {
     image: images,
     category: "Toys & Games > Remote Control Cars",
     brand: { "@type": "Brand", name: THEME.brandName },
+    // Only publish AggregateRating when real approved reviews exist — Google
+    // penalizes rating markup that isn't backed by on-page reviews.
+    ...(agg.count > 0
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: agg.averageRating.toString(),
+            reviewCount: agg.count.toString(),
+            bestRating: "5",
+            worstRating: "1",
+          },
+        }
+      : {}),
     offers: {
       "@type": "Offer",
       priceCurrency: "INR",
@@ -148,7 +168,20 @@ export default async function ProductPage({
   // exist in the data for admin tooling (manual orders, inventory) but must
   // not be reachable as PDPs - otherwise a stranger who guesses the slug
   // can place a ₹1 COD order that burns ₹180-240 in two-way RTO logistics.
-  if (!sku || sku.hidden || sku.internal) notFound();
+  if (!sku || sku.hidden || sku.internal || sku.comingSoon) notFound();
+
+  // Reviews are keyed under the single hub site. Fetch aggregate +
+  // approved list on the server so the PDP ships with real ratings + JSON-LD.
+  const siteId = REVIEWS_SITE_ID;
+  const [agg, reviewRows] = await Promise.all([
+    getReviewAggregateForSku(siteId, sku.id),
+    getApprovedReviewsForSku(siteId, sku.id, 30),
+  ]);
+  // Serialize Date → ISO string across the server/client boundary.
+  const reviews = reviewRows.map((r) => ({
+    ...r,
+    createdAt: r.createdAt.toISOString(),
+  }));
 
   return (
     <>
@@ -159,7 +192,7 @@ export default async function ProductPage({
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(productJsonLd(sku)).replace(/</g, "\\u003c"),
+          __html: JSON.stringify(productJsonLd(sku, agg)).replace(/</g, "\\u003c"),
         }}
       />
       <AnnouncementBar />
@@ -177,7 +210,12 @@ export default async function ProductPage({
         </div>
       </nav>
       <main className="flex-1 bg-white">
-        <PDPClient sku={sku} />
+        <PDPClient
+          sku={sku}
+          siteId={siteId}
+          reviews={reviews}
+          reviewData={agg}
+        />
       </main>
       <Footer />
       <PdpFloatingUi />

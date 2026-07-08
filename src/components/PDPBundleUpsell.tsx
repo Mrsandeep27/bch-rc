@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Check, Plus } from "lucide-react";
@@ -28,18 +28,24 @@ import { bundleDiscountInr } from "@/lib/config";
  */
 export default function PDPBundleUpsell({ sku }: { sku: Sku }) {
   const router = useRouter();
-  const visible = getVisibleProducts();
-  const pair =
-    visible.find((p) => p.id !== sku.id && p.id === "pocket-porsche") ??
-    visible.find((p) => p.id !== sku.id);
+  const others = getVisibleProducts().filter((p) => p.id !== sku.id);
 
   const [includePair, setIncludePair] = useState(true);
+  // Pair suggestion rotates per visit (random), instead of always Porsche.
+  // Deterministic first-other for SSR, then a random one after mount (no
+  // hydration mismatch).
+  const [pair, setPair] = useState<Sku | null>(others[0] ?? null);
+  useEffect(() => {
+    if (others.length > 0) setPair(others[Math.floor(Math.random() * others.length)]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sku.id]);
 
   if (!pair) return null;
 
-  // Flat 2-car bundle bonus — the exact value checkout subtracts. Price the
-  // pair as (both retails − bonus), never a fixed total.
-  const pairSavings = bundleDiscountInr(2);
+  // 2-car bundle bonus — the exact value checkout subtracts (now a % of the
+  // pair subtotal). Price the pair as (both retails − bonus), never a fixed
+  // total, so the page and the bill always agree.
+  const pairSavings = bundleDiscountInr(2, sku.retailINR + pair.retailINR);
   const singleTotal = sku.retailINR;
   const pairTotal = sku.retailINR + pair.retailINR - pairSavings;
   const finalTotal = includePair ? pairTotal : singleTotal;
@@ -47,18 +53,18 @@ export default function PDPBundleUpsell({ sku }: { sku: Sku }) {
   function addBundle() {
     const cart = useCart.getState();
     cart.add(sku.id, defaultVariantSlug(sku), 1);
-    if (includePair) cart.add(pair!.id, defaultVariantSlug(pair!), 1);
+    if (includePair && pair) cart.add(pair.id, defaultVariantSlug(pair), 1);
     router.push("/checkout");
   }
 
   return (
     <div className="mt-6 border-2 border-brand-red/20 rounded-xl overflow-hidden bg-brand-red/5">
-      <div className="px-4 py-3 bg-brand-red text-white flex items-center justify-between">
+      <div className="px-3 py-2 sm:px-4 sm:py-3 bg-brand-red text-white flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-mono font-bold uppercase tracking-widest bg-white text-brand-red px-2 py-0.5 rounded-full">
             Best Deal
           </span>
-          <span className="text-sm font-bold">
+          <span className="text-[13px] sm:text-sm font-bold">
             Pair it · save {formatINR(pairSavings)}
           </span>
         </div>
@@ -67,10 +73,10 @@ export default function PDPBundleUpsell({ sku }: { sku: Sku }) {
         </span>
       </div>
 
-      <div className="p-4 space-y-3">
+      <div className="p-3 space-y-2.5 sm:p-4 sm:space-y-3">
         {/* This SKU row */}
         <div className="flex items-center gap-3">
-          <div className="relative w-14 h-14 shrink-0 rounded-lg overflow-hidden bg-white border border-brand-line">
+          <div className="relative w-11 h-11 sm:w-14 sm:h-14 shrink-0 rounded-lg overflow-hidden bg-white border border-brand-line">
             <Image
               src={sku.heroImage}
               alt={sku.name}
@@ -106,7 +112,7 @@ export default function PDPBundleUpsell({ sku }: { sku: Sku }) {
               : "border-brand-line bg-white/50"
           )}
         >
-          <div className="relative w-14 h-14 shrink-0 rounded-lg overflow-hidden bg-white border border-brand-line">
+          <div className="relative w-11 h-11 sm:w-14 sm:h-14 shrink-0 rounded-lg overflow-hidden bg-white border border-brand-line">
             <Image
               src={pair.heroImage}
               alt={pair.name}
@@ -144,7 +150,7 @@ export default function PDPBundleUpsell({ sku }: { sku: Sku }) {
             <p className="text-[10px] font-mono uppercase tracking-widest text-brand-ink-soft">
               Bundle price
             </p>
-            <p className="text-xl font-bold text-brand-ink leading-none">
+            <p className="text-lg sm:text-xl font-bold text-brand-ink leading-none">
               {formatINR(finalTotal)}
               {includePair && (
                 <span className="ml-2 text-xs font-mono text-success">
@@ -156,7 +162,7 @@ export default function PDPBundleUpsell({ sku }: { sku: Sku }) {
           <button
             type="button"
             onClick={addBundle}
-            className="bg-brand-ink hover:bg-black text-white px-5 py-3 rounded-xl font-bold text-sm transition-colors"
+            className="bg-brand-ink hover:bg-black text-white px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl font-bold text-sm transition-colors"
           >
             {includePair ? "Buy bundle" : "Buy single"} →
           </button>

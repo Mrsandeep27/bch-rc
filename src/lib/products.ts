@@ -8,7 +8,12 @@
  * MRP carries a ~30-35% strikethrough.
  */
 
-export type Scale = "1:64" | "1:43" | "1:24" | "1:16";
+export type Scale = "1:64" | "1:43" | "1:24" | "1:20" | "1:16";
+
+/** Hub category a SKU belongs to. Defaults are derived from scale (1:64→mini,
+ *  1:16→big, 1:20→s20); `construction` is an explicit override for the RC
+ *  trucks/diggers, which sit on the 1:64 chassis but belong in their own tile. */
+export type ProductCategory = "mini" | "big" | "s20" | "construction" | "polo";
 
 export type ColorVariant = {
   /** Display name, e.g. "Blue", "Multi Colour", "Red & Orange" */
@@ -55,6 +60,17 @@ export type Sku = {
   internal?: boolean;
   /** Per-color stock + image. Listed in display order. */
   colors?: ColorVariant[];
+  /** Hub category override. When unset the category is derived from `scale`.
+   *  Use `"construction"` for the RC trucks/diggers so they land in that tile
+   *  instead of the 1:64 Mini grid. */
+  category?: ProductCategory;
+  /** Teaser-only SKU: shown in the hub category grid as "Coming soon" (no price,
+   *  no buy) but EXCLUDED from the live 1:64/1:16 storefronts, PDPs, sitemap and
+   *  checkout. Set on products whose price/stock isn't live yet. */
+  comingSoon?: boolean;
+  /** Fixed-price bundle SKU (e.g. the Construction 3-Pack). Purchasable, but
+   *  EXCLUDED from the normal product grid — surfaced via its own CTA banner. */
+  bundle?: boolean;
   specs: {
     lengthMM: number;
     drive: "2WD" | "4WD";
@@ -395,6 +411,395 @@ export const PRODUCTS: Sku[] = [
       drift: "Pro drift mode",
     },
   },
+  // ---- 1:64 "RC AI" batch (2026-07) — new bodies on the same 1:64 chassis.
+  //      Online (UPI) price = retailINR − ₹100; COD = retailINR; MRP ~30% off.
+  //      Media: /products/rcai/<slug>/<colour>[-N].webp (AI product art). ----
+  {
+    id: "cybertruck-camper",
+    slug: "cybertruck-camper",
+    scale: "1:64",
+    name: "Mini Cybertruck Camper",
+    tagline: "Angular EV pickup + pop-top camper · 2.4 GHz · LED",
+    retailINR: 2099,
+    mrpINR: 2999,
+    bullets: [
+      "Cybertruck-style body with detachable camper shell",
+      "2.4 GHz · race up to 3 side-by-side",
+      "USB-C · 12–15 min run per charge",
+      "Full-function RC · 7-day replacement",
+    ],
+    badge: "NEW",
+    bodyShape: "Angular EV pickup + camper",
+    heroImage: "/products/rcai/cybertruck-camper/default.webp",
+    altImages: [
+      "/products/rcai/cybertruck-camper/default-2.webp",
+      "/products/rcai/cybertruck-camper/default-3.webp",
+      "/products/rcai/cybertruck-camper/default-4.webp",
+    ],
+    specs: {
+      lengthMM: 80,
+      drive: "4WD",
+      topSpeedKmh: 13,
+      batteryMin: 14,
+      chargeMin: 35,
+      rangeM: 25,
+      minAge: 6,
+      led: "Head + Tail",
+      drift: "No — grip tyres",
+    },
+  },
+  {
+    id: "ferrari-drift",
+    slug: "ferrari-drift",
+    scale: "1:64",
+    name: "Mini Ferrari Drift",
+    tagline: "Prancing-horse GT · pro drift wheels · 4 colours",
+    retailINR: 1599,
+    mrpINR: 2299,
+    bullets: [
+      "Ferrari-style GT die-cast body",
+      "Pre-tuned drift wheels · tail-out on tap",
+      "2.4 GHz · USB-C · LED head + tail lights",
+      "Pick from 4 colours · 7-day replacement",
+    ],
+    badge: "NEW",
+    bodyShape: "Ferrari-style GT coupe",
+    heroImage: "/products/rcai/ferrari-drift/red.webp",
+    altImages: [
+      "/products/rcai/ferrari-drift/red-2.webp",
+      "/products/rcai/ferrari-drift/red-3.webp",
+      "/products/rcai/ferrari-drift/red-4.webp",
+    ],
+    colors: [
+      { name: "Red", slug: "red", swatch: "#e11d2a", stock: 30, image: "/products/rcai/ferrari-drift/red.webp",
+        altImages: ["/products/rcai/ferrari-drift/red-2.webp", "/products/rcai/ferrari-drift/red-3.webp", "/products/rcai/ferrari-drift/red-4.webp"] },
+      { name: "Black", slug: "black", swatch: "#111827", stock: 24, image: "/products/rcai/ferrari-drift/black.webp",
+        altImages: ["/products/rcai/ferrari-drift/black-2.webp", "/products/rcai/ferrari-drift/black-3.webp", "/products/rcai/ferrari-drift/black-4.webp"] },
+      { name: "White", slug: "white", swatch: "#f1f1ef", stock: 22, image: "/products/rcai/ferrari-drift/white.webp",
+        altImages: ["/products/rcai/ferrari-drift/white-2.webp", "/products/rcai/ferrari-drift/white-3.webp", "/products/rcai/ferrari-drift/white-4.webp"] },
+      { name: "Yellow", slug: "yellow", swatch: "#f4c400", stock: 18, image: "/products/rcai/ferrari-drift/yellow.webp",
+        altImages: ["/products/rcai/ferrari-drift/yellow-2.webp", "/products/rcai/ferrari-drift/yellow-3.webp", "/products/rcai/ferrari-drift/yellow-4.webp"] },
+    ],
+    specs: {
+      lengthMM: 74,
+      drive: "4WD",
+      topSpeedKmh: 15,
+      batteryMin: 14,
+      chargeMin: 30,
+      rangeM: 28,
+      minAge: 8,
+      led: "Head + Tail",
+      drift: "Yes — pro drift wheels",
+    },
+  },
+  {
+    id: "mini-atv",
+    slug: "mini-atv",
+    scale: "1:64",
+    name: "Mini ATV Quad",
+    tagline: "Knobby-tyre quad · 4WD grip · all-terrain",
+    retailINR: 1999,
+    mrpINR: 2899,
+    bullets: [
+      "Chunky all-terrain quad-bike body",
+      "4WD grip tyres · climbs rough ground",
+      "2.4 GHz · USB-C rechargeable",
+      "Full-function RC · 7-day replacement",
+    ],
+    badge: "NEW",
+    bodyShape: "All-terrain ATV quad",
+    heroImage: "/products/rcai/mini-atv/default.webp",
+    altImages: [
+      "/products/rcai/mini-atv/default-2.webp",
+      "/products/rcai/mini-atv/default-3.webp",
+      "/products/rcai/mini-atv/default-4.webp",
+    ],
+    specs: {
+      lengthMM: 70,
+      drive: "4WD",
+      topSpeedKmh: 12,
+      batteryMin: 15,
+      chargeMin: 35,
+      rangeM: 22,
+      minAge: 6,
+      led: "Head lamp",
+      drift: "No — off-road grip",
+    },
+  },
+  {
+    id: "mini-bmw-m4",
+    slug: "mini-bmw-m4",
+    scale: "1:64",
+    name: "Mini BMW M4",
+    tagline: "Wide-body M coupe · drift-tuned · LED",
+    retailINR: 1599,
+    mrpINR: 2299,
+    bullets: [
+      "Wide-body M-style coupe die-cast",
+      "Drift-tuned wheels · 2.4 GHz control",
+      "USB-C · LED head + tail lights",
+      "Silver or Black · 7-day replacement",
+    ],
+    badge: "NEW",
+    bodyShape: "Wide-body M coupe",
+    heroImage: "/products/rcai/mini-bmw-m4/grey.webp",
+    altImages: [
+      "/products/rcai/mini-bmw-m4/grey-2.webp",
+      "/products/rcai/mini-bmw-m4/grey-3.webp",
+      "/products/rcai/mini-bmw-m4/grey-4.webp",
+    ],
+    colors: [
+      { name: "Silver", slug: "silver", swatch: "#c8ccce", stock: 26, image: "/products/rcai/mini-bmw-m4/grey.webp",
+        altImages: ["/products/rcai/mini-bmw-m4/grey-2.webp", "/products/rcai/mini-bmw-m4/grey-3.webp", "/products/rcai/mini-bmw-m4/grey-4.webp"] },
+      { name: "Black", slug: "black", swatch: "#111827", stock: 20, image: "/products/rcai/mini-bmw-m4/black.webp",
+        altImages: ["/products/rcai/mini-bmw-m4/black-2.webp", "/products/rcai/mini-bmw-m4/black-3.webp", "/products/rcai/mini-bmw-m4/black-4.webp"] },
+    ],
+    specs: {
+      lengthMM: 74,
+      drive: "4WD",
+      topSpeedKmh: 15,
+      batteryMin: 14,
+      chargeMin: 30,
+      rangeM: 28,
+      minAge: 8,
+      led: "Head + Tail",
+      drift: "Yes — drift wheels",
+    },
+  },
+  {
+    id: "mini-land-rover",
+    slug: "mini-land-rover",
+    scale: "1:64",
+    name: "Mini Land Rover",
+    tagline: "Boxy off-roader · roof rack + bull bar · 4WD",
+    retailINR: 1899,
+    mrpINR: 2699,
+    bullets: [
+      "Boxy Defender-style off-road body",
+      "Roof rack + bull bar detailing · 4WD",
+      "2.4 GHz · USB-C rechargeable",
+      "Lilac or Sand · 7-day replacement",
+    ],
+    badge: "NEW",
+    bodyShape: "Boxy off-road SUV",
+    heroImage: "/products/rcai/mini-land-rover/two.webp",
+    altImages: [
+      "/products/rcai/mini-land-rover/two-2.webp",
+      "/products/rcai/mini-land-rover/two-3.webp",
+      "/products/rcai/mini-land-rover/two-4.webp",
+    ],
+    colors: [
+      { name: "Sand", slug: "sand", swatch: "#c9b183", stock: 22, image: "/products/rcai/mini-land-rover/two.webp",
+        altImages: ["/products/rcai/mini-land-rover/two-2.webp", "/products/rcai/mini-land-rover/two-3.webp", "/products/rcai/mini-land-rover/two-4.webp"] },
+      { name: "Lilac", slug: "lilac", swatch: "#b9a3dd", stock: 18, image: "/products/rcai/mini-land-rover/one.webp",
+        altImages: ["/products/rcai/mini-land-rover/one-2.webp", "/products/rcai/mini-land-rover/one-3.webp", "/products/rcai/mini-land-rover/one-4.webp"] },
+    ],
+    specs: {
+      lengthMM: 78,
+      drive: "4WD",
+      topSpeedKmh: 12,
+      batteryMin: 15,
+      chargeMin: 35,
+      rangeM: 24,
+      minAge: 6,
+      led: "Head + roof",
+      drift: "No — off-road grip",
+    },
+  },
+  {
+    id: "mini-porsche",
+    slug: "mini-porsche",
+    scale: "1:64",
+    name: "Mini Porsche GT3",
+    tagline: "911 GT3 RS silhouette · drift wheels · LED",
+    retailINR: 1599,
+    mrpINR: 2299,
+    bullets: [
+      "911 GT3 RS-style body with rear wing",
+      "Pre-tuned drift wheels · 2.4 GHz",
+      "USB-C · LED head + tail lights",
+      "White or Blue · 7-day replacement",
+    ],
+    badge: "NEW",
+    bodyShape: "911 GT3 RS-style",
+    heroImage: "/products/rcai/mini-porsche/silver.webp",
+    altImages: [
+      "/products/rcai/mini-porsche/silver-2.webp",
+      "/products/rcai/mini-porsche/silver-3.webp",
+      "/products/rcai/mini-porsche/silver-4.webp",
+    ],
+    colors: [
+      { name: "White", slug: "white", swatch: "#f1f1ef", stock: 24, image: "/products/rcai/mini-porsche/silver.webp",
+        altImages: ["/products/rcai/mini-porsche/silver-2.webp", "/products/rcai/mini-porsche/silver-3.webp", "/products/rcai/mini-porsche/silver-4.webp"] },
+      { name: "Blue", slug: "blue", swatch: "#1d4ed8", stock: 20, image: "/products/rcai/mini-porsche/blue.webp",
+        altImages: ["/products/rcai/mini-porsche/blue-2.webp", "/products/rcai/mini-porsche/blue-3.webp", "/products/rcai/mini-porsche/blue-4.webp"] },
+    ],
+    specs: {
+      lengthMM: 73,
+      drive: "4WD",
+      topSpeedKmh: 15,
+      batteryMin: 14,
+      chargeMin: 30,
+      rangeM: 28,
+      minAge: 8,
+      led: "Head + Tail",
+      drift: "Yes — pro drift wheels",
+    },
+  },
+  {
+    id: "rc-tractor",
+    slug: "rc-tractor",
+    scale: "1:64",
+    name: "Mini RC Tractor",
+    tagline: "Farm tractor · big rear tyres · 2.4 GHz",
+    retailINR: 1999,
+    mrpINR: 2899,
+    bullets: [
+      "Detailed farm-tractor body + big rear tyres",
+      "2.4 GHz full-function control",
+      "USB-C rechargeable · LED work lamp",
+      "Blue or Yellow · 7-day replacement",
+    ],
+    badge: "NEW",
+    bodyShape: "Farm tractor",
+    heroImage: "/products/rcai/rc-tractor/blue.webp",
+    altImages: [
+      "/products/rcai/rc-tractor/blue-2.webp",
+      "/products/rcai/rc-tractor/blue-3.webp",
+      "/products/rcai/rc-tractor/blue-4.webp",
+    ],
+    colors: [
+      { name: "Blue", slug: "blue", swatch: "#1d4ed8", stock: 22, image: "/products/rcai/rc-tractor/blue.webp",
+        altImages: ["/products/rcai/rc-tractor/blue-2.webp", "/products/rcai/rc-tractor/blue-3.webp", "/products/rcai/rc-tractor/blue-4.webp"] },
+      { name: "Yellow", slug: "yellow", swatch: "#f4c400", stock: 20, image: "/products/rcai/rc-tractor/yellow.webp",
+        altImages: ["/products/rcai/rc-tractor/yellow-2.webp", "/products/rcai/rc-tractor/yellow-3.webp", "/products/rcai/rc-tractor/yellow-4.webp"] },
+    ],
+    specs: {
+      lengthMM: 70,
+      drive: "2WD",
+      topSpeedKmh: 8,
+      batteryMin: 18,
+      chargeMin: 35,
+      rangeM: 20,
+      minAge: 6,
+      led: "Work lamp",
+      drift: "No — farm grip",
+    },
+  },
+  {
+    id: "tiger-monster",
+    slug: "tiger-monster",
+    scale: "1:64",
+    name: "Tiger Monster Truck",
+    tagline: "Monster 4x4 · giant grip tyres · bounce-proof",
+    retailINR: 1999,
+    mrpINR: 2899,
+    bullets: [
+      "Monster-truck body on giant grip tyres",
+      "4WD · climbs and crushes obstacles",
+      "2.4 GHz · USB-C rechargeable",
+      "Tough bounce-proof shell · 7-day replacement",
+    ],
+    badge: "NEW",
+    bodyShape: "Monster truck 4x4",
+    heroImage: "/products/rcai/tiger-monster/default.webp",
+    altImages: [
+      "/products/rcai/tiger-monster/default-2.webp",
+      "/products/rcai/tiger-monster/default-3.webp",
+      "/products/rcai/tiger-monster/default-4.webp",
+    ],
+    specs: {
+      lengthMM: 82,
+      drive: "4WD",
+      topSpeedKmh: 14,
+      batteryMin: 14,
+      chargeMin: 35,
+      rangeM: 25,
+      minAge: 6,
+      led: "Head lamp",
+      drift: "No — monster grip",
+    },
+  },
+  {
+    id: "toyota-trueno",
+    slug: "toyota-trueno",
+    scale: "1:64",
+    name: "Toyota Trueno AE86",
+    tagline: "AE86 panda drift legend · pro drift wheels",
+    retailINR: 1599,
+    mrpINR: 2299,
+    bullets: [
+      "AE86 Trueno panda-style drift body",
+      "Pre-tuned drift wheels · tail-out on tap",
+      "2.4 GHz · USB-C · LED pop-up lights",
+      "Red or White · 7-day replacement",
+    ],
+    badge: "NEW",
+    bodyShape: "AE86 Trueno hatch",
+    heroImage: "/products/rcai/toyota-trueno/default.webp",
+    altImages: [
+      "/products/rcai/toyota-trueno/default-2.webp",
+      "/products/rcai/toyota-trueno/default-3.webp",
+      "/products/rcai/toyota-trueno/default-4.webp",
+    ],
+    colors: [
+      { name: "Red", slug: "red", swatch: "#c81e1e", stock: 24, image: "/products/rcai/toyota-trueno/default.webp",
+        altImages: ["/products/rcai/toyota-trueno/default-2.webp", "/products/rcai/toyota-trueno/default-3.webp", "/products/rcai/toyota-trueno/default-4.webp"] },
+      { name: "White", slug: "white", swatch: "#eceae7", stock: 22, image: "/products/rcai/toyota-trueno/white.webp",
+        altImages: ["/products/rcai/toyota-trueno/white-2.webp", "/products/rcai/toyota-trueno/white-3.webp", "/products/rcai/toyota-trueno/white-4.webp"] },
+    ],
+    specs: {
+      lengthMM: 74,
+      drive: "4WD",
+      topSpeedKmh: 15,
+      batteryMin: 14,
+      chargeMin: 30,
+      rangeM: 28,
+      minAge: 8,
+      led: "Pop-up + Tail",
+      drift: "Yes — pro drift wheels",
+    },
+  },
+  {
+    id: "samtop-camera",
+    slug: "samtop-camera",
+    scale: "1:64",
+    name: "Camera Drift RC — SAMTOP C6",
+    tagline: "FPV camera drift car · stream to your phone · LED",
+    retailINR: 2999,
+    mrpINR: 4299,
+    bullets: [
+      "Built-in FPV camera — stream live to your phone",
+      "Pro drift wheels · 2.4 GHz control",
+      "USB-C · LED head + tail lights",
+      "Black or White · 7-day replacement",
+    ],
+    badge: "PRO",
+    bodyShape: "FPV-camera drift coupe",
+    heroImage: "/products/rcai/samtop-camera/black.webp",
+    altImages: [
+      "/products/rcai/samtop-camera/black-2.webp",
+      "/products/rcai/samtop-camera/black-3.webp",
+      "/products/rcai/samtop-camera/black-4.webp",
+    ],
+    colors: [
+      { name: "Black", slug: "black", swatch: "#111827", stock: 16, image: "/products/rcai/samtop-camera/black.webp",
+        altImages: ["/products/rcai/samtop-camera/black-2.webp", "/products/rcai/samtop-camera/black-3.webp", "/products/rcai/samtop-camera/black-4.webp"] },
+      { name: "White", slug: "white", swatch: "#f1f1ef", stock: 14, image: "/products/rcai/samtop-camera/white.webp",
+        altImages: ["/products/rcai/samtop-camera/white-2.webp", "/products/rcai/samtop-camera/white-3.webp", "/products/rcai/samtop-camera/white-4.webp"] },
+    ],
+    specs: {
+      lengthMM: 76,
+      drive: "4WD",
+      topSpeedKmh: 15,
+      batteryMin: 12,
+      chargeMin: 35,
+      rangeM: 25,
+      minAge: 10,
+      led: "Head + Tail",
+      drift: "Yes — FPV drift",
+    },
+  },
   // ---- 1:16 "Big" series (the /16 storefront) ----
   // Separate store, separate cart (useCart16), but the SAME order pipeline.
   // Excluded from the 1:64 grid/PDP via the scale filter in getVisibleProducts
@@ -427,6 +832,7 @@ export const PRODUCTS: Sku[] = [
   },
   {
     id: "drift-toxic",
+    hidden: true, // merged into "Mercedes AMG GT3" (AI image) — kept for reference
     slug: "drift-toxic",
     scale: "1:16",
     name: "Drift Toxic",
@@ -450,6 +856,7 @@ export const PRODUCTS: Sku[] = [
   },
   {
     id: "drift-phantom",
+    hidden: true, // merged into "BMW M4 DTM" (AI image) — kept for reference
     slug: "drift-phantom",
     scale: "1:16",
     name: "Drift Phantom",
@@ -473,9 +880,12 @@ export const PRODUCTS: Sku[] = [
   },
   {
     id: "drift-carbon",
+    hidden: true, // merged into "GT-R GT3" (AI image) — kept for reference
     slug: "drift-carbon",
     scale: "1:16",
-    name: "Drift Carbon",
+    category: "big",
+    badge: "NEW",
+    name: "Speed Racing GT-R",
     tagline: "Carbon-fibre look · 4WD · 2.4 GHz full-proportional",
     retailINR: 2999,
     mrpINR: 3999,
@@ -520,6 +930,7 @@ export const PRODUCTS: Sku[] = [
   },
   {
     id: "dares-recon",
+    hidden: true, // merged into "Extreme Street Drift" (AI image) — kept for reference
     slug: "dares-recon",
     scale: "1:16",
     name: "Dares Recon",
@@ -551,6 +962,151 @@ export const PRODUCTS: Sku[] = [
   // tests without burning ₹1,299 per attempt. Stock is seeded by
   // src/db/seed-inventory.ts with variant_slug = ''.
   // -----------------------------------------------------------------------
+  // ---- COMING SOON teasers (2026-07) — shown in the hub category grid only,
+  //      no price/stock yet. Excluded from live storefronts, PDPs, sitemap and
+  //      checkout via `comingSoon`. Prices land later. ----
+  {
+    id: "bmw-m4-dtm", slug: "bmw-m4-dtm", scale: "1:16", category: "big",
+    name: "BMW M4 DTM", tagline: "Murdered-out black · 4WD · 2.4 GHz full-proportional",
+    retailINR: 2999, mrpINR: 3999, badge: "NEW",
+    bullets: ["4WD drivetrain · up to ~25 km/h", "2.4 GHz full-proportional — steer, throttle, brake + speed trim", "ESP stability · rubber drift tyres + spare set", "USB-C rechargeable · full LED · ready-to-run"],
+    bodyShape: "1:16 drift car",
+    heroImage: "/products/rcai/bmw-m4-dtm/default.webp",
+    altImages: ["/products/rcai/bmw-m4-dtm/default-2.webp", "/products/rcai/bmw-m4-dtm/default-3.webp", "/products/rcai/bmw-m4-dtm/default-4.webp"],
+    specs: { lengthMM: 280, drive: "4WD", topSpeedKmh: 25, batteryMin: 18, chargeMin: 90, rangeM: 30, minAge: 6, led: "Full LED", drift: "ESP-assisted" },
+  },
+  {
+    id: "extreme-street-drift", slug: "extreme-street-drift", scale: "1:16", category: "big",
+    name: "Extreme Street Drift", tagline: "Green & grey stealth livery · flagship · 4WD",
+    retailINR: 3599, mrpINR: 4999, badge: "PRO",
+    bullets: ["Sharper, wider race-livery shell", "4WD · up to ~25 km/h · 2.4 GHz full-proportional", "ESP stability · rubber drift tyres + spare set", "USB-C rechargeable · full LED · ready-to-run"],
+    bodyShape: "1:16 race-livery drift car",
+    heroImage: "/products/rcai/extreme-street-drift/default.webp",
+    altImages: ["/products/rcai/extreme-street-drift/default-2.webp", "/products/rcai/extreme-street-drift/default-3.webp", "/products/rcai/extreme-street-drift/default-4.webp"],
+    specs: { lengthMM: 280, drive: "4WD", topSpeedKmh: 25, batteryMin: 18, chargeMin: 90, rangeM: 30, minAge: 6, led: "Full LED", drift: "ESP-assisted" },
+  },
+  {
+    id: "gtr-gt3", slug: "gtr-gt3", scale: "1:16", category: "big",
+    name: "GT-R GT3", tagline: "Carbon-fibre look · 4WD · 2.4 GHz full-proportional",
+    retailINR: 2999, mrpINR: 3999, badge: "NEW",
+    bullets: ["4WD drivetrain · up to ~25 km/h", "2.4 GHz full-proportional — steer, throttle, brake + speed trim", "ESP stability · rubber drift tyres + spare set", "USB-C rechargeable · full LED · ready-to-run"],
+    bodyShape: "1:16 drift car",
+    heroImage: "/products/rcai/gtr-gt3/default.webp",
+    altImages: ["/products/rcai/gtr-gt3/default-2.webp", "/products/rcai/gtr-gt3/default-3.webp", "/products/rcai/gtr-gt3/default-4.webp"],
+    specs: { lengthMM: 280, drive: "4WD", topSpeedKmh: 25, batteryMin: 18, chargeMin: 90, rangeM: 30, minAge: 6, led: "Full LED", drift: "ESP-assisted" },
+  },
+  {
+    id: "mercedes-amg-gt3", slug: "mercedes-amg-gt3", scale: "1:16", category: "big",
+    name: "Mercedes AMG GT3", tagline: "Neon green · 4WD · 2.4 GHz full-proportional",
+    retailINR: 2999, mrpINR: 3999, badge: "NEW",
+    bullets: ["4WD drivetrain · up to ~25 km/h", "2.4 GHz full-proportional — steer, throttle, brake + speed trim", "ESP stability · rubber drift tyres + spare set", "USB-C rechargeable · full LED · ready-to-run"],
+    bodyShape: "1:16 drift car",
+    heroImage: "/products/rcai/mercedes-amg-gt3/default.webp",
+    altImages: ["/products/rcai/mercedes-amg-gt3/default-2.webp", "/products/rcai/mercedes-amg-gt3/default-3.webp", "/products/rcai/mercedes-amg-gt3/default-4.webp"],
+    specs: { lengthMM: 280, drive: "4WD", topSpeedKmh: 25, batteryMin: 18, chargeMin: 90, rangeM: 30, minAge: 6, led: "Full LED", drift: "ESP-assisted" },
+  },
+  {
+    id: "lamborghini-vision-gt", slug: "lamborghini-vision-gt", scale: "1:20", category: "s20",
+    name: "Lamborghini Vision GT", tagline: "1:20 concept hypercar · 2.4 GHz · LED",
+    retailINR: 1799, mrpINR: 2599,
+    bullets: ["1:20 Vision GT-style body", "2.4 GHz full-function control", "USB-C · LED lights", "7-day replacement"],
+    badge: "NEW",
+    bodyShape: "Vision GT concept",
+    heroImage: "/products/rcai/lamborghini-vision-gt/default.webp",
+    altImages: ["/products/rcai/lamborghini-vision-gt/default-2.webp", "/products/rcai/lamborghini-vision-gt/default-3.webp", "/products/rcai/lamborghini-vision-gt/default-4.webp"],
+    specs: { lengthMM: 210, drive: "4WD", topSpeedKmh: 16, batteryMin: 15, chargeMin: 60, rangeM: 25, minAge: 8, led: "Head + Tail", drift: "Yes" },
+  },
+  {
+    id: "toyota-ae86-20", slug: "toyota-ae86-20", scale: "1:20", category: "s20",
+    name: "Toyota AE86 Trueno · 1:20", tagline: "1:20 AE86 drift legend · 2.4 GHz · LED",
+    retailINR: 1699, mrpINR: 2399,
+    bullets: ["1:20 AE86 Trueno body", "2.4 GHz full-function control", "USB-C · LED lights", "7-day replacement"],
+    badge: "NEW",
+    bodyShape: "AE86 Trueno hatch",
+    heroImage: "/products/rcai/toyota-ae86-20/default.webp",
+    altImages: ["/products/rcai/toyota-ae86-20/default-2.webp", "/products/rcai/toyota-ae86-20/default-3.webp", "/products/rcai/toyota-ae86-20/default-4.webp"],
+    specs: { lengthMM: 210, drive: "4WD", topSpeedKmh: 16, batteryMin: 15, chargeMin: 60, rangeM: 25, minAge: 8, led: "Pop-up + Tail", drift: "Yes" },
+  },
+  {
+    id: "track-rover", slug: "track-rover", scale: "1:20", category: "s20",
+    name: "Track Rover", tagline: "1:20 rally off-roader · 2.4 GHz · LED",
+    retailINR: 1799, mrpINR: 2599,
+    bullets: ["1:20 rally off-road body", "2.4 GHz full-function control", "USB-C · LED lights", "7-day replacement"],
+    badge: "NEW",
+    bodyShape: "Rally off-roader",
+    heroImage: "/products/rcai/track-rover/default.webp",
+    altImages: ["/products/rcai/track-rover/default-2.webp", "/products/rcai/track-rover/default-3.webp", "/products/rcai/track-rover/default-4.webp"],
+    specs: { lengthMM: 210, drive: "4WD", topSpeedKmh: 14, batteryMin: 15, chargeMin: 60, rangeM: 24, minAge: 8, led: "Head + roof", drift: "No" },
+  },
+  {
+    id: "vw-polo-95-white", slug: "vw-polo-95-white", scale: "1:20", category: "polo",
+    name: "VW Polo Racing 95 — White", tagline: "1:20 Polo racing hot-hatch · 2.4 GHz · LED",
+    retailINR: 1899, mrpINR: 2699,
+    bullets: ["Polo racing hot-hatch body", "2.4 GHz full-function control", "USB-C · LED head + tail lights", "7-day replacement"],
+    badge: "NEW",
+    bodyShape: "Racing hot-hatch",
+    heroImage: "/products/rcai/vw-polo-95/white.webp",
+    altImages: ["/products/rcai/vw-polo-95/white-2.webp", "/products/rcai/vw-polo-95/white-3.webp", "/products/rcai/vw-polo-95/white-4.webp"],
+    specs: { lengthMM: 210, drive: "2WD", topSpeedKmh: 16, batteryMin: 15, chargeMin: 60, rangeM: 25, minAge: 8, led: "Head + Tail", drift: "No" },
+  },
+  {
+    id: "vw-polo-95-blue", slug: "vw-polo-95-blue", scale: "1:20", category: "polo",
+    name: "VW Polo Racing 95 — Blue", tagline: "1:20 Polo racing hot-hatch · 2.4 GHz · LED",
+    retailINR: 1899, mrpINR: 2699,
+    bullets: ["Polo racing hot-hatch body", "2.4 GHz full-function control", "USB-C · LED head + tail lights", "7-day replacement"],
+    badge: "NEW",
+    bodyShape: "Racing hot-hatch",
+    heroImage: "/products/rcai/vw-polo-95/blue.webp",
+    altImages: ["/products/rcai/vw-polo-95/blue-2.webp", "/products/rcai/vw-polo-95/blue-3.webp", "/products/rcai/vw-polo-95/blue-4.webp"],
+    specs: { lengthMM: 210, drive: "2WD", topSpeedKmh: 16, batteryMin: 15, chargeMin: 60, rangeM: 25, minAge: 8, led: "Head + Tail", drift: "No" },
+  },
+  {
+    // Fixed-price bundle SKU: one cart line at ₹4,999 that represents all three
+    // construction rigs. Priced as its own product so checkout/receipts hit the
+    // exact ₹4,999 (the % ladder can't land on that number). Ships as all 3.
+    id: "construction-3pack", slug: "construction-3pack", scale: "1:64", category: "construction", bundle: true,
+    name: "Construction 3-Pack", tagline: "Mining Truck + Excavator + Forklift — all three, one price",
+    retailINR: 4999, mrpINR: 6297,
+    bullets: ["Heavy Duty Mining Truck included", "Mini RC Excavator included", "Mini RC Forklift included", "Save ~₹1,300 vs buying all three separately"],
+    badge: "NEW",
+    bodyShape: "3-in-1 construction bundle",
+    heroImage: "/landing/construction-3pack.webp",
+    altImages: [],
+    specs: { lengthMM: 120, drive: "4WD", topSpeedKmh: 8, batteryMin: 20, chargeMin: 60, rangeM: 20, minAge: 6, led: "Work lamps", drift: "No" },
+  },
+  {
+    id: "mining-truck", slug: "mining-truck", scale: "1:64", category: "construction",
+    name: "Heavy Duty Mining Truck", tagline: "RC haul truck · 2.4 GHz · work lamp",
+    retailINR: 2099, mrpINR: 2999,
+    bullets: ["Heavy-duty mining haul body", "2.4 GHz full-function control", "USB-C rechargeable", "7-day replacement"],
+    badge: "NEW",
+    bodyShape: "Mining haul truck",
+    heroImage: "/products/rcai/mining-truck/default.webp",
+    altImages: ["/products/rcai/mining-truck/default-2.webp", "/products/rcai/mining-truck/default-3.webp", "/products/rcai/mining-truck/default-4.webp"],
+    specs: { lengthMM: 120, drive: "4WD", topSpeedKmh: 8, batteryMin: 20, chargeMin: 60, rangeM: 20, minAge: 6, led: "Work lamp", drift: "No" },
+  },
+  {
+    id: "rc-excavator", slug: "rc-excavator", scale: "1:64", category: "construction",
+    name: "Mini RC Excavator", tagline: "RC digger with working arm · 2.4 GHz",
+    retailINR: 2099, mrpINR: 2999,
+    bullets: ["Excavator with articulating arm", "2.4 GHz full-function control", "USB-C rechargeable", "7-day replacement"],
+    badge: "NEW",
+    bodyShape: "Tracked excavator",
+    heroImage: "/products/rcai/rc-excavator/default.webp",
+    altImages: ["/products/rcai/rc-excavator/default-2.webp", "/products/rcai/rc-excavator/default-3.webp", "/products/rcai/rc-excavator/default-4.webp"],
+    specs: { lengthMM: 120, drive: "2WD", topSpeedKmh: 5, batteryMin: 20, chargeMin: 60, rangeM: 18, minAge: 6, led: "Work lamp", drift: "No" },
+  },
+  {
+    id: "rc-forklift", slug: "rc-forklift", scale: "1:64", category: "construction",
+    name: "Mini RC Forklift", tagline: "RC forklift with lift mast · 2.4 GHz",
+    retailINR: 2099, mrpINR: 2999,
+    bullets: ["Forklift with working lift mast", "2.4 GHz full-function control", "USB-C rechargeable", "7-day replacement"],
+    badge: "NEW",
+    bodyShape: "Warehouse forklift",
+    heroImage: "/products/rcai/rc-forklift/default.webp",
+    altImages: ["/products/rcai/rc-forklift/default-2.webp", "/products/rcai/rc-forklift/default-3.webp", "/products/rcai/rc-forklift/default-4.webp"],
+    specs: { lengthMM: 110, drive: "2WD", topSpeedKmh: 5, batteryMin: 20, chargeMin: 60, rangeM: 16, minAge: 6, led: "Work lamp", drift: "No" },
+  },
   {
     id: "qa-1rs",
     slug: "qa-1rs",
@@ -610,7 +1166,12 @@ export function getVisibleProducts(): Sku[] {
     return i === -1 ? STOREFRONT_ORDER.length : i;
   };
   return PRODUCTS.filter(
-    (p) => !p.hidden && !p.internal && p.scale === "1:64"
+    (p) =>
+      !p.hidden &&
+      !p.internal &&
+      !p.comingSoon &&
+      p.category !== "construction" &&
+      p.scale === "1:64"
   ).sort((a, b) => rank(a.id) - rank(b.id));
 }
 
@@ -631,8 +1192,55 @@ export function getStore16Skus(): Sku[] {
     return i === -1 ? STORE16_ORDER.length : i;
   };
   return PRODUCTS.filter(
-    (p) => p.scale === "1:16" && !p.hidden && !p.internal
+    (p) => p.scale === "1:16" && !p.hidden && !p.internal && !p.comingSoon
   ).sort((a, b) => rank(a.id) - rank(b.id));
+}
+
+// ── Hub category grids ──────────────────────────────────────────────────────
+// The hub Shop shows categories that INCLUDE coming-soon teasers (unlike the
+// live /64 + /16 storefronts above, which exclude them). Each helper returns
+// the buyable products first, coming-soon last.
+
+const bySoon = (a: Sku, b: Sku) =>
+  Number(a.comingSoon ?? false) - Number(b.comingSoon ?? false);
+
+/** Hub "Mini RC · 1:64" tile — the live 1:64 lineup (no coming-soon here). */
+export function getHubMiniSkus(): Sku[] {
+  return getVisibleProducts();
+}
+
+/** Hub "Big Drift · 1:16" tile — the live 1:16 lineup + any 1:16 teasers. */
+export function getHubBig16Skus(): Sku[] {
+  return PRODUCTS.filter(
+    (p) => p.scale === "1:16" && !p.hidden && !p.internal
+  ).sort(bySoon);
+}
+
+/** Hub "1:20 Scale" tile — 1:20 products, minus those pulled into their own
+ *  tile (e.g. the VW Polos live under the Polo tile). */
+export function getHub20Skus(): Sku[] {
+  return PRODUCTS.filter(
+    (p) => p.scale === "1:20" && p.category !== "polo" && !p.hidden && !p.internal
+  ).sort(bySoon);
+}
+
+/** Hub "Construction" tile — RC trucks/diggers (category override). */
+export function getHubConstructionSkus(): Sku[] {
+  return PRODUCTS.filter(
+    (p) => p.category === "construction" && !p.hidden && !p.internal && !p.bundle
+  ).sort(bySoon);
+}
+
+/** The Construction 3-Pack bundle SKU (surfaced via its own CTA banner). */
+export function getConstructionBundle(): Sku | undefined {
+  return PRODUCTS.find((p) => p.id === "construction-3pack");
+}
+
+/** Hub "Polo" tile — the VW Polo cars as individual products. */
+export function getHubPoloSkus(): Sku[] {
+  return PRODUCTS.filter(
+    (p) => p.category === "polo" && !p.hidden && !p.internal
+  ).sort(bySoon);
 }
 
 export function getHeroSku(): Sku {

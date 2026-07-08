@@ -34,9 +34,17 @@ import { trackFunnel } from "@/lib/funnel-client";
 const CONSENT_KEY = "prc_consent";
 
 export default function Analytics() {
-  const gaId = process.env.NEXT_PUBLIC_GA_ID;
-  const pixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID;
-  const clarityId = process.env.NEXT_PUBLIC_CLARITY_ID;
+  // Sanitize analytics IDs from env. A stray newline/space in an env value
+  // (common when it's piped in from a shell) corrupts the gtag script URL, and
+  // next/script then builds an invalid `querySelector` from it and throws —
+  // which is the "not a valid selector" crash. Strip all whitespace, and for GA
+  // require a clean measurement-ID shape; anything unexpected is treated as
+  // unset so a bad value can never take down the page.
+  const strip = (v: string | undefined) => v?.replace(/\s+/g, "") || undefined;
+  const rawGa = strip(process.env.NEXT_PUBLIC_GA_ID);
+  const gaId = rawGa && /^[\w-]+$/.test(rawGa) ? rawGa : undefined;
+  const pixelId = strip(process.env.NEXT_PUBLIC_META_PIXEL_ID);
+  const clarityId = strip(process.env.NEXT_PUBLIC_CLARITY_ID);
   const pathname = usePathname();
   const sp = useSearchParams();
 

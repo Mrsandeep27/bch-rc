@@ -101,3 +101,5 @@ public/store16-images/**/*.png
 public/store16-images/video/
 # competitor scrape output
 scripts/out/
+
+.vercel

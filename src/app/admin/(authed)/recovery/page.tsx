@@ -3,6 +3,7 @@ import { LifeBuoy, MessageCircle, Phone, Snowflake } from "lucide-react";
 import { db } from "@/db";
 import { orders, checkoutLeads } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
+import { recoverCapturedPayments } from "@/lib/reconcile";
 import { formatINR } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -18,8 +19,12 @@ export const dynamic = "force-dynamic";
 const RECOVERABLE = ["PENDING", "ABANDONED", "FAILED"] as const;
 const PAID = ["PAID", "PACKED", "SHIPPED", "DELIVERED"] as const;
 
-// Don't show carts younger than this — the customer may still be mid-checkout.
-const MIN_AGE_MIN = 30;
+// Don't show carts idle for less than this — the customer may still be mid-
+// checkout. Kept tight (5 min) so the team can call a fresh drop-off while it's
+// still hot. Safe at 5 min because (a) we Razorpay-verify recent orders below,
+// so a just-completed payment is already excluded, and (b) leads are gated on
+// last activity (updatedAt), so someone still typing won't surface.
+const MIN_AGE_MIN = 5;
 // Carts up to this age are "hot" — the lead is fresh and worth a nudge/call.
 const FRESH_DAYS = 14;
 // Older than FRESH_DAYS up to this bound = "cold lead" — still callable, lower
@@ -84,6 +89,15 @@ function recoveryWaLink(
 export default async function RecoveryPage() {
   const ctx = await requireAdmin();
 
+  // Money-truth before we list anyone: ask Razorpay whether any *recent* unpaid
+  // order was in fact paid (webhook lag or a dropped capture) and flip it to
+  // PAID — so a customer who just completed payment is never nudged. Scoped to
+  // the last 30 min: older orders are kept current by the 5-min reconcile cron,
+  // so here we only pay for the handful of genuinely-fresh unpaid orders. This
+  // is what makes the tight MIN_AGE_MIN window safe. Best-effort: a Razorpay
+  // hiccup must never break the recovery view.
+  await recoverCapturedPayments(50, 30 * 60 * 1000).catch(() => {});
+
   const nowMs = new Date().getTime();
   const since = new Date(nowMs - COLD_DAYS * 86_400_000);
   const until = new Date(nowMs - MIN_AGE_MIN * 60_000);
@@ -147,7 +161,7 @@ export default async function RecoveryPage() {
     state: string | null;
     subtotalInr: number;
     customerId: string;
-    createdAt: Date;
+    updatedAt: Date;
   };
   let leadRows: LeadRow[] = [];
   try {
@@ -161,18 +175,22 @@ export default async function RecoveryPage() {
         state: checkoutLeads.state,
         subtotalInr: checkoutLeads.subtotalInr,
         customerId: checkoutLeads.customerId,
-        createdAt: checkoutLeads.createdAt,
+        updatedAt: checkoutLeads.updatedAt,
       })
       .from(checkoutLeads)
+      // Gate on updatedAt (LAST activity), not createdAt: the checkout page now
+      // autosaves each time the buyer changes a field, so a fresh updatedAt
+      // means they're still actively filling — don't nudge them yet. Only once
+      // they've gone quiet for MIN_AGE_MIN do they surface as a real drop-off.
       .where(
         and(
           inArray(checkoutLeads.siteId, ctx.siteIds),
           eq(checkoutLeads.status, "OPEN"),
-          gte(checkoutLeads.createdAt, since),
-          lt(checkoutLeads.createdAt, until),
+          gte(checkoutLeads.updatedAt, since),
+          lt(checkoutLeads.updatedAt, until),
         ),
       )
-      .orderBy(desc(checkoutLeads.createdAt))
+      .orderBy(desc(checkoutLeads.updatedAt))
       .limit(500)) as LeadRow[];
   } catch {
     leadRows = [];
@@ -194,7 +212,9 @@ export default async function RecoveryPage() {
     paymentMethod: "",
     source: "web",
     customerId: l.customerId,
-    placedAt: l.createdAt,
+    // Display "age" = time since last activity, so the calling team sees how
+    // long ago the buyer actually went quiet (not their first-ever visit).
+    placedAt: l.updatedAt,
   }));
 
   // Merge order-carts (richer, take precedence) ahead of leads, newest first.

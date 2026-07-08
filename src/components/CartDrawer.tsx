@@ -25,8 +25,10 @@ import {
   OFFERS,
   BUNDLE_TIERS,
   bundleDiscountInr,
+  bundleDiscountPct,
 } from "@/lib/config";
 import { formatINR } from "@/lib/utils";
+import { trackFunnel } from "@/lib/funnel-client";
 
 export default function CartDrawer({
   initialOpen = false,
@@ -41,6 +43,15 @@ export default function CartDrawer({
   const lines = getCartLines(items);
   const subtotal = getCartSubtotal(items);
   const count = getCartCount(items);
+
+  // Funnel: `view_cart` fires once each time the drawer opens (this stage had
+  // no instrumentation before, so it always read empty on the funnel chart).
+  useEffect(() => {
+    if (!isOpen) return;
+    trackFunnel("view_cart", { cartValueInr: subtotal, itemCount: count });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
   const delta = getFreeShippingDelta(subtotal);
   const progressPct = Math.min(
     100,
@@ -49,19 +60,14 @@ export default function CartDrawer({
   // Bundle bonus nudge — show the current tier the buyer has unlocked, and
   // how much MORE they'd save by hitting the next tier. The tiers list is
   // sorted ascending so we can peek "the next tier above current" by index.
-  const currentBundleBonus = bundleDiscountInr(count);
+  const currentBundleBonus = bundleDiscountInr(count, subtotal);
   const nextTier = BUNDLE_TIERS.find((t) => t.minQty > count);
   const bundleGap = nextTier ? nextTier.minQty - count : 0;
-  // Surfaced as a percentage off the current subtotal so the badge reads as
-  // a discount instead of a raw rupee amount — feels bigger, scales with
-  // what the buyer is actually about to pay. The exact ₹ amount still
-  // shows on the receipt + checkout summary for accounting clarity.
-  const currentBundlePct =
-    subtotal > 0 ? Math.round((currentBundleBonus / subtotal) * 100) : 0;
-  const nextTierPct =
-    nextTier && subtotal > 0
-      ? Math.round((nextTier.bonusInr / subtotal) * 100)
-      : 0;
+  // The bundle discount is now a straight percentage of the subtotal, so the
+  // badge reads it directly off the tier. The exact ₹ amount still shows on
+  // the receipt + checkout summary for accounting clarity.
+  const currentBundlePct = bundleDiscountPct(count);
+  const nextTierPct = nextTier ? nextTier.pct : 0;
 
   // Open from ?openCart=1 query param on first mount.
   const initialOpenAppliedRef = useRef(false);

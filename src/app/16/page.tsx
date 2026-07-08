@@ -1,6 +1,7 @@
 import { ArrowRight } from "lucide-react";
 import { STORE16 } from "@/lib/store16";
 import { Hero16 } from "@/components/store16/Hero16";
+import ShopBySize from "@/components/ShopBySize";
 import MiniFaq16 from "@/components/store16/MiniFaq16";
 import SpecMarquee16 from "@/components/store16/SpecMarquee16";
 import { Lineup16 } from "@/components/store16/Lineup16";
@@ -22,6 +23,9 @@ export default function Store16Page() {
 
       <main className="flex-1">
         <Hero16 />
+
+        {/* ── Shop by size — same category front-door as the 1:64 store ── */}
+        <ShopBySize current="1:16" />
 
         {/* ── Before-you-buy mini-FAQ ────────────────────────────── */}
         <MiniFaq16 />

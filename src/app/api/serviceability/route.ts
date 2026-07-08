@@ -14,8 +14,14 @@
 import { NextResponse, after, type NextRequest } from "next/server";
 import { verifyServiceabilityLive } from "@/lib/serviceability";
 import { recordServerFunnelEvent } from "@/lib/funnel-server";
+import { rateLimit } from "@/lib/rate-limit";
 
 export async function GET(req: NextRequest) {
+  // Each call makes a live Shiprocket serviceability fetch AND writes a funnel
+  // event; cap per-IP to stop quota burn + analytics poisoning by a flooder.
+  const limited = rateLimit(req, { scope: "serviceability", limit: 30 });
+  if (limited) return limited;
+
   const url = new URL(req.url);
   const pincode = url.searchParams.get("pincode") ?? "";
   const needsCod = (url.searchParams.get("payment") ?? "").toLowerCase() === "cod";

@@ -134,7 +134,7 @@ function priceBreakdown(p: EmailPayload): string {
     // (online-pay bonus, bundle bonus, coupon) instead of one opaque number.
     const cartQty = (p.items ?? []).reduce((n, i) => n + i.qty, 0);
     const prepaidBonus = p.paymentMethod !== "COD" ? PREPAID_BONUS_INR : 0;
-    const bundleBonus = bundleBonusInrLocal(cartQty);
+    const bundleBonus = bundleBonusInrLocal(cartQty, p.subtotalInr ?? 0);
     const bundleName = bundleTierLabelLocal(cartQty);
     const couponBonus = Math.max(0, p.discountInr - prepaidBonus - bundleBonus);
     if (prepaidBonus > 0) {
@@ -174,7 +174,7 @@ function priceBreakdownText(p: EmailPayload): string {
   if (p.discountInr && p.discountInr > 0) {
     const cartQty = (p.items ?? []).reduce((n, i) => n + i.qty, 0);
     const prepaidBonus = p.paymentMethod !== "COD" ? PREPAID_BONUS_INR : 0;
-    const bundleBonus = bundleBonusInrLocal(cartQty);
+    const bundleBonus = bundleBonusInrLocal(cartQty, p.subtotalInr ?? 0);
     const bundleName = bundleTierLabelLocal(cartQty);
     const couponBonus = Math.max(0, p.discountInr - prepaidBonus - bundleBonus);
     if (prepaidBonus > 0) {

@@ -477,6 +477,7 @@ export async function getShipmentStatus(shipmentId: string): Promise<{
   current_status: string;
   current_status_id: number;
   awb: string | null;
+  courier: string | null;
 }> {
   const data = await srFetch<{
     tracking_data: {
@@ -484,6 +485,7 @@ export async function getShipmentStatus(shipmentId: string): Promise<{
         current_status: string;
         current_status_id: number;
         awb_code: string | null;
+        courier_company_name?: string | null;
       }>;
     };
   }>(`/courier/track/shipment/${shipmentId}`, { method: "GET" });
@@ -493,6 +495,7 @@ export async function getShipmentStatus(shipmentId: string): Promise<{
     current_status: t?.current_status ?? "Unknown",
     current_status_id: t?.current_status_id ?? 0,
     awb: t?.awb_code ?? null,
+    courier: t?.courier_company_name?.trim() || null,
   };
 }
 

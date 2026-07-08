@@ -7,6 +7,17 @@ import { getProductById, getVisibleProducts, type Sku } from "@/lib/products";
 import { formatINR } from "@/lib/utils";
 import { RECENTLY_VIEWED_KEY } from "@/lib/recently-viewed";
 
+/** Random N items (Fisher–Yates) — runs client-side only (in useEffect), so no
+ *  SSR/hydration concern. Keeps the rail fresh instead of always the first 4. */
+function sample(arr: Sku[], n: number): Sku[] {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy.slice(0, n);
+}
+
 export default function RecentlyViewed({ excludeId }: { excludeId?: string }) {
   const [items, setItems] = useState<Sku[]>([]);
 
@@ -14,21 +25,25 @@ export default function RecentlyViewed({ excludeId }: { excludeId?: string }) {
     try {
       const raw = localStorage.getItem(RECENTLY_VIEWED_KEY);
       const ids: string[] = raw ? JSON.parse(raw) : [];
-      const skus = ids
+      const recent = ids
         .filter((id) => id !== excludeId)
         .map((id) => getProductById(id))
         .filter((s): s is Sku => Boolean(s) && !s!.hidden && !s!.internal);
 
-      // Pad with other visible products if list is short
-      if (skus.length < 4) {
-        const pad = getVisibleProducts()
-          .filter((p) => p.id !== excludeId && !skus.some((s) => s.id === p.id))
-          .slice(0, 4 - skus.length);
-        skus.push(...pad);
-      }
-      setItems(skus.slice(0, 4));
+      // Always show a RANDOM 4 from the whole catalog so every model (incl. the
+      // new ones) gets surfaced — not just whatever's in view-history. At most
+      // one genuinely-recently-viewed car is kept up front for relevance, the
+      // rest are random picks from everything else.
+      const pool = getVisibleProducts().filter((p) => p.id !== excludeId);
+      const lead = recent.slice(0, 1);
+      const rest = sample(
+        pool.filter((p) => !lead.some((s) => s.id === p.id)),
+        4 - lead.length
+      );
+      setItems([...lead, ...rest].slice(0, 4));
     } catch {
-      setItems(getVisibleProducts().filter((p) => p.id !== excludeId).slice(0, 4));
+      const pool = getVisibleProducts().filter((p) => p.id !== excludeId);
+      setItems(sample(pool, 4));
     }
   }, [excludeId]);
 
@@ -47,7 +62,7 @@ export default function RecentlyViewed({ excludeId }: { excludeId?: string }) {
             </h2>
           </div>
           <Link
-            href="/#sku"
+            href="/#hub-shop"
             className="hidden sm:inline text-sm font-semibold text-brand-red hover:underline underline-offset-4"
           >
             See all →

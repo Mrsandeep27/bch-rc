@@ -25,6 +25,7 @@ import {
   events,
 } from "@/db/schema";
 import { logError } from "@/lib/logger";
+import { INVENTORY_SITE_ID } from "@/lib/inventory";
 
 type OrderItem = {
   skuId: string;
@@ -73,7 +74,9 @@ export async function releaseOrderHolds(
     const { items, siteId, customerId } = claimed[0];
     const lines = (items as OrderItem[]) ?? [];
 
-    // ── Restore reserved stock for each line. ──────────────────────────
+    // ── Restore reserved stock for each line. Single inventory: restore
+    //    targets INVENTORY_SITE_ID, symmetric with the order-create decrement
+    //    (the order row's own siteId is a storefront label, not a keyspace). ─
     let restoredLines = 0;
     for (const line of lines) {
       const variantKey = line.variantSlug ?? "";
@@ -85,7 +88,7 @@ export async function releaseOrderHolds(
         })
         .where(
           and(
-            eq(inventory.siteId, siteId),
+            eq(inventory.siteId, INVENTORY_SITE_ID),
             eq(inventory.skuId, line.skuId),
             eq(inventory.variantSlug, variantKey),
           ),
@@ -173,7 +176,7 @@ export async function reacquireOrderHolds(
         })
         .where(
           and(
-            eq(inventory.siteId, siteId),
+            eq(inventory.siteId, INVENTORY_SITE_ID),
             eq(inventory.skuId, line.skuId),
             eq(inventory.variantSlug, variantKey),
           ),

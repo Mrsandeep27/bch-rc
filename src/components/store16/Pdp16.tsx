@@ -17,6 +17,7 @@ import { useCart16 } from "@/lib/cart-store";
 import { OFFERS } from "@/lib/config";
 import { calcDiscountPct } from "@/lib/utils";
 import { formatINR16, type Store16Product } from "@/lib/store16";
+import { trackFunnel } from "@/lib/funnel-client";
 
 // Key selling points — the 1:16 hardware is shared across finishes, so these
 // are common. Rendered as ⚡ bullets, matching the 1:64 PDP.
@@ -45,8 +46,23 @@ export default function Pdp16({ product }: { product: Store16Product }) {
   const savings = mrpINR - onlinePrice;
   const pct = calcDiscountPct(mrpINR, onlinePrice);
 
+  // Funnel: product_view fires once when the 1:16 PDP mounts (this store had no
+  // product_view / add_to_cart instrumentation, so the prc16 funnel read empty).
+  useEffect(() => {
+    trackFunnel("product_view", {
+      skuId: product.slug,
+      name: product.name,
+      priceInr: product.priceINR,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product.slug]);
+
+  const trackAdd = () =>
+    trackFunnel("add_to_cart", { skuId: product.slug, qty: 1, valueInr: product.priceINR });
+
   const onAdd = () => {
     add(product.slug, null);
+    trackAdd();
     setAdded(true);
     setTimeout(() => setAdded(false), 1500);
   };
@@ -55,6 +71,7 @@ export default function Pdp16({ product }: { product: Store16Product }) {
   // drawer dwell). Mirrors the Lineup card's buy-now path.
   const onBuyNow = () => {
     add(product.slug, null);
+    trackAdd();
     router.push("/checkout?store=16");
   };
 

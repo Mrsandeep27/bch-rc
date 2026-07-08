@@ -5,26 +5,27 @@ import Image from "next/image";
 import { motion } from "framer-motion";
 import { Check, ShoppingBag, Plus } from "lucide-react";
 import { BUNDLE_TIERS } from "@/lib/config";
-import { useCart } from "@/lib/cart-store";
-import { formatINR, cn } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
-// Bundle bonus is universal — any 2 cars get ₹298 off, any 3+ get ₹698 off.
-// Driven by total cart quantity, applied automatically at checkout
+// Bundle bonus is universal — a PERCENTAGE off the cart subtotal that grows
+// with quantity (2→5% · 3→10% · 4/5→15% · 6+→20%). Driven by total cart
+// quantity, applied automatically at checkout
 // (src/app/api/orders/create/route.ts via bundleDiscountInr).
 //
 // These cards exist purely to communicate the offer + let the buyer scroll
 // to the SKU lineup to pick. We don't pre-fill specific cars any more —
 // the customer mixes freely.
 
-const TIER_BY_QTY: Record<2 | 3, { bonusInr: number }> = {
-  2: { bonusInr: BUNDLE_TIERS.find((t) => t.minQty === 2)?.bonusInr ?? 298 },
-  3: { bonusInr: BUNDLE_TIERS.find((t) => t.minQty === 3)?.bonusInr ?? 698 },
+const TIER_BY_QTY: Record<2 | 3 | 4, { pct: number }> = {
+  2: { pct: BUNDLE_TIERS.find((t) => t.minQty === 2)?.pct ?? 5 },
+  3: { pct: BUNDLE_TIERS.find((t) => t.minQty === 3)?.pct ?? 10 },
+  4: { pct: BUNDLE_TIERS.find((t) => t.minQty === 4)?.pct ?? 15 },
 };
 
 type BundleOption = {
-  qty: 1 | 2 | 3;
+  qty: 2 | 3 | 4;
   label: string;
-  saveINR: number;
+  savePct: number;
   badge?: "MOST POPULAR" | "BEST VALUE";
   sub: string;
   cars: { src: string; alt: string }[];
@@ -33,35 +34,37 @@ type BundleOption = {
 const CAR_BMW = { src: "/products/PRC-bmw.webp", alt: "Pocket BMW" };
 const CAR_PORSCHE = { src: "/products/PRC-porsche.webp", alt: "Pocket Porsche" };
 const CAR_MONSTER = { src: "/products/PRC-monster.webp", alt: "Pocket Monster Truck" };
+// 1:16 big-drift car — bundles mix scales, so show a 1:16 in the lineup too.
+const CAR_16 = { src: "/store16-images/drift-inferno/1-hero.webp", alt: "Drift Inferno 1:16" };
 
 const OPTIONS: BundleOption[] = [
   {
-    qty: 1,
-    label: "Buy 1",
-    saveINR: 0,
-    sub: "Just for me",
-    cars: [CAR_BMW],
-  },
-  {
     qty: 2,
     label: "Mix any 2",
-    saveINR: TIER_BY_QTY[2].bonusInr,
+    savePct: TIER_BY_QTY[2].pct,
     badge: "MOST POPULAR",
     sub: "Gift + keep",
-    cars: [CAR_BMW, CAR_PORSCHE],
+    cars: [CAR_PORSCHE, CAR_16],
   },
   {
     qty: 3,
-    label: "Mix any 3+",
-    saveINR: TIER_BY_QTY[3].bonusInr,
-    badge: "BEST VALUE",
+    label: "Mix any 3",
+    savePct: TIER_BY_QTY[3].pct,
     sub: "Race night",
-    cars: [CAR_BMW, CAR_PORSCHE, CAR_MONSTER],
+    cars: [CAR_BMW, CAR_PORSCHE, CAR_16],
+  },
+  {
+    qty: 4,
+    label: "Mix any 4+",
+    savePct: TIER_BY_QTY[4].pct,
+    badge: "BEST VALUE",
+    sub: "Full garage",
+    cars: [CAR_BMW, CAR_PORSCHE, CAR_MONSTER, CAR_16],
   },
 ];
 
 export default function BundlePicker() {
-  const [selectedQty, setSelectedQty] = useState<1 | 2 | 3>(2);
+  const [selectedQty, setSelectedQty] = useState<2 | 3 | 4>(2);
 
   const handlePick = () => {
     // No more pre-filling a fixed combo — the bundle is "any cars". Scroll to
@@ -69,17 +72,16 @@ export default function BundlePicker() {
     // If we're not on the home page, hop there with the hash and the browser
     // takes care of the in-page scroll.
     if (typeof window === "undefined") return;
-    const lineup = document.getElementById("sku");
+    // Works on both the 1:64 home (#sku lineup) and the hub (#hub-shop grid) —
+    // scroll to whichever shoppable list is on the current page.
+    const lineup =
+      document.getElementById("sku") ?? document.getElementById("hub-shop");
     if (lineup) {
       lineup.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
     window.location.href = "/#sku";
   };
-
-  // Open the cart drawer so the buyer can see live bundle progress as they
-  // browse. No-op if the cart is empty — they'll see the empty-state nudge.
-  const handleOpenCart = () => useCart.getState().open();
 
   return (
     <section id="bundles" className="py-5 sm:py-10 bg-brand-cream">
@@ -89,10 +91,10 @@ export default function BundlePicker() {
             Bundle &amp; save
           </span>
           <h2 className="font-display text-xl sm:text-3xl font-bold text-brand-ink mt-1 text-balance">
-            More cars. Bigger savings.
+            More cars. <span className="text-brand-red">Bigger savings.</span>
           </h2>
           <p className="text-brand-ink-soft text-xs sm:text-sm mt-1">
-            Auto-applied in cart.
+            Add more to your order to get more off — auto-applied in cart.
           </p>
         </div>
 
@@ -177,13 +179,13 @@ export default function BundlePicker() {
                   ))}
                 </div>
 
-                {/* Savings headline replaces the (misleading) fixed total
-                    price — the actual cart total depends on which cars the
-                    buyer mixes, so we show the bonus they'll get instead. */}
+                {/* Savings headline — the discount is now a percentage off the
+                    subtotal, so we show the % they unlock (the exact ₹ depends
+                    on which cars they mix, and shows live in the cart). */}
                 <div className="mt-3 sm:mt-4">
-                  {opt.saveINR > 0 ? (
+                  {opt.savePct > 0 ? (
                     <div className="font-display text-2xl sm:text-3xl font-bold text-success">
-                      Save {formatINR(opt.saveINR)}
+                      Save {opt.savePct}%{opt.qty === 4 ? "+" : ""}
                     </div>
                   ) : (
                     <div className="font-display text-2xl sm:text-3xl font-bold text-brand-ink">
@@ -193,7 +195,7 @@ export default function BundlePicker() {
                 </div>
 
                 <div className="mt-2 inline-block bg-success/10 text-success text-[11px] sm:text-xs font-bold px-2.5 py-1 rounded-full">
-                  {opt.saveINR > 0 ? "BONUS" : "FREE SHIPPING"}
+                  {opt.savePct > 0 ? "BONUS" : "FREE SHIPPING"}
                 </div>
               </motion.button>
             );
@@ -204,13 +206,11 @@ export default function BundlePicker() {
         <div className="mt-5 sm:mt-10 flex flex-col items-center gap-2">
           <button
             type="button"
-            onClick={selectedQty === 1 ? handleOpenCart : handlePick}
-            className="bg-brand-red hover:bg-brand-red-hover text-white px-7 sm:px-8 py-3.5 sm:py-5 rounded-full font-semibold text-base sm:text-lg shadow-2xl transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2"
+            onClick={handlePick}
+            className="bg-brand-red hover:bg-brand-red-hover text-white px-7 sm:px-8 py-3.5 sm:py-5 rounded-full font-semibold text-base sm:text-lg shadow-2xl transition-colors animate-heartbeat flex items-center gap-2"
           >
             <ShoppingBag size={20} aria-hidden />
-            {selectedQty === 1
-              ? "Pick your car"
-              : `Pick any ${selectedQty}${selectedQty === 3 ? "+" : ""} cars`}
+            {`Pick any ${selectedQty}${selectedQty === 4 ? "+" : ""} cars`}
           </button>
           <p className="text-brand-ink text-[10px] sm:text-xs mt-1 font-mono font-medium text-center">
             Free shipping · COD · 24-hr dispatch

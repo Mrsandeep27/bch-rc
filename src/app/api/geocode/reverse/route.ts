@@ -14,6 +14,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { rateLimit } from "@/lib/rate-limit";
 
 type NominatimAddress = {
   postcode?: string;
@@ -45,6 +46,12 @@ type NominatimResponse = {
 };
 
 export async function GET(req: Request) {
+  // Nominatim enforces ~1 req/sec per their fair-use policy and will ban our
+  // server IP if abused — cap per-IP so one client can't get the whole app
+  // throttled upstream (and break "use my location" for everyone).
+  const limited = rateLimit(req, { scope: "geocode:reverse", limit: 20 });
+  if (limited) return limited;
+
   const url = new URL(req.url);
   const lat = url.searchParams.get("lat");
   const lon = url.searchParams.get("lon");

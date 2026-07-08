@@ -15,11 +15,23 @@ import { PRODUCTS } from "../lib/products";
 
 const SITE_ID = "prc";
 
+/** Colourless-SKU default seed stock. 1:16 big cars are stocked shallower. */
+function defaultStock(scale: string): number {
+  return scale === "1:16" ? 25 : 50;
+}
+
 async function main() {
   let inserted = 0;
   let skipped = 0;
 
   for (const sku of PRODUCTS) {
+    // Hidden SKUs are not orderable — seeding them creates orphan rows the
+    // admin health page then flags. (ONE single inventory: every orderable
+    // SKU, any scale, seeds under SITE_ID "prc".)
+    if (sku.hidden) {
+      skipped++;
+      continue;
+    }
     if (sku.colors && sku.colors.length > 0) {
       for (const c of sku.colors) {
         const result = await db
@@ -42,19 +54,20 @@ async function main() {
     } else {
       // SKUs without colour variants — single row with variant_slug='' and a
       // generous default stock the operator can flip down.
+      const stock = defaultStock(sku.scale);
       const result = await db
         .insert(inventory)
         .values({
           siteId: SITE_ID,
           skuId: sku.id,
           variantSlug: "",
-          stock: 50,
+          stock,
         })
         .onConflictDoNothing()
         .returning({ skuId: inventory.skuId });
       if (result.length > 0) {
         inserted++;
-        console.log(`  + ${sku.id} stock=50`);
+        console.log(`  + ${sku.id} stock=${stock}`);
       } else {
         skipped++;
       }

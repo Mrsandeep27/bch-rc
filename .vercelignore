@@ -9,6 +9,9 @@ public/products/raw/
 node_modules/
 .DS_Store
 
+# Shopify theme (separate deploy target — not part of the Next build)
+pocketrc-theme/
+
 # Docs and scrape dumps — not needed in deployed output
 docs/scrape-pinchtab/
 docs/*.png

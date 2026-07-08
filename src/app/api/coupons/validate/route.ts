@@ -9,6 +9,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { validateCoupon, CouponError } from "@/lib/coupons";
+import { rateLimit } from "@/lib/rate-limit";
 
 const Query = z.object({
   code: z.string().min(1).max(40),
@@ -18,6 +19,11 @@ const Query = z.object({
 });
 
 export async function GET(req: Request) {
+  // Throttle to blunt coupon-code enumeration (distinct error messages make
+  // this an oracle). 20/min/IP is far above any legitimate checkout use.
+  const limited = rateLimit(req, { scope: "coupons:validate", limit: 20 });
+  if (limited) return limited;
+
   const url = new URL(req.url);
   const parsed = Query.safeParse({
     code: url.searchParams.get("code"),

@@ -57,7 +57,9 @@ const REVIEWS: readonly Review[] = [
 const SCROLL_SPEED_PX_PER_FRAME = 0.4; // ~24 px/sec at 60fps
 const RESUME_AFTER_USER_INTERACTION_MS = 3000;
 
-export default function CustomerReviewsSlider() {
+/** `compact` (hub) shrinks the mobile cards/heading so the section stays
+ *  short — desktop and the auto-scroll behaviour are identical. */
+export default function CustomerReviewsSlider({ compact = false }: { compact?: boolean }) {
   const trackRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -161,17 +163,17 @@ export default function CustomerReviewsSlider() {
   return (
     <section
       aria-labelledby="customer-reviews-title"
-      className="bg-brand-cream border-y border-brand-line py-10 sm:py-16"
+      className={`bg-brand-cream border-y border-brand-line ${compact ? "py-7" : "py-10"} sm:py-16`}
     >
-      <header className="text-center mb-6 sm:mb-10 px-4">
+      <header className={`text-center ${compact ? "mb-4" : "mb-6"} sm:mb-10 px-4`}>
         <p className="text-[10px] sm:text-xs font-mono uppercase tracking-widest text-brand-red">
           Real buyers · real cars
         </p>
         <h2
           id="customer-reviews-title"
-          className="font-display text-2xl sm:text-4xl font-bold text-brand-ink mt-2"
+          className={`font-display ${compact ? "text-xl" : "text-2xl"} sm:text-4xl font-bold text-brand-ink mt-2`}
         >
-          What buyers actually say.
+          What <span className="text-brand-red">buyers actually</span> say.
         </h2>
         <p className="hidden sm:block text-sm sm:text-base text-brand-ink-soft mt-2 max-w-xl mx-auto">
           Unedited photos. Honest one-liners. Drag to browse — or just let it auto-scroll.
@@ -186,7 +188,7 @@ export default function CustomerReviewsSlider() {
       >
         <ul className="flex gap-3 sm:gap-4 px-4 w-max">
           {[...REVIEWS, ...REVIEWS].map((r, i) => (
-            <ReviewCard key={i} review={r} priority={i < 3} />
+            <ReviewCard key={i} review={r} priority={i < 3} compact={compact} />
           ))}
         </ul>
       </div>
@@ -197,30 +199,32 @@ export default function CustomerReviewsSlider() {
 function ReviewCard({
   review,
   priority,
+  compact = false,
 }: {
   review: Review;
   priority: boolean;
+  compact?: boolean;
 }) {
   const padded = String(review.img).padStart(2, "0");
   return (
-    <li className="shrink-0 w-[220px] sm:w-[260px] relative rounded-2xl overflow-hidden bg-brand-ink">
+    <li className={`shrink-0 ${compact ? "w-[160px]" : "w-[220px]"} sm:w-[260px] relative rounded-2xl overflow-hidden bg-brand-ink`}>
       <div className="relative aspect-[3/4]">
         <Image
           src={`/reviews/review-${padded}.webp`}
           alt={`${review.name} from ${review.city} with their PRC drift car`}
           fill
-          sizes="(max-width: 640px) 220px, 260px"
+          sizes={compact ? "(max-width: 640px) 160px, 260px" : "(max-width: 640px) 220px, 260px"}
           priority={priority}
           loading={priority ? undefined : "lazy"}
           className="object-cover"
         />
         {/* Quote overlay — gradient floor so text stays readable against
             any photo background. */}
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/55 to-transparent p-3.5 sm:p-4 pt-12 sm:pt-14">
-          <p className="text-white text-[13px] sm:text-sm font-medium leading-snug">
+        <div className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/55 to-transparent ${compact ? "p-2.5 pt-9" : "p-3.5 pt-12"} sm:p-4 sm:pt-14`}>
+          <p className={`text-white ${compact ? "text-[11px]" : "text-[13px]"} sm:text-sm font-medium leading-snug`}>
             &ldquo;{review.text}&rdquo;
           </p>
-          <p className="text-white/70 text-[10px] font-mono uppercase tracking-widest mt-2">
+          <p className={`text-white/70 ${compact ? "text-[8px] mt-1" : "text-[10px] mt-2"} font-mono uppercase tracking-widest sm:mt-2 sm:text-[10px]`}>
             — {review.name} · {review.city}
           </p>
         </div>

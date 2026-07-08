@@ -2,11 +2,13 @@
  * Next.js middleware. Two jobs:
  *  1. Refresh the Supabase session cookie on every request (without this, SSR
  *     pages won't see the logged-in user).
- *  2. First-party visitor analytics — assign/refresh the visitor (prc_vid) and
- *     session (prc_sid) cookies and record the pageview by calling /api/track
- *     SERVER-TO-SERVER via event.waitUntil. Because the browser never issues
- *     that request, ad-blockers can't strip it — the main accuracy win over
- *     client-side analytics.
+ *  2. First-party visitor analytics — assign the visitor (prc_vid) and session
+ *     (prc_sid) cookies and, on session START only, record the session by
+ *     calling /api/track SERVER-TO-SERVER via event.waitUntil. Because the
+ *     browser never issues that request, ad-blockers can't strip it — the main
+ *     accuracy win over client-side analytics. Per-navigation liveness is
+ *     bumped by the batched /api/track/event handler instead, so an engaged
+ *     visit costs one round-trip at the start, not one per navigation.
  *
  * Runs on the edge runtime, so it must not touch postgres-js directly; the DB
  * write happens in the node /api/track route.
@@ -30,6 +32,7 @@ import {
   VISITOR_TTL_SECONDS,
   UTM_KEYS,
   shouldTrackPath,
+  isBotUA,
 } from "./src/lib/analytics";
 
 // MAINTENANCE MODE — gated by env var. Runs BEFORE Supabase/analytics so a
@@ -132,10 +135,15 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
 
   let response = NextResponse.next({ request });
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
+  // Supabase session refresh — ONLY when configured. A preview deploy without
+  // the Supabase env vars must not take down the whole site with
+  // MIDDLEWARE_INVOCATION_FAILED; skip the refresh (auth-gated pages degrade
+  // gracefully) and still serve the page + analytics. Production has the vars,
+  // so this is a no-op there.
+  const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supaKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (supaUrl && supaKey) {
+    const supabase = createServerClient(supaUrl, supaKey, {
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -150,10 +158,13 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
           );
         },
       },
-    },
-  );
-
-  await supabase.auth.getUser();
+    });
+    try {
+      await supabase.auth.getUser();
+    } catch {
+      // Best-effort: an auth hiccup must never 500 page delivery.
+    }
+  }
 
   // --- First-party analytics -------------------------------------------------
   trackPageview(request, response, event);
@@ -227,9 +238,24 @@ function trackPageview(
   // present (which we've now eliminated for returning visitors). The
   // Cache-Control header is set further up the chain by the route; we just
   // flag this for the route to read if it wants to.
+  //
+  // The server-side session write fires ONCE per session — on session start (a
+  // freshly-minted sid/vid). This is the ad-blocker-proof signal every
+  // dashboard-of-record metric is built from: it INSERTs the session row with
+  // first-touch attribution (source/utm/referrer), captured only at insert and
+  // never overwritten. Mid-session navigations need no write here — the
+  // per-navigation liveness (last_seen_at) is bumped by the already-batched
+  // /api/track/event handler (see recordFunnelEvents), so an engaged visit no
+  // longer costs one edge request PER navigation, only one at the start.
   if (!writesIdentity) {
     response.headers.set("x-prc-identity", "warm");
+    return;
   }
+
+  // Detected crawlers are excluded from every dashboard count (is_bot = false
+  // filter), so recording their session changes no displayed number — skip the
+  // round-trip rather than pay an edge request for a row nothing reads.
+  if (isBotUA(request.headers.get("user-agent"))) return;
 
   const url = request.nextUrl;
   const payload: Record<string, string | null> = {
@@ -273,7 +299,11 @@ export const config = {
      * - images / videos / fonts
      * - api/webhooks/* (external services like Shiprocket/Razorpay — must respond
      *   fast and never need a Supabase session refresh)
+     * - api/track/* (first-party telemetry: the server-to-server session write,
+     *   the batched funnel beacon, and the Meta CAPI relay — none need
+     *   maintenance/store16/auth middleware, and excluding them stops the
+     *   internal /api/track POST from re-running the whole middleware)
      */
-    "/((?!_next/static|_next/image|favicon.ico|api/webhooks|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|woff2|ttf)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/webhooks|api/track|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|woff2|ttf)$).*)",
   ],
 };

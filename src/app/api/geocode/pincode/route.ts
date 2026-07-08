@@ -20,6 +20,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { rateLimit } from "@/lib/rate-limit";
 
 type PostalApiPostOffice = {
   Name?: string;
@@ -37,6 +38,11 @@ type PostalApiResponse = {
 }[];
 
 export async function GET(req: Request) {
+  // Each call makes an outbound India Post fetch; cap per-IP so a script can't
+  // get our server IP throttled upstream or burn function invocations.
+  const limited = rateLimit(req, { scope: "geocode:pincode", limit: 30 });
+  if (limited) return limited;
+
   const url = new URL(req.url);
   const pincode = (url.searchParams.get("pincode") ?? "").trim();
 

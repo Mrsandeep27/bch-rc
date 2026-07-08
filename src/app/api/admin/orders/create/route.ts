@@ -30,6 +30,7 @@ import {
 } from "@/db/schema";
 import { sql, eq, and } from "drizzle-orm";
 import { PRODUCTS } from "@/lib/products";
+import { INVENTORY_SITE_ID } from "@/lib/inventory";
 import { OFFERS } from "@/lib/config";
 import { THEME } from "@/lib/theme";
 import { createPaymentLink } from "@/lib/razorpay";
@@ -188,7 +189,7 @@ export async function POST(req: Request) {
             .set({ stock: sql`${inventory.stock} - ${item.qty}`, updatedAt: new Date() })
             .where(
               and(
-                eq(inventory.siteId, body.siteId),
+                eq(inventory.siteId, INVENTORY_SITE_ID),
                 eq(inventory.skuId, item.skuId),
                 eq(inventory.variantSlug, variantKey),
                 sql`${inventory.stock} >= ${item.qty}`,
@@ -201,7 +202,7 @@ export async function POST(req: Request) {
               .from(inventory)
               .where(
                 and(
-                  eq(inventory.siteId, body.siteId),
+                  eq(inventory.siteId, INVENTORY_SITE_ID),
                   eq(inventory.skuId, item.skuId),
                   eq(inventory.variantSlug, variantKey),
                 ),

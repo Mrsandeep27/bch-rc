@@ -1,147 +1,113 @@
-import { Suspense } from "react";
-import dynamic from "next/dynamic";
+import type { Metadata } from "next";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
 import Header from "@/components/Header";
-import Hero from "@/components/Hero";
-import HeroMiniFaq from "@/components/HeroMiniFaq";
-import TrustMarquee from "@/components/TrustMarquee";
-import SkuLineup from "@/components/SkuLineup";
+import HubHero from "@/components/hub/HubHero";
+import HubTrustBar from "@/components/hub/HubTrustBar";
+import HubShop from "@/components/hub/HubShop";
+import BundlePicker from "@/components/BundlePicker";
+import HubClientUi from "@/components/hub/HubClientUi";
+import HubPerfBanner from "@/components/hub/HubPerfBanner";
+import HubBestSellers from "@/components/hub/HubBestSellers";
+import HubDriftVideo from "@/components/hub/HubDriftVideo";
+import HubWhyPrc from "@/components/hub/HubWhyPrc";
+import HubBuildYourOwn from "@/components/hub/HubBuildYourOwn";
+import InstaCommunity16 from "@/components/store16/InstaCommunity16";
+import CustomerReviewsSlider from "@/components/CustomerReviewsSlider";
 import Footer from "@/components/Footer";
-import HomeJsonLd from "@/components/HomeJsonLd";
-import HomeClientUi from "@/components/HomeClientUi";
-import { Skeleton, SkeletonGrid } from "@/components/Skeleton";
-import { HOME_FAQS } from "@/lib/faqs";
+import HubSpinWheel from "@/components/hub/HubSpinWheel";
 
-// B06 — make the homepage edge-cacheable. ISR revalidates every hour; that's
-// well below the cadence of any catalogue change (prices, stock, copy) but
-// still lets a deploy refresh the cache via on-demand revalidation if needed.
-// Combined with B05 (cookies no longer Set-Cookie'd on every render) Vercel
-// will serve this from the edge instead of cold-rendering on every visit.
+// The hub IS the homepage — the single storefront across every scale/category
+// (mini 1:64, big 1:16, 1:20, construction, polo). Indexable: this is the main
+// store page, not the old noindex preview.
+export const metadata: Metadata = {
+  title: "PRC Cars — Pocket RC Drift Cars, COD across India",
+  description:
+    "Shop RC drift cars from ₹999 — mini 1:64, big 1:16, construction & more. Cash on Delivery pan-India, 7-day replacement, ships in 24 hrs from Bangalore.",
+  alternates: { canonical: "/" },
+};
+
 export const revalidate = 3600;
-
-// Below-the-fold sections — still SSR'd (SEO + AI-citation), but the client JS
-// is split into separate chunks that browsers fetch in parallel after the
-// hero finishes painting. Skeletons act as the suspense placeholder during
-// the brief streaming gap.
-// FeatureCarousel hidden 2026-06-09 - the 4-card grid (Drift / Pocket /
-// Charge / Race) duplicated what HowToUse already covers + the hero
-// micro-copy. Bring back by uncommenting the import and the JSX below
-// if A/B testing shows the long page benefits from the extra block.
-// const FeatureCarousel = dynamic(() => import("@/components/FeatureCarousel"), {
-//   loading: () => <Skeleton className="h-80 w-full max-w-7xl mx-auto my-12" />,
-// });
-const HowToUse = dynamic(() => import("@/components/HowToUse"), {
-  loading: () => <Skeleton className="h-64 w-full max-w-6xl mx-auto my-12" />,
-});
-const CustomerReviewsSlider = dynamic(
-  () => import("@/components/CustomerReviewsSlider"),
-  {
-    loading: () => <Skeleton className="h-96 w-full mx-auto my-12" />,
-  },
-);
-// OurStorySection hidden 2026-06-10 — bring back by uncommenting the import
-// and the JSX below.
-// const OurStorySection = dynamic(() => import("@/components/OurStorySection"), {
-//   loading: () => <Skeleton className="h-96 w-full max-w-7xl mx-auto my-12" />,
-// });
-const UgcGrid = dynamic(() => import("@/components/UgcGrid"), {
-  loading: () => (
-    <div className="max-w-7xl mx-auto my-12 px-4">
-      <SkeletonGrid count={6} />
-    </div>
-  ),
-});
-const BundlePicker = dynamic(() => import("@/components/BundlePicker"), {
-  loading: () => <Skeleton className="h-96 w-full max-w-7xl mx-auto my-12" />,
-});
-// P03 — OfferStack (5-card offer soup) replaced by ValueStack (one totalled
-// value-stack). The 2-car bundle lives in BundlePicker; the LED upgrade
-// moves to the PDP upsell. Keeping the import comment so a future change
-// can flip it back if A/B testing shows the soup outperforms.
-const ValueStack = dynamic(() => import("@/components/ValueStack"), {
-  loading: () => <Skeleton className="h-64 w-full max-w-7xl mx-auto my-12" />,
-});
-const FAQ = dynamic(() => import("@/components/FAQ"), {
-  loading: () => <Skeleton className="h-96 w-full max-w-3xl mx-auto my-12" />,
-});
-const FinalCta = dynamic(() => import("@/components/FinalCta"), {
-  loading: () => <Skeleton className="h-64 w-full max-w-7xl mx-auto my-12" />,
-});
-
-// UTM-driven hero variant + openCart query-param are now read CLIENT-SIDE
-// by Hero (uses useSearchParams) and HomeClientUi (same). This server page
-// no longer touches searchParams, which lets Next.js statically optimize the
-// route + lets Vercel edge-cache the HTML.
 
 export default function Page() {
   return (
     <>
-      <HomeJsonLd faqs={HOME_FAQS} />
-      <AnnouncementBar />
-      <Header />
-      <main className="flex-1 -mt-16 sm:-mt-20">
-        {/* Suspense wrappers around useSearchParams consumers - Next.js
-            requires a Suspense boundary above any client component that
-            reads useSearchParams when the page is statically rendered. */}
-        <Suspense fallback={<Hero />}>
-          <Hero />
-        </Suspense>
-        {/* StickyMobileCTA observes this sentinel — when it scrolls above the
-            viewport (i.e. the user is past the hero), the sticky buy bar
-            appears. */}
-        <div id="hero-end-sentinel" aria-hidden className="h-px w-full" />
+      <main className="bg-white">
+        <AnnouncementBar />
+        {/* Shared header — transparent over the hero on the homepage. */}
+        <Header />
+        {/* Pull the hero up BEHIND the transparent header. The header's height
+            is h-16 sm:h-18, so the negative margin matches it. The hero itself
+            is sized to (100svh − announcement bar). */}
+        <div className="-mt-16 sm:-mt-[4.5rem]">
+          <HubHero />
+        </div>
 
-        {/* F03 — top-3-objections mini-FAQ. Sits directly under the hero so
-            COD / size / "what if it breaks?" are answered AT the decision
-            pixel, not 13 sections down in the full FAQ. */}
-        <HeroMiniFaq />
+        {/* trust bar — slim genuine-signal strip right under the hero
+            (rating · orders shipped · replacement · secure COD). */}
+        <HubTrustBar />
 
-        {/* TrustMarquee — product-spec marquee (USB-C, 2.4 GHz, die-cast,
-            etc.). Not a trust/policy strip; safe to keep here even though
-            relievers also live in the hero. */}
-        <TrustMarquee />
+        {/* SHOP — category tabs → shoppable grid of every model, one shared
+            cart (mix scales, checkout once). */}
+        <HubShop />
 
-        {/* Order: hero -> mini-FAQ -> spec marquee -> SkuLineup (PRODUCTS
-            high so the buyer can shop immediately) -> CustomerReviews
-            slider (real buyer photos, immediate social proof after the
-            shop) -> Our Story (founder + warehouse) -> UGC -> Features
-            -> HowToUse -> BundlePicker -> ValueStack -> FAQ -> FinalCta.
-            Each below-fold section is wrapped with .cv-auto so the
-            browser skips paint/layout for off-screen content. */}
-        <div className="cv-auto">
-          <SkuLineup />
-        </div>
-        <div className="cv-auto">
-          <CustomerReviewsSlider />
-        </div>
-        {/* OurStorySection hidden 2026-06-10 */}
-        <div className="cv-auto">
-          <UgcGrid />
-        </div>
-        {/* FeatureCarousel hidden 2026-06-09 — see import comment above */}
-        {/* <div className="cv-auto">
-          <FeatureCarousel />
-        </div> */}
-        <div className="cv-auto">
-          <HowToUse />
-        </div>
-        <div className="cv-auto">
-          <BundlePicker />
-        </div>
-        <div className="cv-auto">
-          <ValueStack />
-        </div>
-        <div className="cv-auto">
-          <FAQ />
-        </div>
-        <div className="cv-auto">
-          <FinalCta />
-        </div>
+        {/* BUNDLE — "Bundle & save" cards; % ladder off the shared cart. */}
+        <BundlePicker />
+
+        {/* pocket-performance promo banner (full-bleed) */}
+        <HubPerfBanner />
+
+        {/* best-sellers — one pick per range, each CTA opens that PDP */}
+        <HubBestSellers />
+
+        {/* drift video — clip + tagline */}
+        <HubDriftVideo />
+
+        {/* reviews — real-buyer-photo slider (compact cards on mobile) */}
+        <CustomerReviewsSlider compact />
+
+        {/* CTA band — social proof → shop */}
+        <section className="bg-white pb-10 pt-2 text-center sm:pb-14">
+          <a
+            href="#hub-shop"
+            className="inline-flex items-center gap-2 rounded-full bg-brand-red px-8 py-4 text-base font-bold text-white shadow-lg animate-heartbeat sm:text-lg"
+          >
+            Shop all models
+            <span aria-hidden>→</span>
+          </a>
+        </section>
+
+        {/* why buy PRC — differentiator strip */}
+        <HubWhyPrc />
+
+        {/* #PRC on Insta — scattered autoplaying UGC reels + Find-us CTA */}
+        <InstaCommunity16 />
+
+        {/* build your own PRC — model + colour configurator teaser */}
+        <HubBuildYourOwn />
+
+        {/* Final CTA band — last conversion push before the footer */}
+        <section className="bg-brand-ink px-4 py-12 text-center text-white sm:py-16">
+          <h2 className="font-display text-2xl font-extrabold uppercase tracking-wide sm:text-3xl">
+            Ready to <span className="text-brand-red">drift</span>?
+          </h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-white/70 sm:text-base">
+            Pan-India COD · 7-day replacement · ships in 24 hrs from Bangalore.
+          </p>
+          <a
+            href="#hub-shop"
+            className="mt-6 inline-flex items-center gap-2 rounded-full bg-brand-red px-8 py-4 text-base font-bold text-white shadow-lg animate-heartbeat sm:text-lg"
+          >
+            Grab yours today
+            <span aria-hidden>→</span>
+          </a>
+        </section>
       </main>
+      {/* footer */}
       <Footer />
-      <Suspense fallback={null}>
-        <HomeClientUi />
-      </Suspense>
+      {/* Lead capture — "drift for your discount" popup (pops 3s after entry) */}
+      <HubSpinWheel />
+      {/* Shared cart drawer — opened by the header bag + product "Add to cart" */}
+      <HubClientUi />
     </>
   );
 }

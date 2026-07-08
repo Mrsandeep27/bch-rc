@@ -4,7 +4,17 @@ import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Minus, Plus, ShoppingBag, Zap, Truck, Shield, RotateCw } from "lucide-react";
+import {
+  Minus,
+  Plus,
+  ShoppingBag,
+  Truck,
+  Shield,
+  RotateCw,
+  Check,
+  Lock,
+  BadgeCheck,
+} from "lucide-react";
 import type { Sku } from "@/lib/products";
 import { formatINR, calcDiscountPct, cn } from "@/lib/utils";
 
@@ -17,6 +27,15 @@ import { useCart } from "@/lib/cart-store";
 import { ProductPlaceholder } from "@/components/ProductPlaceholder";
 import PDPStickyCTA from "@/components/PDPStickyCTA";
 import { Skeleton } from "@/components/Skeleton";
+import { EmiBadge } from "@/components/EmiBadge";
+import { Stars } from "@/components/Stars";
+import {
+  PdpReviews,
+  type PdpReviewItem,
+  type PdpReviewData,
+} from "@/components/PdpReviews";
+import { TRUST } from "@/lib/config";
+import { baselineRatingFor, baselineCountFor } from "@/lib/reviews-baseline";
 import { recordView } from "@/lib/recently-viewed";
 import {
   trackAddToCart,
@@ -74,7 +93,25 @@ function GalleryImage({
   );
 }
 
-export default function PDPClient({ sku }: { sku: Sku }) {
+export default function PDPClient({
+  sku,
+  siteId,
+  reviews,
+  reviewData,
+}: {
+  sku: Sku;
+  siteId: string;
+  reviews: PdpReviewItem[];
+  reviewData: PdpReviewData;
+}) {
+  // Per-product rating: real average once approved reviews exist, else a
+  // deterministic per-SKU baseline (4.5–4.9) so each product shows a distinct
+  // star row instead of an identical 4.7 across the whole catalog.
+  const baselineRating = baselineRatingFor(sku.id);
+  const baselineCount = baselineCountFor(sku.id);
+  const ratingValue =
+    reviewData.count > 0 ? reviewData.averageRating : baselineRating;
+  const ratingCount = reviewData.count > 0 ? reviewData.count : baselineCount;
   const router = useRouter();
   const [qty, setQty] = useState(1);
   const [activeImage, setActiveImage] = useState(0);
@@ -241,20 +278,37 @@ export default function PDPClient({ sku }: { sku: Sku }) {
             {sku.badge}
           </span>
         )}
-        <p className="text-[10px] sm:text-xs font-mono uppercase tracking-widest text-brand-ink-soft">
-          {sku.scale} · {sku.bodyShape}
+        {/* Single kicker line: scale + the product's own body class. The
+            bodyShape sometimes already carries the scale (e.g. "1:16 Drift
+            Car"), so strip a leading scale token to avoid "1:16 · 1:16 Drift
+            Car". One line only — Google still indexes scale + class here. */}
+        <p className="text-[10px] sm:text-xs font-mono uppercase tracking-widest text-brand-red">
+          {sku.scale} die-cast RC · {sku.bodyShape.replace(/^1:\d+\s+/i, "")}
         </p>
-        {/* H1 carries the scale + product class as a small kicker line so
-            Google indexes "1:64 die-cast RC drift car" against the product
-            page instead of just the brand name "Pocket BMW". Visually
-            hierarchical: scale chip, big SKU name, tagline. */}
-        <div className="text-[10px] sm:text-xs font-mono uppercase tracking-widest text-brand-red mt-1">
-          {sku.scale} die-cast RC drift car
-        </div>
         <h1 className="text-2xl sm:text-4xl font-bold text-brand-ink mt-0.5 leading-tight text-balance">
           {sku.name}
         </h1>
-        <p className="text-sm sm:text-lg text-brand-ink-soft mt-1 sm:mt-2">{sku.tagline}</p>
+
+        {/* Trust rating row — highlighted amber pill so the stars read as a
+            first-class trust signal. Real average once reviews land, brand
+            baseline until then. Links down to the reviews section. */}
+        <a
+          href="#reviews"
+          className="group mt-2.5 inline-flex items-center gap-2 rounded-full border border-amber-300/70 bg-amber-50 px-3 py-1.5 transition-colors hover:border-amber-400 hover:bg-amber-100"
+        >
+          <Stars value={ratingValue} size={17} />
+          <span className="text-sm font-extrabold tabular-nums text-brand-ink">
+            {ratingValue.toFixed(1)}
+          </span>
+          <span className="h-3.5 w-px bg-amber-300" aria-hidden />
+          <span className="text-xs font-semibold text-amber-700 underline-offset-2 group-hover:underline">
+            {reviewData.count > 0
+              ? `${ratingCount.toLocaleString("en-IN")} verified review${reviewData.count > 1 ? "s" : ""}`
+              : `${ratingCount.toLocaleString("en-IN")} ratings`}
+          </span>
+        </a>
+
+        <p className="text-sm sm:text-lg text-brand-ink-soft mt-2">{sku.tagline}</p>
 
         {/* Color picker — moved above price so it's visible in the mobile fold
             without scrolling. Most buyers decide colour before re-checking price. */}
@@ -292,7 +346,10 @@ export default function PDPClient({ sku }: { sku: Sku }) {
                   <button
                     key={c.slug}
                     type="button"
-                    disabled={soldOut}
+                    // Always selectable — a sold-out colour can still be
+                    // previewed (swap the hero + gallery); only the Buy/Add
+                    // buttons stay disabled for it. This keeps colours
+                    // browseable even when live stock is 0 (or unavailable).
                     onClick={() => {
                       setSelectedColorSlug(c.slug);
                       setActiveImage(0);
@@ -304,14 +361,13 @@ export default function PDPClient({ sku }: { sku: Sku }) {
                     role="radio"
                     aria-checked={active}
                     aria-label={soldOut ? `${c.name} — sold out` : c.name}
-                    aria-disabled={soldOut}
                     title={soldOut ? `${c.name} — sold out` : c.name}
                     className={cn(
                       "w-11 h-11 sm:w-10 sm:h-10 rounded-full border-2 transition-colors relative shrink-0 overflow-hidden",
                       active
                         ? "border-brand-ink ring-2 ring-offset-1 ring-brand-red"
                         : "border-brand-line hover:border-brand-ink-soft active:scale-95",
-                      soldOut && "opacity-40 cursor-not-allowed hover:border-brand-line active:scale-100"
+                      soldOut && !active && "opacity-50"
                     )}
                     style={{ background: swatchBg(c.swatch) }}
                   >
@@ -334,17 +390,15 @@ export default function PDPClient({ sku }: { sku: Sku }) {
           </div>
         )}
 
-        {/* Rating row removed — the PDP no longer surfaces reviews or a
-            rating summary (both the hand-curated ReviewsBlock and the
-            DB-backed PdpReviews block were pulled). */}
 
         {/* Price block - W05 dual price (online / COD) consistent with the
             home SkuLineup. Big number = online price (the "from" anchor);
             sub-line names the COD ceiling so a COD buyer doesn't hit a
-            +₹100 surprise at checkout. */}
-        <div className="mt-3 sm:mt-4">
+            +₹100 surprise at checkout. Grouped in an "offer card" so price,
+            EMI and free-ship read as one cohesive deal. */}
+        <div className="mt-4 rounded-2xl border border-brand-line bg-gradient-to-b from-white to-brand-cream/50 p-4 sm:p-5 shadow-sm">
           <div className="flex items-baseline gap-2 sm:gap-3 flex-wrap">
-            <span className="text-3xl sm:text-4xl font-bold text-brand-ink">
+            <span className="text-4xl sm:text-5xl font-extrabold tracking-tight text-brand-ink">
               {formatINR(sku.retailINR - 100)}
             </span>
             <span className="text-[10px] sm:text-xs font-mono uppercase tracking-widest text-brand-ink-soft">
@@ -353,14 +407,15 @@ export default function PDPClient({ sku }: { sku: Sku }) {
             <span className="text-base sm:text-lg text-brand-ink-soft line-through">
               {formatINR(sku.mrpINR)}
             </span>
-            <span className="text-xs sm:text-sm font-semibold bg-success/10 text-success px-2 py-0.5 rounded">
+            <span className="text-xs sm:text-sm font-bold bg-success text-white px-2.5 py-1 rounded-full shadow-sm">
               Save {formatINR(savings + 100)} · {pct}% off
             </span>
           </div>
-          <p className="text-xs sm:text-sm text-brand-ink-soft mt-1">
-            or {formatINR(sku.retailINR)} cash on delivery · all taxes
-            included
+          <p className="text-xs sm:text-sm text-brand-ink-soft mt-1.5">
+            or {formatINR(sku.retailINR)} cash on delivery · all taxes included
           </p>
+
+          <EmiBadge priceInr={sku.retailINR - 100} variant="pdp" className="mt-3" />
 
           {/* X15 - Free-ship progress band. Free-ship threshold is ₹1,099;
               the BMW lands right at it on COD, the F1/Monster clear it,
@@ -375,7 +430,8 @@ export default function PDPClient({ sku }: { sku: Sku }) {
             if (gap === 0) {
               return (
                 <div className="mt-3 inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-success">
-                  ✓ Free shipping unlocked
+                  <Check size={15} strokeWidth={3} className="shrink-0" />
+                  Free shipping unlocked
                 </div>
               );
             }
@@ -395,12 +451,15 @@ export default function PDPClient({ sku }: { sku: Sku }) {
           })()}
         </div>
 
-        {/* Bullets */}
-        <ul className="mt-4 sm:mt-6 space-y-2">
+        {/* Bullets — check chips read as "included / true", cleaner than a
+            wall of identical ⚡ icons. */}
+        <ul className="mt-4 grid gap-2 sm:mt-6 sm:gap-2.5">
           {sku.bullets.map((b) => (
-            <li key={b} className="flex items-start gap-2 text-sm text-brand-ink">
-              <Zap size={16} className="text-brand-red shrink-0 mt-0.5" />
-              <span>{b}</span>
+            <li key={b} className="flex items-start gap-2 text-[13px] text-brand-ink sm:gap-2.5 sm:text-sm">
+              <span className="mt-0.5 flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full bg-brand-red/10 sm:h-5 sm:w-5">
+                <Check size={12} strokeWidth={3} className="text-brand-red" />
+              </span>
+              <span className="leading-snug">{b}</span>
             </li>
           ))}
         </ul>
@@ -409,11 +468,12 @@ export default function PDPClient({ sku }: { sku: Sku }) {
             until we shoot one. Lists the contents the OfferStack value
             stack also names, so the buyer can confirm what arrives without
             scrolling to value-stack. */}
-        <div className="mt-4 sm:mt-6 bg-brand-cream rounded-xl border border-brand-line p-4 sm:p-5">
+        <div className="mt-3 sm:mt-6 bg-brand-cream rounded-xl border border-brand-line p-3 sm:p-5">
           <p className="text-[10px] sm:text-xs font-mono uppercase tracking-widest text-brand-red font-semibold">
             What&apos;s in the box
           </p>
-          <ul className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-xs sm:text-sm text-brand-ink">
+          {/* 2 columns on mobile too — halves the card height */}
+          <ul className="mt-1.5 sm:mt-2 grid grid-cols-2 gap-x-3 sm:gap-x-4 gap-y-1 sm:gap-y-1.5 text-[11px] sm:text-sm text-brand-ink">
             <li>· Die-cast {sku.scale} drift car (assembled)</li>
             <li>· 2.4 GHz remote</li>
             <li>· USB-C cable + battery</li>
@@ -424,24 +484,24 @@ export default function PDPClient({ sku }: { sku: Sku }) {
         </div>
 
         {/* Qty + CTAs */}
-        <div className="mt-4 sm:mt-7 flex items-stretch gap-3">
+        <div className="mt-3 sm:mt-7 flex items-stretch gap-3">
           <div className="flex items-center border-2 border-brand-line rounded-xl">
             <button
               type="button"
               onClick={() => setQty(Math.max(1, qty - 1))}
-              className="w-11 h-11 flex items-center justify-center text-brand-ink-soft hover:text-brand-ink"
+              className="w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center text-brand-ink-soft hover:text-brand-ink"
               aria-label="Decrease quantity"
             >
               <Minus size={16} />
             </button>
-            <span className="w-10 text-center font-semibold text-brand-ink">
+            <span className="w-8 sm:w-10 text-center font-semibold text-brand-ink">
               {qty}
             </span>
             <button
               type="button"
               onClick={() => setQty((q) => Math.min(maxQty, q + 1))}
               disabled={qty >= maxQty}
-              className="w-11 h-11 flex items-center justify-center text-brand-ink-soft hover:text-brand-ink disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center text-brand-ink-soft hover:text-brand-ink disabled:opacity-40 disabled:cursor-not-allowed"
               aria-label="Increase quantity"
             >
               <Plus size={16} />
@@ -451,7 +511,7 @@ export default function PDPClient({ sku }: { sku: Sku }) {
             type="button"
             onClick={addToCart}
             disabled={outOfStock}
-            className="flex-1 bg-white border-2 border-brand-ink text-brand-ink hover:bg-brand-ink hover:text-white px-5 py-3 rounded-xl font-semibold text-sm transition-colors inline-flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-brand-ink"
+            className="flex-1 bg-white border-2 border-brand-ink text-brand-ink hover:bg-brand-ink hover:text-white px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl font-semibold text-sm transition-colors inline-flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-brand-ink"
           >
             <ShoppingBag size={16} />
             Add to Cart
@@ -461,37 +521,65 @@ export default function PDPClient({ sku }: { sku: Sku }) {
           type="button"
           onClick={buyNow}
           disabled={outOfStock}
-          className="mt-3 w-full bg-brand-red hover:bg-brand-red-hover text-white py-4 rounded-xl font-bold text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand-red"
+          className={cn(
+            "mt-3 w-full bg-brand-red hover:bg-brand-red-hover text-white py-3.5 sm:py-4 rounded-xl font-bold text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand-red",
+            !outOfStock && "animate-heartbeat",
+          )}
         >
           {outOfStock ? "Sold out" : `Buy Now · ${formatINR(sku.retailINR * qty)}`}
         </button>
 
+        {/* Reassurance strip at the decision moment — secure pay, genuine
+            product, COD. Kills the last "is this legit?" hesitation. */}
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-[11px] sm:text-xs text-brand-ink-soft">
+          <span className="inline-flex items-center gap-1.5">
+            <Lock size={13} className="text-success" /> 100% secure payment
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <BadgeCheck size={13} className="text-success" /> Genuine product
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Truck size={13} className="text-success" /> Pan-India COD
+          </span>
+        </div>
+
         {/* Bundle upsell at the decision moment — directly below Buy Now */}
         <PDPBundleUpsell sku={sku} />
 
-        {/* Trust row */}
-        <div className="mt-6 grid grid-cols-3 gap-3 text-center">
-          <div className="p-3 border border-brand-line rounded-lg">
-            <Truck size={18} className="mx-auto text-brand-red" />
-            <p className="text-[11px] font-semibold text-brand-ink mt-1.5">
-              Ships in 24 hrs
-            </p>
-            <p className="text-[10px] text-brand-ink-soft">from Bangalore</p>
-          </div>
-          <div className="p-3 border border-brand-line rounded-lg">
-            <RotateCw size={18} className="mx-auto text-brand-red" />
-            <p className="text-[11px] font-semibold text-brand-ink mt-1.5">
-              7-Day Free
-            </p>
-            <p className="text-[10px] text-brand-ink-soft">Replacement</p>
-          </div>
-          <div className="p-3 border border-brand-line rounded-lg">
-            <Shield size={18} className="mx-auto text-brand-red" />
-            <p className="text-[11px] font-semibold text-brand-ink mt-1.5">
-              Recommended
-            </p>
-            <p className="text-[10px] text-brand-ink-soft">Age {sku.specs.minAge}+</p>
-          </div>
+        {/* Trust row — icons in soft circles; compact single row on mobile. */}
+        <div className="mt-4 grid grid-cols-3 gap-2 text-center sm:mt-6 sm:gap-2.5">
+          {[
+            { icon: Truck, title: "Ships in 24 hrs", sub: "from Bangalore" },
+            { icon: RotateCw, title: "7-Day Free", sub: "Replacement" },
+            { icon: Shield, title: `Age ${sku.specs.minAge}+`, sub: "Recommended" },
+          ].map(({ icon: Icon, title, sub }) => (
+            <div
+              key={title}
+              className="flex flex-col items-center rounded-xl border border-brand-line bg-white p-2 transition-colors hover:border-brand-red/40 sm:p-3"
+            >
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-red/10 sm:h-9 sm:w-9">
+                <Icon className="h-3.5 w-3.5 text-brand-red sm:h-[17px] sm:w-[17px]" />
+              </span>
+              <p className="mt-1.5 text-[10px] font-semibold text-brand-ink leading-tight sm:mt-2 sm:text-[11px]">
+                {title}
+              </p>
+              <p className="text-[9px] text-brand-ink-soft sm:text-[10px]">{sub}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Social proof — real order volume + rating as one trust bar. */}
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-xl bg-brand-cream border border-brand-line px-4 py-2.5 text-center text-xs">
+          <Stars value={ratingValue} size={14} />
+          <span className="font-bold text-brand-ink">{ratingValue.toFixed(1)}/5</span>
+          <span className="text-brand-ink-soft">·</span>
+          <span className="text-brand-ink-soft">
+            Trusted by{" "}
+            <span className="font-semibold text-brand-ink">
+              {TRUST.ordersShipped.toLocaleString("en-IN")}+
+            </span>{" "}
+            happy buyers across India
+          </span>
         </div>
 
         {/* X16 - Spec table open by default. Reviewer flagged it as
@@ -532,6 +620,18 @@ export default function PDPClient({ sku }: { sku: Sku }) {
           </div>
         </details>
       </div>
+    </div>
+
+    {/* Per-product reviews (ratings summary, verified-buyer photos + submit) */}
+    <div className="max-w-3xl mx-auto px-4">
+      <PdpReviews
+        siteId={siteId}
+        skuId={sku.id}
+        reviews={reviews}
+        data={reviewData}
+        fallbackRating={baselineRating}
+        fallbackCount={baselineCount}
+      />
     </div>
 
     {/* Recently-viewed strip — full-width below the two-column PDP grid.

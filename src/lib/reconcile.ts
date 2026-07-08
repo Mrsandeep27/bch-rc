@@ -14,7 +14,7 @@
  *  4. alert if permanently-failed shipment jobs exist.
  */
 
-import { and, eq, inArray, lt, gte, isNotNull, sql, desc } from "drizzle-orm";
+import { and, eq, inArray, lt, gte, isNotNull, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { events, orders } from "@/db/schema";
 import { releaseOrderHolds, reacquireOrderHolds } from "@/lib/inventory/release";
@@ -161,9 +161,15 @@ export async function sweepUnverifiedCodOrders(
  * For each match: re-reserve stock if a prior failure released it, mark
  * PAID/CAPTURED, fire the shipment + customer confirmation — exactly what the
  * live capture path does.
+ *
+ * `withinMs` bounds how far back we look (default 7 days for the cron). Callers
+ * that only need to catch a *just-completed* payment — e.g. the recovery page,
+ * confirming nobody about to be nudged has actually paid — pass a short window
+ * so the Razorpay round-trips stay to the handful of genuinely-recent orders.
  */
 export async function recoverCapturedPayments(
   limit = 100,
+  withinMs = 7 * 24 * 60 * 60 * 1000,
 ): Promise<{ checked: number; recovered: number }> {
   const candidates = await db
     .select()
@@ -177,7 +183,7 @@ export async function recoverCapturedPayments(
           "PENDING_COD_VERIFICATION",
         ]),
         isNotNull(orders.razorpayOrderId),
-        gte(orders.placedAt, sql`now() - interval '7 days'`),
+        gte(orders.placedAt, new Date(Date.now() - withinMs)),
       ),
     )
     .orderBy(desc(orders.placedAt))

@@ -12,8 +12,9 @@
  */
 
 import type { NextRequest } from "next/server";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { funnelEvents } from "@/db/schema";
+import { funnelEvents, analyticsSessions } from "@/db/schema";
 import { SESSION_COOKIE, VISITOR_COOKIE, isBotUA } from "@/lib/analytics";
 import { isFunnelEvent, type FunnelEventType } from "@/lib/funnel-events";
 import { logError } from "@/lib/logger";
@@ -21,16 +22,11 @@ import { logError } from "@/lib/logger";
 const SITE_ID = process.env.DEFAULT_SITE_ID ?? "prc";
 
 /**
- * Which store an event belongs to. The 1:16 store is served either on the
- * STORE16_HOST subdomain (prod) or under the /16 path (local/preview), so a
- * funnel event is prc16 if EITHER signal is present, else the default site.
+ * Single hub store: every funnel event belongs to the one site. (The old
+ * prc16 host/path attribution is gone with the store split — /16 pages that
+ * are still reachable attribute here too, which is what the dashboard wants.)
  */
-function resolveEventSiteId(host: string, path?: string | null): string {
-  const store16Host = process.env.STORE16_HOST?.trim().toLowerCase();
-  if (store16Host && host === store16Host) return "prc16";
-  if (path && (path === "/16" || path.startsWith("/16/") || path.startsWith("/16#"))) {
-    return "prc16";
-  }
+function resolveEventSiteId(_host: string, _path?: string | null): string {
   return SITE_ID;
 }
 
@@ -91,6 +87,28 @@ export async function recordFunnelEvents(
     await db.insert(funnelEvents).values(rows);
   } catch (err) {
     logError("funnel:record-batch", err, { count: rows.length });
+  }
+
+  // Keep the session's liveness fresh straight from this batched beacon,
+  // instead of the per-navigation /api/track round-trip the middleware used to
+  // fire. This only UPDATEs an existing row (the session was INSERTed
+  // server-side on its first hit), so it never creates rows and never touches
+  // first-touch attribution — it moves just last_seen_at (the live-visitors
+  // gauge) and the pageview tally off the per-navigation critical path. Bots
+  // are filtered out of every dashboard, so bumping their rows would be waste.
+  if (sessionId && !isBot) {
+    const pageviews = rows.filter((r) => r.type === "page_view").length;
+    try {
+      await db
+        .update(analyticsSessions)
+        .set({
+          lastSeenAt: new Date(),
+          pageviewCount: sql`${analyticsSessions.pageviewCount} + ${pageviews}`,
+        })
+        .where(eq(analyticsSessions.id, sessionId));
+    } catch (err) {
+      logError("funnel:session-bump", err, { sessionId });
+    }
   }
 }
 

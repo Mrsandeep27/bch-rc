@@ -15,13 +15,16 @@ export const metadata: Metadata = {
     canonical: "/",
   },
   description:
-    "Gift-ready mini RC drift cars — 1:64 die-cast RC cars with LED, drift wheels & USB-C. From ₹999. Pan-India COD, ships in 24 hrs from Bangalore.",
+    "Pocket RC drift cars from ₹999 — mini 1:64 die-cast RC cars with LED, drift wheels & USB-C. Gift-ready pocket cars, Pan-India COD, ships 24 hrs from Bangalore.",
   keywords: [
     "RC car India",
     "mini RC drift car",
     "RC car gift",
     "drift car remote control",
+    "pocket car",
+    "pocket cars",
     "pocket RC cars",
+    "rccar",
     "PRC Cars",
   ],
   openGraph: {

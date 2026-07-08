@@ -12,18 +12,36 @@
 import Razorpay from "razorpay";
 import { createHmac, timingSafeEqual } from "crypto";
 
-const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
-const keySecret = process.env.RAZORPAY_KEY_SECRET;
-
-if (!keyId || !keySecret) {
-  throw new Error(
-    "NEXT_PUBLIC_RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET must be set.",
-  );
+// Lazily create the Razorpay client. The env-var check now happens on first
+// USE, not at import — so `next build` (which imports every route's modules to
+// collect page data, including preview builds without payment keys) no longer
+// crashes. The keys are still required at runtime the moment any call is made.
+let _rp: Razorpay | null = null;
+function razorpayClient(): Razorpay {
+  if (_rp) return _rp;
+  const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
+  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+  if (!keyId || !keySecret) {
+    throw new Error(
+      "NEXT_PUBLIC_RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET must be set.",
+    );
+  }
+  _rp = new Razorpay({ key_id: keyId, key_secret: keySecret });
+  return _rp;
 }
 
-export const razorpay = new Razorpay({
-  key_id: keyId,
-  key_secret: keySecret,
+// Backwards-compatible export: a Proxy that forwards property access to the
+// lazily-created client, so existing `razorpay.orders.create(...)` call sites
+// keep working unchanged while deferring construction (and the env check) past
+// import time.
+export const razorpay: Razorpay = new Proxy({} as Razorpay, {
+  get(_target, prop) {
+    const c = razorpayClient() as unknown as Record<PropertyKey, unknown>;
+    const value = c[prop];
+    return typeof value === "function"
+      ? (value as (...args: unknown[]) => unknown).bind(c)
+      : value;
+  },
 });
 
 export function verifyRazorpaySignature(params: {
@@ -31,8 +49,10 @@ export function verifyRazorpaySignature(params: {
   razorpayPaymentId: string;
   razorpaySignature: string;
 }): boolean {
+  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+  if (!keySecret) return false;
   const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = params;
-  const expected = createHmac("sha256", keySecret!)
+  const expected = createHmac("sha256", keySecret)
     .update(`${razorpayOrderId}|${razorpayPaymentId}`)
     .digest("hex");
   try {

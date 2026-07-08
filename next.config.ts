@@ -2,6 +2,12 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   images: {
+    // DEV-ONLY: bypass the image optimizer locally. The Next 16 + Turbopack dev
+    // optimizer was failing to render optimized images on this machine (blank
+    // tiles). Serving originals directly in dev sidesteps it entirely; PRODUCTION
+    // still runs the optimizer (qualities + sizes below apply there). Flip by
+    // NODE_ENV so `next build`/Vercel are unaffected.
+    unoptimized: process.env.NODE_ENV !== "production",
     // Our source assets cap at 1024px (rembg pipeline outputs 1024x1024
     // canvases). Default Next.js deviceSizes [640, 750, 828, 1080, 1200,
     // 1920, 2048, 3840] would request 3840w variants for any image with
@@ -11,6 +17,11 @@ const nextConfig: NextConfig = {
     // cache entries.
     deviceSizes: [640, 750, 828, 1080, 1200, 1920],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+    // Next.js 16 requires every `quality` value used by <Image> to be declared
+    // here — anything unlisted makes the optimizer error and the image fails to
+    // render. We use 75 (default) and 85 (product/hero shots). Without 85, the
+    // whole site's imagery broke after the Next 16 upgrade.
+    qualities: [75, 85],
   },
   async headers() {
     // B07 — long-immutable cache TTLs on the heaviest, never-versioned

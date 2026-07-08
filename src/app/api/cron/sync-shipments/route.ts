@@ -1,9 +1,11 @@
 /**
  * /api/cron/sync-shipments — poll Shiprocket for in-transit orders.
  *
- * Replaces the Shiprocket webhook (their UI Save button is broken). Runs
- * every 10 minutes via Vercel Cron, pulls the latest tracking status for
- * each shipment that isn't terminal, and updates orders.status accordingly.
+ * Replaces the Shiprocket webhook (their UI Save button was broken when we
+ * tried to register it). Runs on the vercel.json cron schedule (currently
+ * every 3 hours), pulls the latest tracking status for each shipment that
+ * isn't terminal, and updates orders.status accordingly. Doubles as the
+ * safety net if/when the real webhook (/api/webhooks/courier) is registered.
  *
  * Auth: Vercel Cron sends an `Authorization: Bearer <CRON_SECRET>` header
  * automatically when the route is listed in vercel.json's crons. We verify
@@ -65,6 +67,7 @@ export async function GET(req: Request) {
       status: orders.status,
       shipmentId: orders.shiprocketShipmentId,
       awb: orders.awbCode,
+      courierName: orders.courierName,
       packedAt: orders.packedAt,
       shippedAt: orders.shippedAt,
       deliveredAt: orders.deliveredAt,
@@ -103,8 +106,10 @@ export async function GET(req: Request) {
 
       const awbJustLanded = !!awbNow && !o.awb;
       const statusChanged = !!mapped && mapped !== o.status;
+      const courierJustFound =
+        !!status.courier && !(o.courierName ?? "").trim();
 
-      if (statusChanged || awbJustLanded) {
+      if (statusChanged || awbJustLanded || courierJustFound) {
         const now = new Date();
         const updates: Partial<typeof orders.$inferInsert> = { updatedAt: now };
         if (statusChanged && mapped) {
@@ -112,6 +117,9 @@ export async function GET(req: Request) {
           if (mapped === "PACKED" && !o.packedAt) updates.packedAt = now;
           if (mapped === "SHIPPED" && !o.shippedAt) updates.shippedAt = now;
           if (mapped === "DELIVERED" && !o.deliveredAt) updates.deliveredAt = now;
+          // Fast couriers can jump PACKED→DELIVERED between poll runs — never
+          // leave shipped_at NULL on a delivered order.
+          if (mapped === "DELIVERED" && !o.shippedAt) updates.shippedAt = now;
           if (mapped === "CANCELLED" && !o.cancelledAt) updates.cancelledAt = now;
         }
         // Persist the AWB the instant Shiprocket reveals it, so the DB row and
@@ -119,6 +127,12 @@ export async function GET(req: Request) {
         if (awbJustLanded) {
           updates.awbCode = awbNow;
           updates.trackingUrl = `https://shiprocket.co/tracking/${awbNow}`;
+        }
+        // Backfill the courier the tracking API reports. Shiprocket's create
+        // response persisted "" for manual-AWB orders, so treat empty string
+        // as missing (an IS NULL audit hides those rows).
+        if (status.courier && !(o.courierName ?? "").trim()) {
+          updates.courierName = status.courier;
         }
 
         await db.update(orders).set(updates).where(eq(orders.id, o.id));

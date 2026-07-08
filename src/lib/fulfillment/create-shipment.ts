@@ -152,7 +152,10 @@ export async function createShipmentForOrder(orderId: string): Promise<ShipmentR
       shiprocketOrderId: result.shiprocketOrderId,
       shiprocketShipmentId: result.shipmentId,
       awbCode: result.awbCode,
-      courierName: result.courierName,
+      // Shiprocket's create response sends courier_name: "" for manual-AWB
+      // orders — store NULL, not "", so `?? fallback` renders and IS NULL
+      // audits work. The sync cron backfills the real courier later.
+      courierName: (result.courierName ?? "").trim() || null,
       trackingUrl: result.trackingUrl,
       status: result.awbCode ? "PACKED" : order.status,
       packedAt: result.awbCode ? new Date() : order.packedAt,

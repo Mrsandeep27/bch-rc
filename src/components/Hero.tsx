@@ -159,7 +159,7 @@ export default function Hero({
                 H1 element for Google and gives screen-reader users a
                 plain-language tail. */}
             <span className="sr-only">
-              {" "}— Mini RC drift cars from ₹999, gift-ready box, COD pan-India.
+              {" "}— Mini pocket RC drift cars from ₹999, gift-ready box, COD pan-India.
             </span>
           </h1>
 
@@ -171,9 +171,9 @@ export default function Hero({
 
           {/* SEO h2 — keyword tail invisible to sighted users. */}
           <h2 className="sr-only">
-            Mini RC Cars from ₹999 — 1:64 RC drift cars with 2.4&nbsp;GHz
-            control, USB-C charging and a die-cast alloy body. Pan-India COD,
-            ships in 24&nbsp;hrs from Bangalore.
+            Mini RC Cars from ₹999 — 1:64 pocket RC drift cars with 2.4&nbsp;GHz
+            control, USB-C charging and a die-cast alloy body. Pan-India COD on
+            all pocket cars, ships in 24&nbsp;hrs from Bangalore.
           </h2>
 
           {/* On mobile, mt-auto absorbs the gap so the headline stays high

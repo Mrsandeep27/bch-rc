@@ -17,7 +17,7 @@ import {
   type AdminContext,
 } from "@/lib/admin-auth";
 import { DatabaseUnavailableError } from "@/db";
-import { checkLimits } from "@/lib/rate-limit";
+import { checkLimits, clientIp } from "@/lib/rate-limit";
 import { logError } from "@/lib/logger";
 
 const FOUNDER_EMAILS = (process.env.ADMIN_FOUNDER_EMAILS ?? "")
@@ -34,12 +34,6 @@ const Body = z.object({
 const RL_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const RL_PER_EMAIL = 5;
 const RL_PER_IP = 20;
-
-function clientIp(req: Request): string {
-  const first = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  if (first) return first;
-  return req.headers.get("x-real-ip")?.trim() || "unknown";
-}
 
 function tooManyResponse(retryAfterSec: number): NextResponse {
   return NextResponse.json(

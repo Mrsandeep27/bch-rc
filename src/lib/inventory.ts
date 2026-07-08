@@ -16,19 +16,18 @@ import { PRODUCTS } from "@/lib/products";
 
 export const INVENTORY_SITE_ID = "prc";
 
-/** Every site whose inventory this module spans. A SKU lives under exactly one. */
-export const ALL_SITE_IDS = ["prc", "prc16"] as const;
+/**
+ * ONE single inventory (2026-07-08). The old per-store split (1:16 under
+ * "prc16", everything else under "prc") is gone — the hub is the single
+ * storefront and every inventory row lives under "prc". The prc16 rows were
+ * re-keyed to prc in the same change; seed + decrement + restore all target
+ * this one keyspace.
+ */
+export const ALL_SITE_IDS = [INVENTORY_SITE_ID] as const;
 
-/** A SKU's store is fixed by its scale: 1:16 → prc16, everything else → prc. */
-function siteIdForScale(scale: string): string {
-  return scale === "1:16" ? "prc16" : "prc";
-}
-
-const SKU_SITE = new Map(PRODUCTS.map((p) => [p.id, siteIdForScale(p.scale)]));
-
-/** Resolve which site's inventory keyspace a SKU belongs to. */
-export function siteIdForSku(skuId: string): string {
-  return SKU_SITE.get(skuId) ?? INVENTORY_SITE_ID;
+/** Every SKU's inventory lives in the single hub keyspace. */
+export function siteIdForSku(_skuId: string): string {
+  return INVENTORY_SITE_ID;
 }
 
 /** Low-stock nudge threshold for both storefront badges and admin health. */
@@ -57,8 +56,9 @@ export function expectedInventoryKeys(siteId?: string): ExpectedKey[] {
   const out: ExpectedKey[] = [];
   for (const sku of PRODUCTS) {
     if (sku.hidden) continue;
-    // When scoped to a site, only that store's SKUs are "expected" there.
-    if (siteId && siteIdForScale(sku.scale) !== siteId) continue;
+    // Single inventory: every SKU lives under INVENTORY_SITE_ID, so a site
+    // scope other than the hub site expects nothing.
+    if (siteId && siteId !== INVENTORY_SITE_ID) continue;
     if (sku.colors && sku.colors.length > 0) {
       for (const c of sku.colors) {
         out.push({
@@ -88,10 +88,6 @@ export function expectedInventoryKeys(siteId?: string): ExpectedKey[] {
  * returned map means "no inventory row configured" (callers treat as 0/unknown).
  */
 export async function getStockMap(skuIds?: string[]): Promise<Record<string, number>> {
-  // Span both stores. A SKU lives under exactly one site (by scale), and the
-  // map key is sku:variant, so merging prc + prc16 rows is unambiguous — and it
-  // means the 1:16 storefront sees its stock (now under prc16) without each
-  // caller having to know which store a SKU belongs to.
   const rows = await db
     .select({
       skuId: inventory.skuId,
@@ -102,10 +98,10 @@ export async function getStockMap(skuIds?: string[]): Promise<Record<string, num
     .where(
       skuIds && skuIds.length > 0
         ? and(
-            inArray(inventory.siteId, [...ALL_SITE_IDS]),
+            eq(inventory.siteId, INVENTORY_SITE_ID),
             inArray(inventory.skuId, skuIds),
           )
-        : inArray(inventory.siteId, [...ALL_SITE_IDS]),
+        : eq(inventory.siteId, INVENTORY_SITE_ID),
     );
 
   const map: Record<string, number> = {};

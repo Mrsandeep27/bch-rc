@@ -1,0 +1,179 @@
+"use client";
+
+import { useEffect, useRef } from "react";
+import Image from "next/image";
+
+/**
+ * Hub hero — section 2. Full-bleed banner carousel that fills the screen
+ * (100svh minus the announcement bar); the transparent site Header floats over
+ * its top (the page pulls this up behind the header). A top scrim keeps the
+ * white header legible even over the lighter banners.
+ *
+ * MOBILE: 2 portrait posters — full-bleed, small CTA pill on the image.
+ * DESKTOP: 3 landscape 16:9 banners — full-bleed, CTA pill inside.
+ * Both auto-roll. Assets in /public/landing.
+ */
+
+type Slide = { src: string; alt: string; href: string; cta: string };
+
+const MOBILE_SLIDES: Slide[] = [
+  {
+    src: "/landing/mobile-1.webp",
+    alt: "PRC pocket-size drift car — small size, big drift",
+    href: "/",
+    cta: "Shop Mini RC",
+  },
+  {
+    src: "/landing/mobile-2.webp",
+    alt: "PRC Mini RC drift car — the gift he won't stop using",
+    href: "/",
+    cta: "Shop Mini RC",
+  },
+  // 3rd slide — Construction 3-Pack (BUY ALL 3 · ₹4,999) → construction category
+  {
+    src: "/landing/mobile-construction.webp",
+    alt: "PRC construction 3-pack — mining truck, excavator and forklift, buy all 3 for ₹4,999",
+    href: "/hub/shop/construction",
+    cta: "Shop the 3-Pack",
+  },
+];
+
+const DESKTOP_SLIDES: Slide[] = [
+  {
+    src: "/landing/hero-1.webp",
+    alt: "PRC pocket mini RC car lineup — big thrills, smaller size",
+    href: "/",
+    cta: "Shop the Lineup",
+  },
+  {
+    src: "/landing/hero-2.webp",
+    alt: "PRC pocket mini cars — designed for precision",
+    href: "/",
+    cta: "Shop Drift Cars",
+  },
+  // 3rd slide — Construction 3-Pack banner (BUY ALL 3 · ₹4,999) → construction.
+  // Uses the 16:9 hero-composed art (ribbon pushed clear of the header, no crop).
+  {
+    src: "/landing/hero-construction.webp",
+    alt: "PRC construction 3-pack — mining truck, excavator and forklift, buy all 3 for ₹4,999",
+    href: "/hub/shop/construction",
+    cta: "Shop the 3-Pack",
+  },
+];
+
+const AUTOROLL_MS = 3500;
+
+function useAutoRoll(ref: { current: HTMLDivElement | null }, count: number) {
+  useEffect(() => {
+    const rail = ref.current;
+    if (!rail || count < 2) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+
+    let paused = false;
+    const pause = () => (paused = true);
+    const resume = () => (paused = false);
+    const evPause = ["pointerdown", "mouseenter", "touchstart"] as const;
+    const evResume = ["pointerup", "pointercancel", "mouseleave", "touchend"] as const;
+    evPause.forEach((e) => rail.addEventListener(e, pause, { passive: true }));
+    evResume.forEach((e) => rail.addEventListener(e, resume, { passive: true }));
+
+    const id = setInterval(() => {
+      if (paused) return;
+      const w = rail.clientWidth;
+      if (!w) return; // hidden carousel
+      const cur = Math.round(rail.scrollLeft / w);
+      rail.scrollTo({ left: ((cur + 1) % count) * w, behavior: "smooth" });
+    }, AUTOROLL_MS);
+
+    return () => {
+      clearInterval(id);
+      evPause.forEach((e) => rail.removeEventListener(e, pause));
+      evResume.forEach((e) => rail.removeEventListener(e, resume));
+    };
+  }, [ref, count]);
+}
+
+/** Full-bleed banner with the CTA pill overlaid on the image. `small` = the
+ *  compact mobile pill; default = the bigger desktop pill. */
+function Banner({
+  s,
+  w,
+  h,
+  small = false,
+}: {
+  s: Slide;
+  w: number;
+  h: number;
+  small?: boolean;
+}) {
+  return (
+    <div className="relative h-[calc(100svh-2rem)] w-full shrink-0 snap-center">
+      <a href={s.href} className="block h-full w-full overflow-hidden">
+        <Image
+          src={s.src}
+          alt={s.alt}
+          width={w}
+          height={h}
+          priority
+          unoptimized
+          sizes="100vw"
+          className="h-full w-full object-cover"
+        />
+      </a>
+      {/* Centered via a flex wrapper so the button's own transform is free for
+          the heartbeat animation (translate-x centering would clash with it). */}
+      <div
+        className={`absolute inset-x-0 flex justify-center ${small ? "bottom-6" : "bottom-8"}`}
+      >
+        <a
+          href={s.href}
+          className={`group inline-flex items-center rounded-full bg-brand-red font-bold text-white animate-heartbeat ${
+            small
+              ? "gap-1.5 px-6 py-2.5 text-sm shadow-lg"
+              : "gap-2 px-10 py-4 text-lg shadow-xl"
+          }`}
+        >
+          {s.cta}
+          <span aria-hidden className="transition-transform group-hover:translate-x-1">
+            →
+          </span>
+        </a>
+      </div>
+    </div>
+  );
+}
+
+export default function HubHero() {
+  const mobileRef = useRef<HTMLDivElement>(null);
+  const desktopRef = useRef<HTMLDivElement>(null);
+  useAutoRoll(mobileRef, MOBILE_SLIDES.length);
+  useAutoRoll(desktopRef, DESKTOP_SLIDES.length);
+
+  return (
+    <section aria-label="Featured drift cars" className="relative bg-brand-cream">
+      {/* Top scrim — keeps the transparent white header legible over the
+          lighter banners without darkening the whole image. */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-30 h-24 bg-gradient-to-b from-black/40 to-transparent" />
+
+      {/* MOBILE: 2 portrait posters */}
+      <div
+        ref={mobileRef}
+        className="no-scrollbar flex snap-x snap-mandatory overflow-x-auto sm:hidden"
+      >
+        {MOBILE_SLIDES.map((s) => (
+          <Banner key={s.src} s={s} w={1054} h={1492} small />
+        ))}
+      </div>
+
+      {/* DESKTOP: 3 landscape 16:9 banners */}
+      <div
+        ref={desktopRef}
+        className="no-scrollbar hidden snap-x snap-mandatory overflow-x-auto sm:flex"
+      >
+        {DESKTOP_SLIDES.map((s) => (
+          <Banner key={s.src} s={s} w={1672} h={941} />
+        ))}
+      </div>
+    </section>
+  );
+}

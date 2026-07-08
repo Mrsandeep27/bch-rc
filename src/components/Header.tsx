@@ -4,25 +4,21 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ShoppingBag, Menu, X, ChevronLeft, ChevronDown } from "lucide-react";
+import { ShoppingBag, Menu, X, ChevronLeft } from "lucide-react";
 import { WhatsAppIcon } from "@/components/BrandIcons";
 import { THEME, waLink } from "@/lib/theme";
 import { useCart, getCartCount } from "@/lib/cart-store";
 import { trackFunnel } from "@/lib/funnel-client";
-import { getSizes, SizeRow, SIZE_TEASER } from "@/lib/store-sizes";
 import { cn } from "@/lib/utils";
 
-// FAQ moved out of the top nav (it still lives on the home page) and replaced
-// by the "Shop by size" menu below. Nav is split so the size dropdown can sit
-// in FAQ's old slot — between Bundles and Track Order.
+// Top nav. The hub is the SINGLE storefront now, so Shop/Bundles anchor into
+// the homepage's own sections. The old "Shop by size" menu — which pointed at
+// the retired 1:64 / 1:16 split stores — has been removed.
 const NAV_BEFORE = [
-  { label: "Shop", href: "/#sku" },
+  { label: "Shop", href: "/#hub-shop" },
   { label: "Bundles", href: "/#bundles" },
 ];
 const NAV_AFTER = [{ label: "Track Order", href: "/track" }];
-
-// This store is the 1:64 "Pocket" store, so it marks 1:64 as "You're here".
-const SIZES = getSizes("1:64");
 
 export default function Header() {
   const items = useCart((s) => s.items);
@@ -33,17 +29,17 @@ export default function Header() {
   const cartCount = hasHydrated ? getCartCount(items) : 0;
   const pathname = usePathname();
   const router = useRouter();
-  // Only the home page has a dark full-bleed hero behind the header.
-  // Everywhere else (PDP, checkout, policy pages), keep the solid-bg style
-  // even at scrollY === 0 — otherwise the white logo + nav are invisible
-  // against the white page background.
+  // The homepage ("/") is the hub — a dark full-bleed hero sits behind the
+  // header, so it's transparent at the top (and hides the back button).
+  // Everywhere else (PDP, checkout, policy pages) keeps the solid-bg style so
+  // the white logo + nav stay visible.
   const isHomePage = pathname === "/";
 
   // Back button — shown on every non-home page so the buyer always has a
   // visible escape hatch alongside the browser back gesture. Tries
   // router.back() first (preserves Next.js state/scroll); falls back to
-  // pushing "/" when there's no in-app history (e.g. deep-link landings,
-  // Razorpay return URLs that opened a fresh tab).
+  // pushing "/" (the hub) when there's no in-app history (e.g. deep-link
+  // landings, Razorpay return URLs that opened a fresh tab).
   const handleBack = () => {
     if (typeof window !== "undefined" && window.history.length > 1) {
       router.back();
@@ -54,9 +50,6 @@ export default function Header() {
 
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  // Mobile "Sizes" sheet — opened from an always-visible pill in the header bar
-  // so the size switcher is reachable without opening the hamburger.
-  const [sizeSheet, setSizeSheet] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
@@ -70,7 +63,7 @@ export default function Header() {
   // Also force solid style when the mobile menu is open — otherwise the
   // white logo / hamburger / cart icon are invisible against the open
   // white drawer, and the user has no way to close the menu.
-  const useSolidStyle = !isHomePage || scrolled || mobileOpen || sizeSheet;
+  const useSolidStyle = !isHomePage || scrolled || mobileOpen;
 
   return (
     <header
@@ -115,84 +108,11 @@ export default function Header() {
                 priority
               />
             </Link>
-
-            {/* Always-visible mobile size switcher — the desktop nav is hidden
-                behind the hamburger on mobile, so this pill keeps "Shop by size"
-                one tap away without opening the menu. */}
-            <button
-              type="button"
-              onClick={() => {
-                setSizeSheet((v) => !v);
-                setMobileOpen(false);
-              }}
-              aria-expanded={sizeSheet}
-              aria-label="Shop by size"
-              className={cn(
-                "lg:hidden inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-semibold transition-colors",
-                useSolidStyle
-                  ? "bg-brand-red-soft text-brand-red"
-                  : "bg-white/15 text-white backdrop-blur-sm"
-              )}
-            >
-              Sizes
-              <ChevronDown
-                size={14}
-                className={cn("transition-transform", sizeSheet && "rotate-180")}
-              />
-            </button>
           </div>
 
           {/* Desktop nav */}
           <nav className="hidden lg:flex items-center gap-8">
-            {NAV_BEFORE.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={cn(
-                  "text-sm font-medium transition-colors",
-                  useSolidStyle
-                    ? "text-brand-ink-soft hover:text-brand-red"
-                    : "text-white/80 hover:text-white"
-                )}
-              >
-                {link.label}
-              </Link>
-            ))}
-
-            {/* Shop by size — opens on hover or keyboard focus (pure CSS, no
-                JS state needed on desktop). The panel itself is always a white
-                card so it reads on both the transparent hero and solid header. */}
-            <div className="relative group">
-              <button
-                type="button"
-                className={cn(
-                  "inline-flex items-center gap-1 text-sm font-medium transition-colors",
-                  useSolidStyle
-                    ? "text-brand-ink-soft hover:text-brand-red"
-                    : "text-white/80 hover:text-white"
-                )}
-                aria-haspopup="true"
-              >
-                Shop by size
-                <ChevronDown size={15} className="transition-transform group-hover:rotate-180" />
-              </button>
-              <div className="invisible absolute left-1/2 top-full z-50 w-72 -translate-x-1/2 pt-3 opacity-0 transition-all duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
-                <div className="overflow-hidden rounded-2xl border border-brand-line bg-white text-brand-ink shadow-xl">
-                  <ul className="p-1.5">
-                    {SIZES.map((s) => (
-                      <li key={s.scale}>
-                        <SizeRow s={s} />
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="border-t border-brand-line bg-brand-cream px-4 py-2.5 text-[11px] leading-snug text-brand-ink-soft">
-                    {SIZE_TEASER}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {NAV_AFTER.map((link) => (
+            {[...NAV_BEFORE, ...NAV_AFTER].map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
@@ -249,10 +169,7 @@ export default function Header() {
 
             <button
               type="button"
-              onClick={() => {
-                setMobileOpen((v) => !v);
-                setSizeSheet(false);
-              }}
+              onClick={() => setMobileOpen((v) => !v)}
               className={cn(
                 "lg:hidden p-2.5 rounded-full transition-colors",
                 useSolidStyle
@@ -266,33 +183,6 @@ export default function Header() {
           </div>
         </div>
       </div>
-
-      {/* Mobile size sheet — opened by the always-visible "Sizes" pill, full
-          width so every scale is clearly visible without opening the hamburger. */}
-      {sizeSheet && (
-        <>
-          <button
-            type="button"
-            aria-hidden
-            tabIndex={-1}
-            onClick={() => setSizeSheet(false)}
-            className="fixed inset-0 z-30 cursor-default lg:hidden"
-          />
-          <div className="relative z-40 lg:hidden bg-white border-t border-brand-line shadow-lg">
-            <div className="px-2.5 py-2">
-              <p className="px-3 pb-1 pt-1 font-mono text-[10px] uppercase tracking-widest text-brand-ink-soft">
-                Shop by size
-              </p>
-              {SIZES.map((s) => (
-                <SizeRow key={s.scale} s={s} onNavigate={() => setSizeSheet(false)} />
-              ))}
-              <p className="px-3 pt-2 text-[11px] leading-snug text-brand-ink-soft">
-                {SIZE_TEASER}
-              </p>
-            </div>
-          </div>
-        </>
-      )}
 
       {/* Mobile menu drawer */}
       {mobileOpen && (

@@ -65,29 +65,44 @@ export function computeCodConfirmationFee(
 
 /**
  * Bundle-bonus tiers — auto-apply at checkout based on TOTAL cart quantity
- * (mix any cars). Single source of truth used by:
+ * (mix any cars). Now a **percentage off the cart subtotal** ("buy more, save
+ * more"), not a flat rupee bonus. Single source of truth used by:
  *   - client checkout summary  (src/app/checkout/page.tsx)
  *   - server order creator     (src/app/api/orders/create/route.ts)
- *   - order receipt page       (src/app/orders/[id]/page.tsx)
+ *   - order receipt page       (src/app/orders/[id]/page.tsx + admin)
  *   - email templates          (src/lib/notifications/templates.ts)
  *   - cart drawer nudge        (src/components/CartDrawer.tsx)
- *   - BundlePicker marketing   (src/components/BundlePicker.tsx)
+ *   - bundle marketing         (BundlePicker.tsx + hub/HubBundle.tsx)
  *
- * Tiers are evaluated highest-first so 5+ cars always get the top-tier
- * bonus. Add new tiers in ascending-qty order — the lookup picks the
- * largest tier whose `minQty` is <= cart count.
+ * Ladder: 2→5% · 3→10% · 4→15% · 5→15% (no new tier, keeps 4's rate) · 6+→20%.
+ * Tiers are evaluated ascending so the lookup picks the LARGEST tier whose
+ * `minQty` is <= cart count (so 5 cars floor down to the 4-car 15%).
  */
 export const BUNDLE_TIERS = [
-  { minQty: 2, bonusInr: 298, label: "2-car bundle" },
-  { minQty: 3, bonusInr: 698, label: "3-car bundle" },
+  { minQty: 2, pct: 5, label: "2-car bundle" },
+  { minQty: 3, pct: 10, label: "3-car bundle" },
+  { minQty: 4, pct: 15, label: "4-car bundle" },
+  { minQty: 6, pct: 20, label: "6-car bundle" },
 ] as const;
 
-export function bundleDiscountInr(itemCount: number): number {
-  let bonus = 0;
+/** Discount percentage unlocked by a given cart quantity (0 below 2 cars). */
+export function bundleDiscountPct(itemCount: number): number {
+  let pct = 0;
   for (const tier of BUNDLE_TIERS) {
-    if (itemCount >= tier.minQty) bonus = tier.bonusInr;
+    if (itemCount >= tier.minQty) pct = tier.pct;
   }
-  return bonus;
+  return pct;
+}
+
+/**
+ * Rupee value of the bundle discount = `pct% × subtotal`, rounded to the
+ * nearest rupee. Needs the subtotal now (percentage model). Deterministic so
+ * the order creator, checkout summary and receipt recompute the SAME number.
+ */
+export function bundleDiscountInr(itemCount: number, subtotalInr: number): number {
+  const pct = bundleDiscountPct(itemCount);
+  if (pct <= 0 || subtotalInr <= 0) return 0;
+  return Math.round((subtotalInr * pct) / 100);
 }
 
 export function bundleTierLabel(itemCount: number): string | null {
@@ -96,6 +111,54 @@ export function bundleTierLabel(itemCount: number): string | null {
     if (itemCount >= tier.minQty) label = tier.label;
   }
   return label;
+}
+
+/**
+ * "Whichever number reads bigger" — compares the raw percentage figure (e.g.
+ * `20`) against the rupees-saved figure (e.g. `540`) and reports which to lead
+ * with. For any real multi-car cart the rupee amount wins; the percentage only
+ * wins on tiny/empty subtotals. Returns null below the 2-car threshold.
+ */
+export function bundleSaving(
+  itemCount: number,
+  subtotalInr: number,
+): { pct: number; inr: number; showPct: boolean } | null {
+  const pct = bundleDiscountPct(itemCount);
+  if (pct <= 0) return null;
+  const inr = bundleDiscountInr(itemCount, subtotalInr);
+  return { pct, inr, showPct: pct >= inr };
+}
+
+/**
+ * No-Cost EMI display config. EMI is a LIVE rail on this store via Razorpay:
+ * Card EMI (Amex + Axis/ICICI/IDFC/Kotak…) and Cardless EMI (Early Salary now,
+ * Instacred from ~18 Jul 2026). Banks floor EMI at ~₹3,000 of the *charged*
+ * amount, so the badge only renders at/above `minInr` — single cheap 1:64 cars
+ * don't qualify; the 1:16, HobbyGrade, and any 2+ bundle that clears the floor
+ * do. The true small-ticket "₹200/mo" on cheap cars needs Snapmint (separate
+ * onboarding); this figure is the honest "from ₹X/mo" for the Razorpay rail.
+ *
+ * Single source of truth used by:
+ *   - product cards        (HubProductCard.tsx via <EmiBadge/>)
+ *   - PDP price block       (PDPClient.tsx via <EmiBadge/>)
+ *   - cart / checkout nudge (subtotal-based, when a bundle clears the floor)
+ */
+export const EMI = {
+  /** Hide the badge below this charged amount (bank EMI floor ≈ ₹3,000). */
+  minInr: 2500,
+  /** Tenure we quote the monthly figure against (No-Cost EMI = price ÷ months). */
+  tenureMonths: 6,
+} as const;
+
+/**
+ * Lowest monthly figure to advertise for a given charged amount: `price ÷
+ * tenure`, rounded to the nearest rupee (No-Cost EMI carries no interest, so
+ * the monthly is just principal split evenly). Returns 0 below the floor so the
+ * badge renders nothing rather than an ineligible offer.
+ */
+export function emiMonthlyInr(priceInr: number): number {
+  if (priceInr < EMI.minInr) return 0;
+  return Math.round(priceInr / EMI.tenureMonths);
 }
 
 /**
