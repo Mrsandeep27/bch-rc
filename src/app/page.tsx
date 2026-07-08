@@ -14,7 +14,9 @@ import HubBuildYourOwn from "@/components/hub/HubBuildYourOwn";
 import InstaCommunity16 from "@/components/store16/InstaCommunity16";
 import CustomerReviewsSlider from "@/components/CustomerReviewsSlider";
 import Footer from "@/components/Footer";
-import HubSpinWheel from "@/components/hub/HubSpinWheel";
+// Spin-wheel discount popup hidden on request (2026-07-08). Re-enable by
+// uncommenting this import and the <HubSpinWheel /> mount below.
+// import HubSpinWheel from "@/components/hub/HubSpinWheel";
 
 // The hub IS the homepage — the single storefront across every scale/category
 // (mini 1:64, big 1:16, 1:20, construction, polo). Indexable: this is the main
@@ -104,8 +106,8 @@ export default function Page() {
       </main>
       {/* footer */}
       <Footer />
-      {/* Lead capture — "drift for your discount" popup (pops 3s after entry) */}
-      <HubSpinWheel />
+      {/* Lead-capture spin-wheel popup — hidden on request 2026-07-08. */}
+      {/* <HubSpinWheel /> */}
       {/* Shared cart drawer — opened by the header bag + product "Add to cart" */}
       <HubClientUi />
     </>
