@@ -106,3 +106,6 @@ scripts/out/
 
 # nested Shopify theme repo — has its own .git, never commit
 pocketrc-theme/
+
+# internal docs — kept locally, not published to GitHub
+docs/
