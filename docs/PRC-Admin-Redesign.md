@@ -1,8 +1,10 @@
 # PRC Admin — Shopify-UI Redesign · Build Spec & Progress
 
-**Route:** `/admin/*` (`src/app/admin/(authed)/*`) · **Status:** 🛠 **Redesign IMPLEMENTED in code** — Shopify-style sidebar shell (`AdminShell`), redesigned Dashboard, and 5 new data-backed pages (Products, Discounts, Finance, Returns/RTO, Reviews moderation) are built and wired to **real** queries. Light is the default theme with a dark toggle. Analytics/funnel data bugs fixed (§9). Build + lint clean. **Not pushed.**
-**Last updated:** 2026-07-09
-**Owner instruction:** design/preview first, **do NOT push** until each piece is approved.
+**Route:** `/admin/*` (`src/app/admin/(authed)/*`) · **Status:** ✅ **SHIPPED to `main`** (`deebeca` + `330f0de`, 103 files, +11,396/−3,416). Shopify-style shell (`AdminShell`), rebuilt Dashboard/Analytics/Funnel/Orders, and full CRUD on Discounts + Customers + Products (via a DB **overrides** layer). Analytics data bugs fixed (§9) **and** the cross-page metric inconsistency fixed (§10). Build + lint + typecheck clean; consistency verified by script.
+**Last updated:** 2026-07-10
+**Owner instruction:** ~~design/preview first, do NOT push~~ — superseded 2026-07-10: owner approved and the work is on `main`. The `product_overrides` migration is **applied** to the live DB (RLS on, 0 policies).
+
+**Theme correction:** the admin is now **one cohesive LIGHT theme** — white sidebar rail, white topbar. The dark theme and its toggle were **removed** at the owner's request. Any mention of a "dark sidebar" or "light/dark toggle" below is historical.
 
 Related: [PRC-Hub-Build.md](PRC-Hub-Build.md) (storefront). This doc is the **admin** workstream.
 
@@ -33,24 +35,26 @@ Legend: ✅ built (code) · 🎨 designed (preview only, no code) · 🚧 redesi
 
 | Section | Route | Status | Notes |
 |---|---|---|---|
-| **Dashboard / Overview** | `/admin` | ✅ **built** | Rebuilt: ROW 1 = 5 KPI cards (Revenue/Orders/Conversion/AOV/Live) with **real vs-prev deltas + sparklines**; ROW 2 = SVG sales-over-time area chart (70%) + needs-attention (30%); ROW 3 = flat recent-orders table (Order·Customer·Total·Payment·Status). Extras (visitors, velocity, customers, sources, top SKUs, export) moved to a "More insights" section below the fold. Single-store (PRC/PRC16 switcher removed). |
-| **Orders** | `/admin/orders` | ✅ built | Status tabs + search + badges (pre-existing, preserved under the new shell). Pagination still capped at 100 (see §8B). |
-| **Inventory** | `/admin/inventory` | ✅ **DONE** | Rebuilt — see §2. |
-| **Customers** | `/admin/customers` | 🚧 | Code = top-50 by spend, no search/filter/export. Inherits the shell theme. |
-| **Analytics** | `/admin/analytics` | ✅ data-fixed | 5 data bugs fixed (§9). Renders under the shell theme; deeper UI polish still available. |
-| **Funnel** | `/admin/funnel` | ✅ data-fixed | Unit mismatch fixed + anomaly note added (§9). |
+| **Dashboard / Overview** | `/admin` | ✅ **built** | **Today** is the default range (Today/7/14/30). ROW 1 = 5 KPI cards (Revenue/Orders/Conversion/AOV/Live) with real vs-prev deltas + sparklines; ROW 2 = sales chart (**hourly** for Today, daily otherwise, real empty state) + needs-attention. Then: **Orders requiring action** (COD verify · ready to ship · failed payments · abandoned), **Top selling products** + **Low stock w/ one-tap `+10` restock**, **Customer insights**, compact recent orders (5). Traffic report, stat-card grid and the dead `units_sold` LATERAL query were **removed** (they belong in Analytics). |
+| **Orders** | `/admin/orders` | ✅ built | Status tabs + server-side search + **cursor pagination (50/page)**. Detail: sticky actions rail, horizontal status timeline, **cancel**, **print invoice**, fulfilment/tracking editor, **in-module COD verify**, refund (Razorpay), create-shipment. |
+| **Inventory** | ~~`/admin/inventory`~~ | ❌ **removed** | Page **deleted** — it duplicated Products. Stock is now edited per-product (`/admin/products/[id]`) and from the dashboard's Low-stock widget. `POST /api/admin/inventory` remains the single audited write path. See §2. |
+| **Customers** | `/admin/customers` | ✅ built | Search + **edit** (name/email/notes via server action) + **CSV export**. Profile = LTV, order history, addresses. |
+| **Analytics** | `/admin/analytics` | ✅ **rebuilt** | Tabbed: **Overview / Products / Customers / Marketing / Operations**. Real date selector (Today/7/30/90), revenue **line chart** (gradient fill, tooltip, Revenue/Orders/Customers toggle), traffic **donut**, funnel, loading skeleton. Deep tables moved off Overview. |
+| **Funnel** | `/admin/funnel` | ✅ **data-fixed** | Stage 1 now uses the **canonical** visitor count (matches Dashboard exactly) + reports client-event `coveragePct` so tracking loss is never read as customer behaviour. See §10. |
 | **Recovery** | `/admin/recovery` | 🚧 | Keep — telecaller call-queue + `/desk/[token]` caller surface. |
 | **Activity** | `/admin/activity` | 🚧 | Global event log. Code = last 200, no date filter. |
-| **Settings** | `/admin/settings` | 🚧 | **Read-only today** — no add-site / add-admin / role edit. See §8C. |
-| **Products / Catalog** | `/admin/products` | ✅ built | Real read-only table: thumbnail + swatches + "N colours", Active/Coming-soon/Hidden status, category, price+MRP, **live inventory state** (in stock / low / sold out / no data) + status tabs. CRUD pending (catalog lives in code — needs a migration). |
-| **Discounts / Coupons** | `/admin/discounts` | ✅ built | Real read-only from `coupons` (code/type/value/validity/usage/status). CRUD pending. |
-| **Finance (GST / settlements)** | `/admin/finance` | ✅ built | Real read-only from `orders`: gross/paid/refunds/COD-in-flight/RTO-loss + method split. Settlement/GST reconciliation pending. |
-| **Returns / RTO** | `/admin/returns` | ✅ built | Real from `orders`: RTO rate/value, refunds, cancelled + order list (kept distinct). |
-| **Reviews moderation** | `/admin/reviews` | ✅ built | Real queue (pending/approved/rejected) + **approve/reject/reset server actions** (writes `status`, revalidates PDPs). |
+| **Settings** | `/admin/settings` | 🚧 | **Read-only today** — no add-site / add-admin / role edit. Store config still lives in `src/lib/theme.ts` (no `settings` table). See §8C. |
+| **Products / Catalog** | `/admin/products` | ✅ built | Category chips + card grid + search/sort/status tabs. Editor (`/products/[id]`): **price, MRP, visibility, badge persist** via the `product_overrides` DB layer; per-colour **stock** persists via `/api/admin/inventory`. Title/tagline/description/category remain code-defined (read-only). **No create/delete** — see §10. |
+| **Discounts / Coupons** | `/admin/discounts` | ✅ **full CRUD** | Create / edit / enable-disable / delete coupons. No migration was needed — the `coupons` schema and checkout enforcement (expiry, usage limit, per-customer, race-safe `used_count`) already existed. |
+| **Finance (GST / settlements)** | `/admin/finance` | ✅ built | Real read-only from `orders`: gross/paid/refunds/COD-in-flight/RTO-loss + method split. **Known issues:** no Net computed; "RTO loss" shows full order value, not freight; `gross` includes unpaid PENDING (Analytics excludes it). |
+| **Returns / RTO** | `/admin/returns` | ✅ built (derived) | Read-only, **derived from `orders.status`** — there is no `returns` table, no request lifecycle, no reason capture. A real workflow needs a migration. |
+| **Reviews moderation** | `/admin/reviews` | ✅ built | Queue (pending/approved/rejected) + approve/reject/reset server actions (writes `status`, revalidates PDPs). **Missing:** image thumbnails (`reviews.images` exists), delete, reply (needs a column). |
 
-**Shell + theme (new this session):** `AdminShell` — dark 220px sidebar (grouped nav SELLING/INSIGHTS/MONEY&OPS, active red-bar highlight, **real** Orders + Reviews count badges + new/done chips, profile footer), theme-aware topbar with page title + **light/dark toggle** (light is the default), mobile hamburger drawer. Scoped dark theme (`.admin-shell`) in `globals.css` remaps the brand tokens to the Artifact's exact dark palette. Build + lint clean.
+**Shell + theme (current):** `AdminShell` — **white** 224px sidebar rail (grouped nav SELLING/INSIGHTS/MONEY&OPS, active red-bar highlight + red icon, **real** Orders + Reviews count badges, profile footer), white topbar with the page title, mobile hamburger drawer. **One light theme only** — the dark palette, the `.admin-shell:not(.admin-light)` CSS and the toggle were all deleted. Sidebar uses `THEME.logoDark` (the white wordmark would be invisible on a white rail). Route-level `loading.tsx` skeletons added.
 
-**Not yet built (from the §8 audit):** Products/Discounts **CRUD** (needs migration) · Ops-alerts inbox · Failed-delivery list · Shipment-queue & webhook health · Campaign/ROAS report · Finance settlement/GST reconciliation. Plus depth fixes (§8B), platform/RBAC (§8C), and mobile table→card + Lighthouse passes.
+**Single combined store:** the PRC/PRC16 `StoreTabs` component is deleted and every page aggregates across `ctx.siteIds` — dashboard, orders, analytics, funnel, finance. The dead `?site=` plumbing was stripped from orders + dashboard too.
+
+**Still not built:** Products **create/delete** (catalogue is code; only overrides persist) · `returns` workflow table · `settings` table (store config is in code) · Reviews delete/reply/images · Ops-alerts inbox · Failed-delivery list · Shipment-queue & webhook health · Campaign/ROAS report · Finance Net + settlement/GST. Plus RBAC (§8C — the role enum is still cosmetic) and a Lighthouse pass.
 
 **Auth model (corrected — research finding, NOT shared-password):** sign-in is **Supabase Auth email+password** (`/admin/login` → `POST /api/admin/signin`, rate-limited); every page calls `requireAdmin()`. The `admins` table **is** used — real rows with `siteIds[]` + `active` gate access. **But the OWNER/MANAGER/SUPPORT role enum is dead for RBAC** — it's only *displayed*; zero code gates any action by role. Every logged-in admin can do everything within their sites. The `/cod` (telecaller) and `/pack` (packer) consoles have their own separate cookie/secret auth.
 
@@ -58,11 +62,15 @@ Legend: ✅ built (code) · 🎨 designed (preview only, no code) · 🚧 redesi
 
 ---
 
-## 2. Inventory rebuild (DONE)
+## 2. Inventory — rebuilt, then MERGED INTO PRODUCTS (page removed)
 
-Files: `src/app/admin/(authed)/inventory/page.tsx` + `InventoryManager.tsx`.
+> **Superseded 2026-07-10.** The standalone Inventory page was **deleted**. Once Products gained the category chips *and* per-variant stock editing, the two screens were the same thing with different chrome — the owner chose to keep one. `inventory/page.tsx` and `InventoryManager.tsx` are gone; the `inventory` **table** and `POST /api/admin/inventory` (audited `set`/`adjust` upsert) are untouched and are now driven from:
+> - `/admin/products/[id]` — per-colour stock inputs + sticky Save bar,
+> - the dashboard **Low stock** widget — one-tap `+10` (a relative `adjust`, so two operators can't clobber each other).
+>
+> **Deliberately lost:** the bulk **stock-take** mode and the "missing inventory rows" health banner. Re-add them to Products if a physical recount is ever needed.
 
-**What shipped (code, verified — typecheck + prod build clean; not yet pushed):**
+Historical record of the original rebuild (files no longer exist):
 - **Single unified inventory** — the old prc/prc16 split is gone; `page.tsx` calls `getInventoryHealth()` (site `prc`), removed the dead PRC/PRC16 switcher.
 - **Category-image tabs** — the hub categories (Mini 1:64, Big 1:16, 1:20, Construction, Polo, + empty 1:43/Drone/Hobby) with round storefront thumbnails + live counts; SKU→category via `categoryKeyOf` (polo/construction override, else scale).
 - **Shopify-style flat table** — one row area per variant; **products grouped** (e.g. Pocket BMW shown once with White/Blue/Black nested; single-colour products render as one flat row).
@@ -201,4 +209,52 @@ All five were re-verified against live code and fixed at root cause. Shared modu
 4. ✅ **MED — Status-mix covers every order.** `bucketOfStatus` folds `PENDING_COD_VERIFICATION` into Pending and routes any unknown/future status to a visible **"Other"** bucket, so the denominator always includes every row. `analytics/page.tsx`.
 5. ✅ **LOW — Pageview single-owner.** `/api/track` inserts `pageview_count = 0` and no longer bumps on conflict; the batched `/api/track/event` handler is the sole incrementer. 1-page session = 1 pageview. `track/route.ts`.
 
-**Currency, div-by-zero/NaN guards, Meta CAPI dedup, bot filtering, and best-seller/attribution math were checked and are correct.** Changes are in the working tree, not pushed.
+**Currency, div-by-zero/NaN guards, Meta CAPI dedup, bot filtering, and best-seller/attribution math were checked and are correct.** ✅ Shipped to `main`.
+
+---
+
+## 10. Analytics **consistency** — ✅ FIXED (verified: `scripts/verify-analytics-consistency.ts` passes)
+
+§9 fixed the maths *within* each page. This fixed the fact that the three pages disagreed with **each other**.
+
+**Symptom (7-day window):** Dashboard "Visitors" `3,497` · Analytics "Total" `3,497` · Funnel "Visited site" `2,893`.
+
+**Three independent root causes:**
+1. **Different source table.** `analytics_sessions` is written **server-side by the edge middleware** (`/api/track`) — ad-blocker-proof. `funnel_events` is written **client-side** by a batched browser beacon — ad-blockable. Measured: **627 visitors in sessions emitted zero client events**; only 10 the other way. **Client-event coverage = 82.4% at 7 days, 43% at 30 days.** Sessions is a strict superset; counting "visitors" from `funnel_events` undercounted by ~18%.
+2. **Different window.** The funnel used a rolling `now() - make_interval(days => N)` (slices mid-day); the others used IST-day-aligned. Same metric, different number.
+3. **Conversion had two denominators.** Dashboard did `orders ÷ sessions`; Analytics did `orders ÷ visitors`.
+
+**Also corrected a wrong assumption:** `3,497` was never "sessions" — it was already `COUNT(DISTINCT visitor_id)`. **Real sessions = 4,456**, a number no page displayed. The fix was to *surface* sessions, not rename Visitors.
+
+**The fix — `src/lib/analytics-service.ts`** is now the single source of truth. Dashboard, Analytics and Funnel all read from it.
+
+| Metric | Formula | Table |
+|---|---|---|
+| **VISITOR** | `COUNT(DISTINCT visitor_id)` | `analytics_sessions` |
+| **SESSION** | `COUNT(*)` | `analytics_sessions` |
+| **PAGEVIEW** | `SUM(pageview_count)` | `analytics_sessions` |
+| **TRACKED VISITOR** | `COUNT(DISTINCT visitor_id)`, `type='page_view'` | `funnel_events` — **coverage only, never "visitors"** |
+| **ORDER** / **BUYER** | `COUNT(*)` paid / `COUNT(DISTINCT customer_id)` | `orders` |
+| **CONVERSION** | paid orders ÷ **visitors** | — |
+
+- `analyticsWindow(days)` is the **only** way to build a window (IST-aligned, inclusive of today).
+- Funnel stage 1 is the canonical visitor count; stages 2–4 stay on the event stream (no server record exists for "viewed a product") and the report carries `coveragePct` + a UI callout so the Visited→Product drop is never mistaken for pure behaviour.
+- `checkMetricSanity()` / `warnIfInsane()` assert `visitors ≤ sessions ≤ pageviews`, `trackedVisitors ≤ visitors`, `paidBuyers ≤ buyers ≤ orders`.
+
+**Verification (not a claim):** `npx tsx --env-file=.env.local scripts/verify-analytics-consistency.ts` → identical visitor counts across Dashboard / Analytics / Funnel at **1d, 7d and 30d**; `ALL CONSISTENCY CHECKS PASSED`.
+
+**Open follow-up:** client-event coverage degrades badly with age (82% @ 7d → **43% @ 30d**), so the funnel's middle steps get less trustworthy the further back you look. Worth investigating `funnel_events` retention/pruning.
+
+---
+
+## 11. Products CRUD — the **DB overrides** decision
+
+Full catalogue CRUD would mean moving `src/lib/products.ts` into the DB, which the storefront, PDP, checkout, SEO and inventory keys all read. The owner chose the **safer overrides layer** instead.
+
+- **Migration applied** (live DB, 2026-07-10): `src/db/migrations/manual/2026-07-09_product_overrides.sql` → `product_overrides (site_id, sku_id, price_inr, mrp_inr, hidden, coming_soon, badge, updated_at, updated_by)`.
+- **RLS caught in review:** the migration originally created the table with **no RLS**. Every other public table has RLS enabled with **zero policies** (`0004_enable_rls.sql` — 17 tables), which denies the anon/authenticated PostgREST roles while the app connects directly to Postgres and bypasses RLS. Left as written, `product_overrides` would have been the **only** table readable *and writable* via the public anon key. Fixed and verified: `rls_enabled=true, policies=0, columns=9`.
+- **Fail-safe by design:** `getOverrideMap()` / `getOverrideForSku()` wrap reads in `try/catch` and return empty on **any** error — including a missing table. Deploying the code before the migration silently falls back to code-catalogue prices rather than breaking checkout.
+- **Every price consumer reads the merged value** (PDP display + the order-create pricing seam), so the price shown is the price charged.
+- Apply future manual migrations with `npx tsx --env-file=.env.local scripts/apply-manual-migration.ts <file.sql>` (uses the **pooled** connection — the direct Supabase host is unreachable from dev machines).
+
+**Still impossible without a full migration:** creating or deleting products, and editing title/tagline/description/category.
