@@ -45,8 +45,12 @@ function sample<T>(arr: readonly T[], n: number): T[] {
   return copy.slice(0, n);
 }
 
+type ReviewSummary = { count: number; averageRating: number };
+
 export default function HubShop() {
   const [stockMap, setStockMap] = useState<Record<string, number> | null>(null);
+  const [salesMap, setSalesMap] = useState<Record<string, number> | null>(null);
+  const [reviewsMap, setReviewsMap] = useState<Record<string, ReviewSummary> | null>(null);
   const [active, setActive] = useState(HUB_CATEGORIES[0].key);
   // Rotating preview: first paint is deterministic (SSR-safe = the first 3);
   // after mount we swap in a random 3 per category so a NEW visitor sees a
@@ -59,6 +63,22 @@ export default function HubShop() {
       .then((r) => r.json())
       .then((d) => {
         if (!cancelled && d && typeof d.stock === "object") setStockMap(d.stock);
+      })
+      .catch(() => {});
+    // Real 30-day units sold — drives "Selling fast", "N sold this month" and
+    // the earned BESTSELLER badge. Independent of stock: a failure here costs
+    // social proof, not the ability to buy.
+    fetch("/api/sales")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancelled && d && typeof d.sales === "object") setSalesMap(d.sales);
+      })
+      .catch(() => {});
+    // Approved-review summaries. Absent SKUs render no star row at all.
+    fetch("/api/reviews/summary")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancelled && d && typeof d.reviews === "object") setReviewsMap(d.reviews);
       })
       .catch(() => {});
     return () => {
@@ -141,6 +161,8 @@ export default function HubShop() {
                   key={sku.id}
                   sku={sku}
                   stockMap={stockMap}
+                  salesMap={salesMap}
+                  reviewsMap={reviewsMap}
                   // mobile preview shows 2 (clean 2-col row); the 3rd is desktop-only
                   className={i >= 2 ? "hidden sm:flex" : undefined}
                 />

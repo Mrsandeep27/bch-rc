@@ -33,6 +33,49 @@ const EMPTY_AGG: ReviewAggregate = {
   histogram: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
 };
 
+/** Card-sized slice of an aggregate: enough for a star row, nothing more. */
+export type ReviewSummary = { count: number; averageRating: number };
+
+/** skuId → summary. A SKU with no APPROVED reviews is simply absent. */
+export type ReviewSummaryMap = Record<string, ReviewSummary>;
+
+/**
+ * Count + average for EVERY SKU on a site, in one query.
+ *
+ * The storefront grid renders 3–20 cards; calling getReviewAggregateForSku per
+ * card would be one round trip each. This is the grid's version.
+ *
+ * Absent means "no approved reviews" — the card then renders no star row at
+ * all. There is deliberately no baseline/placeholder here: a rating is a claim
+ * about what real customers said, and inventing one is a lie to the shopper
+ * (and, for the AggregateRating markup Google reads, to Google). Compare
+ * `src/lib/reviews-baseline.ts`, which the PDP still uses.
+ */
+export async function getReviewSummaries(siteId: string): Promise<ReviewSummaryMap> {
+  try {
+    const rows = await db
+      .select({
+        skuId: reviews.skuId,
+        count: sql<number>`count(*)::int`,
+        avg: sql<string>`round(avg(${reviews.rating})::numeric, 1)`,
+      })
+      .from(reviews)
+      .where(and(eq(reviews.siteId, siteId), eq(reviews.status, "approved")))
+      .groupBy(reviews.skuId);
+
+    const map: ReviewSummaryMap = {};
+    for (const r of rows) {
+      const count = Number(r.count) || 0;
+      const averageRating = Number(r.avg) || 0;
+      if (r.skuId && count > 0) map[r.skuId] = { count, averageRating };
+    }
+    return map;
+  } catch {
+    // DB unreachable → grid renders without stars rather than 500-ing.
+    return {};
+  }
+}
+
 /**
  * Approved reviews for a SKU on a site, newest first. Limited at the
  * source so a SKU with 5,000 reviews doesn't ship the whole list to the

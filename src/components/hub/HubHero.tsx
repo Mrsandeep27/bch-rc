@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import Image from "next/image";
+import Link from "next/link";
 
 /**
  * Hub hero — section 2. Full-bleed banner carousel that fills the screen
@@ -16,17 +17,27 @@ import Image from "next/image";
 
 type Slide = { src: string; alt: string; href: string; cta: string };
 
+/**
+ * Every CTA must land on a page that isn't this one. These four used to point
+ * at "/" — the homepage they're already on — so the largest, most animated
+ * button on the site scrolled the visitor to the top and nothing else.
+ *
+ * Destinations mirror the CTA copy: a "Shop <collection>" pill goes to that
+ * collection's grid, never to a single PDP. Category keys come from
+ * `HUB_CATEGORIES` in lib/hub-categories.ts; changing a key there without
+ * changing it here silently 404s the hero.
+ */
 const MOBILE_SLIDES: Slide[] = [
   {
     src: "/landing/mobile-1.webp",
     alt: "PRC pocket-size drift car — small size, big drift",
-    href: "/",
+    href: "/hub/shop/mini64",
     cta: "Shop Mini RC",
   },
   {
     src: "/landing/mobile-2.webp",
     alt: "PRC Mini RC drift car — the gift he won't stop using",
-    href: "/",
+    href: "/hub/shop/mini64",
     cta: "Shop Mini RC",
   },
   // 3rd slide — Construction 3-Pack (BUY ALL 3 · ₹4,999) → construction category
@@ -42,13 +53,13 @@ const DESKTOP_SLIDES: Slide[] = [
   {
     src: "/landing/hero-1.webp",
     alt: "PRC pocket mini RC car lineup — big thrills, smaller size",
-    href: "/",
+    href: "/hub/shop/mini64",
     cta: "Shop the Lineup",
   },
   {
     src: "/landing/hero-2.webp",
     alt: "PRC pocket mini cars — designed for precision",
-    href: "/",
+    href: "/hub/shop/big16",
     cta: "Shop Drift Cars",
   },
   // 3rd slide — Construction 3-Pack banner (BUY ALL 3 · ₹4,999) → construction.
@@ -110,7 +121,9 @@ function Banner({
 }) {
   return (
     <div className="relative h-[calc(100svh-2rem)] w-full shrink-0 snap-center">
-      <a href={s.href} className="block h-full w-full overflow-hidden">
+      {/* next/link, not <a>: a raw anchor tears down the whole React tree and
+          re-downloads the page for what should be a client transition. */}
+      <Link href={s.href} aria-label={s.cta} tabIndex={-1} className="block h-full w-full overflow-hidden">
         <Image
           src={s.src}
           alt={s.alt}
@@ -120,15 +133,15 @@ function Banner({
           {...(priority ? { priority: true } : { loading: "lazy" as const })}
           className="h-full w-full object-cover"
         />
-      </a>
+      </Link>
       {/* Centered via a flex wrapper so the button's own transform is free for
           the heartbeat animation (translate-x centering would clash with it). */}
       <div
         className={`absolute inset-x-0 flex justify-center ${small ? "bottom-6" : "bottom-8"}`}
       >
-        <a
+        <Link
           href={s.href}
-          className={`group inline-flex items-center rounded-full bg-brand-red font-bold text-white animate-heartbeat ${
+          className={`group inline-flex items-center rounded-full bg-brand-red font-bold text-white animate-heartbeat focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 ${
             small
               ? "gap-1.5 px-6 py-2.5 text-sm shadow-lg"
               : "gap-2 px-10 py-4 text-lg shadow-xl"
@@ -138,7 +151,7 @@ function Banner({
           <span aria-hidden className="transition-transform group-hover:translate-x-1">
             →
           </span>
-        </a>
+        </Link>
       </div>
     </div>
   );

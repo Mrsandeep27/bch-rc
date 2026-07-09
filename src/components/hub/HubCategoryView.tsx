@@ -12,8 +12,12 @@ import ConstructionBundleBanner from "@/components/hub/ConstructionBundleBanner"
  * section for ONE category: a tile switcher across categories + the complete
  * product grid. Cards add to the shared cart (same as the hub Shop preview).
  */
+type ReviewSummary = { count: number; averageRating: number };
+
 export default function HubCategoryView({ categoryKey }: { categoryKey: string }) {
   const [stockMap, setStockMap] = useState<Record<string, number> | null>(null);
+  const [salesMap, setSalesMap] = useState<Record<string, number> | null>(null);
+  const [reviewsMap, setReviewsMap] = useState<Record<string, ReviewSummary> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -21,6 +25,22 @@ export default function HubCategoryView({ categoryKey }: { categoryKey: string }
       .then((r) => r.json())
       .then((d) => {
         if (!cancelled && d && typeof d.stock === "object") setStockMap(d.stock);
+      })
+      .catch(() => {});
+    // Real 30-day units sold — drives "Selling fast", "N sold this month" and
+    // the earned BESTSELLER badge. Independent of stock: a failure here costs
+    // social proof, not the ability to buy.
+    fetch("/api/sales")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancelled && d && typeof d.sales === "object") setSalesMap(d.sales);
+      })
+      .catch(() => {});
+    // Approved-review summaries. Absent SKUs render no star row at all.
+    fetch("/api/reviews/summary")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancelled && d && typeof d.reviews === "object") setReviewsMap(d.reviews);
       })
       .catch(() => {});
     return () => {
@@ -63,7 +83,13 @@ export default function HubCategoryView({ categoryKey }: { categoryKey: string }
         {/* full product grid */}
         <div className="mt-4 grid grid-cols-2 gap-3 sm:mt-8 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4">
           {cat.skus.map((sku) => (
-            <HubProductCard key={sku.id} sku={sku} stockMap={stockMap} />
+            <HubProductCard
+              key={sku.id}
+              sku={sku}
+              stockMap={stockMap}
+              salesMap={salesMap}
+              reviewsMap={reviewsMap}
+            />
           ))}
         </div>
       </div>

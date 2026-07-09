@@ -37,6 +37,12 @@ export type Sku = {
   slug: string;
   scale: Scale;
   name: string;
+  /** Grid-card headline only — "{Model} + experience", e.g. "Pocket Porsche GT3
+   *  Drift RC". Never used for cart lines, order snapshots, JSON-LD or the PDP
+   *  <h1>; those stay on `name` so a copy tweak can't rewrite order history.
+   *  Falls back to `name` when unset. Every claim here must be backed by
+   *  `specs` (don't write "4x4" on a 2WD chassis). */
+  cardTitle?: string;
   tagline: string;
   retailINR: number;
   mrpINR: number;
@@ -90,6 +96,7 @@ export const PRODUCTS: Sku[] = [
     slug: "pocket-bmw",
     scale: "1:64",
     name: "Pocket BMW",
+    cardTitle: "Pocket BMW Mini Racer",
     tagline: "M-striped racing icon · 2.4 GHz · LED headlights",
     retailINR: 1099,
     mrpINR: 1599,
@@ -133,6 +140,7 @@ export const PRODUCTS: Sku[] = [
     slug: "pocket-porsche",
     scale: "1:64",
     name: "Pocket Porsche",
+    cardTitle: "Pocket Porsche GT3 Drift RC",
     tagline: "GT3 silhouette · drift wheels · iconic Stuttgart lines",
     retailINR: 1399,
     mrpINR: 1999,
@@ -178,6 +186,9 @@ export const PRODUCTS: Sku[] = [
     slug: "pocket-thar",
     scale: "1:64",
     name: "Pocket Thar",
+    // 2WD chassis — "Off-Road" is backed by specs.drift ("Off-road grip"); do
+    // NOT upgrade this to "4x4"/"4WD".
+    cardTitle: "Pocket Thar Off-Road RC",
     tagline: "Off-road champ · grippy treads · made for Indian roads",
     retailINR: 1399,
     mrpINR: 1999,
@@ -222,6 +233,7 @@ export const PRODUCTS: Sku[] = [
     slug: "pocket-monster",
     scale: "1:64",
     name: "Pocket Monster Truck",
+    cardTitle: "Pocket Monster 4WD Off-Road RC",
     tagline: "Oversized wheels · 4WD · climbs anything · LED roof bar",
     retailINR: 1899,
     mrpINR: 2699,
@@ -274,6 +286,7 @@ export const PRODUCTS: Sku[] = [
     slug: "pocket-f1-classic",
     scale: "1:64",
     name: "Pocket F1 Classic",
+    cardTitle: "Pocket F1 Classic Track RC",
     tagline: "Formula racing silhouette · entry-grade · most popular",
     retailINR: 1799,
     mrpINR: 2299,
