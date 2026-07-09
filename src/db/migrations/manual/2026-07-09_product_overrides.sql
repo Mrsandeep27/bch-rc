@@ -15,3 +15,10 @@ CREATE TABLE IF NOT EXISTS product_overrides (
   updated_by  text,
   PRIMARY KEY (site_id, sku_id)
 );
+
+-- RLS, same as every other public table (see 0004_enable_rls.sql): enabled with
+-- NO policies, so the anon/authenticated PostgREST roles are denied outright.
+-- The app reaches this table over the direct Postgres connection, which is not
+-- subject to RLS. Without this, product_overrides would be the ONLY table in the
+-- schema readable + writable through the public anon key.
+ALTER TABLE public.product_overrides ENABLE ROW LEVEL SECURITY;
