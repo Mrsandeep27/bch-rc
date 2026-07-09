@@ -11,6 +11,7 @@
  */
 
 import { NextResponse } from "next/server";
+import sharp from "sharp";
 import { createAdminClient } from "@/lib/supabase/server";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -58,11 +59,29 @@ export async function POST(req: Request) {
     .createBucket(BUCKET, { public: true, fileSizeLimit: MAX_BYTES })
     .catch(() => {});
 
-  const path = `${crypto.randomUUID()}.${ext}`;
-  const bytes = new Uint8Array(await file.arrayBuffer());
+  // Optimize before storing: a 5 MB phone photo is displayed at ~64px, so
+  // resize to max 1200px, convert to WebP q80, and drop EXIF/GPS metadata
+  // (sharp strips metadata by default; `.rotate()` bakes in the orientation
+  // first so portrait photos don't end up sideways). Result is ~150-250 KB.
+  // Existing stored review images are untouched — only new uploads run this.
+  let optimized: Buffer;
+  try {
+    optimized = await sharp(Buffer.from(await file.arrayBuffer()))
+      .rotate()
+      .resize({ width: 1200, height: 1200, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 80 })
+      .toBuffer();
+  } catch {
+    return NextResponse.json(
+      { ok: false, reason: "Couldn't process that image — try another." },
+      { status: 422 },
+    );
+  }
+
+  const path = `${crypto.randomUUID()}.webp`;
   const { error } = await supabase.storage
     .from(BUCKET)
-    .upload(path, bytes, { contentType: file.type, upsert: false });
+    .upload(path, optimized, { contentType: "image/webp", upsert: false });
   if (error) {
     return NextResponse.json(
       { ok: false, reason: error.message || "Upload failed" },

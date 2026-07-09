@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import type { Sku } from "@/lib/products";
 import { ProductPlaceholder } from "@/components/ProductPlaceholder";
+import blurMap from "@/lib/blur-map.json";
 
 /**
  * Renders the product hero image with a graceful fallback.
@@ -39,6 +40,9 @@ export function ProductImage({
   const [playing, setPlaying] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlled = active !== undefined;
+  // Zepto-style blur-up: tiny base64 preview shows instantly, real image fades
+  // in over it. Map is generated at build time (scripts/gen-blur.ts).
+  const blur = (blurMap as Record<string, string>)[sku.heroImage];
 
   const startVideo = useCallback(() => {
     if (!sku.heroVideo || !videoRef.current) return;
@@ -93,8 +97,10 @@ export function ProductImage({
         src={sku.heroImage}
         alt={sku.name}
         fill
-        sizes="(max-width: 768px) 85vw, (max-width: 1280px) 50vw, 25vw"
+        sizes="(max-width: 768px) 50vw, (max-width: 1280px) 50vw, 25vw"
         quality={85}
+        placeholder={blur ? "blur" : undefined}
+        blurDataURL={blur}
         className={`object-contain object-center transition-opacity duration-300 ${
           playing ? "opacity-0" : "opacity-100"
         }`}

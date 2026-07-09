@@ -66,7 +66,7 @@ export default function OrderActions({
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-brand-line p-5 space-y-4">
+    <div className="bg-white rounded-2xl border border-brand-line p-3 sm:p-5 space-y-3 sm:space-y-4">
       <h2 className="font-semibold text-brand-ink inline-flex items-center gap-2">
         <StickyNote size={16} className="text-brand-ink-soft" />
         Operator notes
@@ -87,7 +87,7 @@ export default function OrderActions({
           type="button"
           onClick={handleSaveNotes}
           disabled={!noteDirty || notesPending}
-          className="inline-flex items-center gap-1.5 bg-brand-ink text-white text-xs font-semibold uppercase tracking-widest px-3 py-2 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-1.5 bg-brand-ink text-white text-xs font-semibold uppercase tracking-widest px-3 py-2.5 sm:py-2 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {notesPending ? (
             <Loader2 size={14} className="animate-spin" />

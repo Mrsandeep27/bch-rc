@@ -40,7 +40,7 @@ export default async function AdminCreateManualOrderPage() {
   return (
     <div className="min-h-screen bg-brand-cream">
       <header className="bg-white border-b border-brand-line">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link
               href="/admin/orders"
@@ -57,8 +57,8 @@ export default async function AdminCreateManualOrderPage() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
-        <p className="text-sm text-brand-ink-soft mb-5 max-w-xl">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
+        <p className="text-sm text-brand-ink-soft mb-3 sm:mb-5 max-w-xl">
           Use this when a customer reaches you on WhatsApp or phone instead of
           the website. Razorpay will SMS them a payment link the moment you
           submit. Once they pay, the order automatically appears in the

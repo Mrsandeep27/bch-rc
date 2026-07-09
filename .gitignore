@@ -103,3 +103,6 @@ public/store16-images/video/
 scripts/out/
 
 .vercel
+
+# nested Shopify theme repo — has its own .git, never commit
+pocketrc-theme/

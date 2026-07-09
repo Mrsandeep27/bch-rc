@@ -22,7 +22,6 @@ export default function HubPerfBanner() {
           alt="Pocket Performance Series — built to dominate, made to thrill. All-terrain ready, high-traction tyres, adjustable suspension, durable build. 2.4 GHz remote, long battery life, high-speed performance."
           width={1672}
           height={941}
-          unoptimized
           sizes="100vw"
           className="h-auto w-full transition-transform duration-500 group-hover:scale-[1.02]"
         />

@@ -142,7 +142,6 @@ export default function HubBestSellers() {
                     alt={b.alt}
                     width={1086}
                     height={1448}
-                    unoptimized
                     sizes="(max-width: 640px) 100vw, 768px"
                     className="h-auto w-full transition-transform duration-500 group-hover:scale-[1.02] sm:hidden"
                   />
@@ -153,7 +152,6 @@ export default function HubBestSellers() {
                     aria-hidden
                     width={b.wDesktop}
                     height={b.hDesktop}
-                    unoptimized
                     sizes="768px"
                     className="hidden h-auto w-full transition-transform duration-500 group-hover:scale-[1.02] sm:block"
                   />

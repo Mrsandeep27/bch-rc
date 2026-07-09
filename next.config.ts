@@ -22,6 +22,20 @@ const nextConfig: NextConfig = {
     // render. We use 75 (default) and 85 (product/hero shots). Without 85, the
     // whole site's imagery broke after the Next 16 upgrade.
     qualities: [75, 85],
+    // Prefer AVIF (~20-30% smaller than WebP), fall back to WebP for older
+    // browsers. Only takes effect in production, where the optimizer runs.
+    formats: ["image/avif", "image/webp"],
+    // Customer review photos live in a public Supabase Storage bucket
+    // (see /api/reviews/upload). The optimizer rejects any remote host not
+    // listed here, so the admin moderation queue's next/image thumbnails —
+    // and any storefront <Image> pointed at these URLs — need this pattern.
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "**.supabase.co",
+        pathname: "/storage/v1/object/public/**",
+      },
+    ],
   },
   async headers() {
     // B07 — long-immutable cache TTLs on the heaviest, never-versioned

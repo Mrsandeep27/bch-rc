@@ -20,7 +20,7 @@ import { HubProductCard } from "@/components/hub/HubProductCard";
 function TileImage({ c }: { c: HubCat }) {
   if (c.img) {
     return (
-      <Image src={c.img} alt={c.label} width={1254} height={1254} unoptimized sizes="150px" className="h-full w-full object-cover" />
+      <Image src={c.img} alt={c.label} width={1254} height={1254} sizes="150px" className="h-full w-full object-cover" />
     );
   }
   return (

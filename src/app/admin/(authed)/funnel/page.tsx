@@ -1,7 +1,7 @@
-import Link from "next/link";
-import { AlertTriangle, TrendingDown, Activity } from "lucide-react";
+import { AlertTriangle, TrendingDown, Info, Activity, ArrowDown } from "lucide-react";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getFunnelReport } from "@/lib/funnel-queries";
+import { clampPct, safePct } from "@/lib/analytics-validation";
 import { FunnelWindowTabs } from "./FunnelWindowTabs";
 
 export const dynamic = "force-dynamic";
@@ -13,183 +13,237 @@ function pct(x: number): string {
 export default async function FunnelDashboard({
   searchParams,
 }: {
-  searchParams: Promise<{ window?: string; site?: string }>;
+  searchParams: Promise<{ window?: string }>;
 }) {
   const ctx = await requireAdmin();
   const sp = await searchParams;
   const windowDays = Number(sp.window) || 7;
-  // Funnel is per-store — pick the requested site, else the admin's first site.
-  const siteId =
-    sp.site && ctx.siteIds.includes(sp.site) ? sp.site : ctx.siteIds[0];
-  const report = await getFunnelReport(siteId, windowDays);
+
+  // Single combined store — aggregate across every site this admin manages.
+  const report = await getFunnelReport(ctx.siteIds, windowDays);
 
   const top = report.stages[0]?.visitors ?? 0;
   const paid = report.stages[report.stages.length - 1]?.visitors ?? 0;
-  const overallConv = top > 0 ? (paid / top) * 100 : 0;
+  const overallConv = clampPct(safePct(paid, top));
   const maxBar = Math.max(1, top);
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <div className="space-y-4 sm:space-y-5">
+      {/* Header */}
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-brand-ink flex items-center gap-2">
+          <h1 className="font-display text-xl sm:text-2xl font-bold text-brand-ink flex items-center gap-2">
             <Activity size={22} className="text-brand-red" /> Conversion funnel
           </h1>
           <p className="text-sm text-brand-ink-soft mt-1">
             Of everyone who visited, where they dropped off — and why.
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {ctx.siteIds.length > 1 && (
-            <div className="flex gap-1 bg-brand-cream rounded-full p-1">
-              {ctx.siteIds.map((s) => (
-                <Link
-                  key={s}
-                  href={`/admin/funnel?site=${s}&window=${windowDays}`}
-                  className={`px-3 py-1.5 rounded-full text-sm font-medium uppercase transition-colors ${
-                    s === siteId
-                      ? "bg-brand-ink text-white"
-                      : "text-brand-ink-soft hover:text-brand-ink"
-                  }`}
-                >
-                  {s}
-                </Link>
-              ))}
-            </div>
-          )}
-          <FunnelWindowTabs />
-        </div>
+        <FunnelWindowTabs />
       </div>
 
-      {/* Headline conversion */}
-      <div className="mt-6 grid grid-cols-3 gap-3">
-        <div className="rounded-xl border border-brand-line p-4">
-          <div className="text-2xl font-bold text-brand-ink">{top.toLocaleString("en-IN")}</div>
-          <div className="text-xs text-brand-ink-soft mt-1">Visitors</div>
-        </div>
-        <div className="rounded-xl border border-brand-line p-4">
-          <div className="text-2xl font-bold text-brand-ink">{paid.toLocaleString("en-IN")}</div>
-          <div className="text-xs text-brand-ink-soft mt-1">Bought</div>
-        </div>
-        <div className="rounded-xl border border-brand-line p-4">
-          <div className="text-2xl font-bold text-brand-red">{pct(overallConv)}</div>
-          <div className="text-xs text-brand-ink-soft mt-1">Conversion</div>
-        </div>
+      {/* Headline KPIs */}
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <Kpi label="Visitors" value={top.toLocaleString("en-IN")} />
+        <Kpi label="Bought" value={paid.toLocaleString("en-IN")} />
+        <Kpi
+          label="Conversion"
+          value={pct(overallConv)}
+          accent
+          sub={top > 0 ? `${paid.toLocaleString("en-IN")} of ${top.toLocaleString("en-IN")}` : undefined}
+        />
       </div>
 
-      {/* Serviceability early-warning — the outage detector */}
-      {report.serviceability.total > 0 && report.serviceability.blockedPct >= 40 && (
-        <div className="mt-4 rounded-xl border border-red-300 bg-red-50 p-4 flex gap-3">
-          <AlertTriangle size={20} className="text-red-600 shrink-0 mt-0.5" />
-          <div className="text-sm text-red-800">
+      {/* Callouts */}
+      <div className="space-y-3">
+        {report.serviceability.total > 0 && report.serviceability.blockedPct >= 40 && (
+          <Callout tone="red" icon={<AlertTriangle size={18} className="text-brand-red shrink-0 mt-0.5" />}>
             <b>{pct(report.serviceability.blockedPct)} of pincode checks were rejected</b>{" "}
             ({report.serviceability.blocked} of {report.serviceability.total}). If this is high,
             checkout may be blocking real customers — check the pickup config and the
             blocked-pincodes list below.
-          </div>
-        </div>
-      )}
+          </Callout>
+        )}
 
-      {/* Biggest leak callout */}
-      {report.biggestLeak && report.biggestLeak.dropped > 0 && (
-        <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4 flex gap-3">
-          <TrendingDown size={20} className="text-amber-600 shrink-0 mt-0.5" />
-          <div className="text-sm text-amber-900">
+        {report.anomalies.length > 0 && (
+          <Callout tone="blue" icon={<Info size={18} className="text-blue-600 shrink-0 mt-0.5" />}>
+            <b className="block">Tracking gap detected</b>
+            {report.anomalies.map((a, i) => (
+              <p key={i}>{a}</p>
+            ))}
+          </Callout>
+        )}
+
+        {report.visitors > 0 && report.coveragePct < 95 && (
+          <Callout tone="blue" icon={<Info size={18} className="text-blue-600 shrink-0 mt-0.5" />}>
+            <b className="block">
+              Client-side events cover {Math.round(report.coveragePct)}% of visitors
+            </b>
+            <p>
+              Steps 1, 5 and 6 are measured server-side (ad-blocker-proof) and match the
+              Dashboard exactly. Steps 2–4 are only seen when the browser reports them, so{" "}
+              <b>{(report.visitors - report.trackedVisitors).toLocaleString("en-IN")} visitors</b>{" "}
+              are missing from them — part of the &ldquo;Viewed a product&rdquo; drop is
+              tracking loss, not customer behaviour.
+            </p>
+          </Callout>
+        )}
+
+        {report.biggestLeak && report.biggestLeak.dropped > 0 && (
+          <Callout tone="amber" icon={<TrendingDown size={18} className="text-amber-600 shrink-0 mt-0.5" />}>
             <b>Biggest drop-off:</b> {report.biggestLeak.dropped.toLocaleString("en-IN")} people
             left between <b>{report.biggestLeak.fromLabel}</b> and{" "}
             <b>{report.biggestLeak.toLabel}</b> (only {pct(report.biggestLeak.stepPct)} continued).
             Fix this step first.
-          </div>
-        </div>
-      )}
+          </Callout>
+        )}
+      </div>
 
       {/* The funnel */}
-      <div className="mt-6 space-y-2">
-        {report.stages.map((s, i) => {
-          const widthPct = (s.visitors / maxBar) * 100;
-          return (
-            <div key={s.key} className="rounded-xl border border-brand-line overflow-hidden">
-              <div className="relative">
-                <div
-                  className="absolute inset-y-0 left-0 bg-brand-red/10"
-                  style={{ width: `${Math.max(widthPct, 2)}%` }}
-                />
-                <div className="relative flex items-center justify-between px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-mono text-brand-ink-soft w-4">{i + 1}</span>
-                    <span className="font-medium text-brand-ink">{s.label}</span>
+      <div className="rounded-2xl border border-brand-line bg-white overflow-hidden">
+        <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-brand-line">
+          <h2 className="font-semibold text-brand-ink">Funnel steps</h2>
+          <span className="text-xs text-brand-ink-soft">
+            Last {windowDays === 1 ? "24 h" : `${windowDays} days`} · distinct people
+          </span>
+        </div>
+        <div className="p-3 sm:p-5 space-y-1.5">
+          {report.stages.map((s, i) => {
+            const widthPct = (s.visitors / maxBar) * 100;
+            const kept = i === 0 ? 100 : s.stepPct;
+            const weak = i > 0 && kept < 50;
+            return (
+              <div key={s.key}>
+                {/* Drop-off connector (people lost since the previous step) */}
+                {i > 0 && s.dropped > 0 && (
+                  <div className="flex items-center gap-1.5 pl-8 sm:pl-14 py-0.5 text-[11px] font-medium text-brand-red/70">
+                    <ArrowDown size={11} />
+                    <span className="tabular-nums">{s.dropped.toLocaleString("en-IN")} left</span>
                   </div>
-                  <div className="flex items-center gap-4 text-right">
-                    <span className="font-bold text-brand-ink tabular-nums">
-                      {s.visitors.toLocaleString("en-IN")}
-                    </span>
-                    {i > 0 && (
-                      <span
-                        className={`text-xs font-mono tabular-nums w-16 ${
-                          s.stepPct < 50 ? "text-red-600" : "text-brand-ink-soft"
-                        }`}
-                        title="continued from previous step"
-                      >
-                        {pct(s.stepPct)}
-                      </span>
-                    )}
+                )}
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <span className="grid place-items-center h-6 w-6 shrink-0 rounded-full bg-brand-cream text-[11px] font-bold tabular-nums text-brand-ink-soft">
+                    {i + 1}
+                  </span>
+                  <span className="w-24 sm:w-44 shrink-0 text-sm font-medium text-brand-ink truncate">
+                    {s.label}
+                  </span>
+                  <div className="relative h-8 sm:h-9 flex-1 rounded-lg bg-brand-cream overflow-hidden">
+                    <div
+                      className="absolute inset-y-0 left-0 rounded-lg bg-gradient-to-r from-brand-red to-brand-red/65"
+                      style={{ width: `${Math.max(widthPct, 2)}%` }}
+                    />
                   </div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Why they leak: blocked pincodes + payment failures */}
-      <div className="mt-8 grid md:grid-cols-2 gap-6">
-        <div>
-          <h2 className="font-semibold text-brand-ink mb-2">Pincodes we rejected</h2>
-          <p className="text-xs text-brand-ink-soft mb-3">
-            Customers told &quot;no courier serves this pincode.&quot; A flood of these = a
-            config/courier problem, not real unserviceable areas.
-          </p>
-          {report.blockedPincodes.length === 0 ? (
-            <p className="text-sm text-brand-ink-soft">None — every pincode was serviceable. ✅</p>
-          ) : (
-            <div className="rounded-xl border border-brand-line divide-y divide-brand-line">
-              {report.blockedPincodes.map((p) => (
-                <div key={p.pincode} className="flex justify-between px-3 py-2 text-sm">
-                  <span className="font-mono text-brand-ink">{p.pincode}</span>
-                  <span className="text-brand-ink-soft">
-                    {p.visitors} {p.visitors === 1 ? "person" : "people"} · {p.checks} checks
+                  <span className="w-12 sm:w-20 text-right font-bold tabular-nums text-brand-ink text-sm">
+                    {s.visitors.toLocaleString("en-IN")}
+                  </span>
+                  <span
+                    className={`w-11 text-right text-xs font-semibold tabular-nums ${
+                      i === 0 ? "text-brand-ink-soft/40" : weak ? "text-brand-red" : "text-success"
+                    }`}
+                    title="continued from the previous step"
+                  >
+                    {i === 0 ? "—" : pct(kept)}
                   </span>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div>
-          <h2 className="font-semibold text-brand-ink mb-2">Payment failures</h2>
-          <p className="text-xs text-brand-ink-soft mb-3">
-            Reasons Razorpay reported when a payment failed at the modal.
-          </p>
-          {report.paymentFailures.length === 0 ? (
-            <p className="text-sm text-brand-ink-soft">No reported payment failures. ✅</p>
-          ) : (
-            <div className="rounded-xl border border-brand-line divide-y divide-brand-line">
-              {report.paymentFailures.map((f, i) => (
-                <div key={i} className="flex justify-between px-3 py-2 text-sm gap-3">
-                  <span className="text-brand-ink truncate">{f.reason}</span>
-                  <span className="text-brand-ink-soft shrink-0">{f.n}</span>
-                </div>
-              ))}
-            </div>
-          )}
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      <p className="mt-8 text-xs text-brand-ink-soft">
-        Tracking started when this feature shipped — data builds up from now. Visitor counts are
-        de-duplicated and exclude bots. Every step is recorded first-party (no consent needed, no
-        personal data stored).
+      {/* Why they leak */}
+      <div className="grid md:grid-cols-2 gap-3 sm:gap-4">
+        <InsightCard
+          title="Pincodes we rejected"
+          hint="Customers told “no courier serves this pincode.” A flood of these = a config/courier problem, not real unserviceable areas."
+        >
+          {report.blockedPincodes.length === 0 ? (
+            <Empty>None — every pincode was serviceable. ✅</Empty>
+          ) : (
+            <ul className="divide-y divide-brand-line">
+              {report.blockedPincodes.map((p) => (
+                <li key={p.pincode} className="flex justify-between px-4 sm:px-5 py-2.5 text-sm">
+                  <span className="font-mono text-brand-ink">{p.pincode}</span>
+                  <span className="text-brand-ink-soft tabular-nums">
+                    {p.visitors} {p.visitors === 1 ? "person" : "people"} · {p.checks} checks
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </InsightCard>
+
+        <InsightCard
+          title="Payment failures"
+          hint="Reasons Razorpay reported when a payment failed at the modal."
+        >
+          {report.paymentFailures.length === 0 ? (
+            <Empty>No reported payment failures. ✅</Empty>
+          ) : (
+            <ul className="divide-y divide-brand-line">
+              {report.paymentFailures.map((f, i) => (
+                <li key={i} className="flex justify-between gap-3 px-4 sm:px-5 py-2.5 text-sm">
+                  <span className="text-brand-ink truncate">{f.reason}</span>
+                  <span className="text-brand-ink-soft shrink-0 tabular-nums">{f.n}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </InsightCard>
+      </div>
+
+      <p className="text-xs text-brand-ink-soft leading-relaxed">
+        Tracking started when this feature shipped — data builds up from now. Every step counts
+        distinct people, de-duplicated and excluding bots: the top steps are unique visitors
+        (first-party cookies), and “Placed order”/“Paid” are unique buyers counted exactly from the
+        orders ledger — so those two are ad-blocker-proof while the upper steps are not. A
+        lower step reading higher than the one above it is flagged as a tracking gap above, not a
+        real increase. Recorded first-party (no consent needed, no personal data stored).
       </p>
     </div>
   );
+}
+
+function Kpi({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: boolean }) {
+  return (
+    <div className="rounded-2xl border border-brand-line bg-white p-3 sm:p-4">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-brand-ink-soft">{label}</div>
+      <div className={`mt-1 text-xl sm:text-2xl font-bold tabular-nums ${accent ? "text-brand-red" : "text-brand-ink"}`}>
+        {value}
+      </div>
+      {sub && <div className="text-[11px] text-brand-ink-soft mt-0.5 tabular-nums">{sub}</div>}
+    </div>
+  );
+}
+
+const CALLOUT_TONE: Record<"red" | "amber" | "blue", string> = {
+  red: "border-brand-red/30 bg-brand-red/5 text-brand-red",
+  amber: "border-amber-300 bg-amber-50 text-amber-900",
+  blue: "border-blue-300 bg-blue-50 text-blue-900",
+};
+
+function Callout({ tone, icon, children }: { tone: "red" | "amber" | "blue"; icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className={`rounded-2xl border p-3 sm:p-4 flex gap-3 text-sm ${CALLOUT_TONE[tone]}`}>
+      {icon}
+      <div className="space-y-1">{children}</div>
+    </div>
+  );
+}
+
+function InsightCard({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-brand-line bg-white overflow-hidden">
+      <div className="px-4 sm:px-5 py-3.5 border-b border-brand-line">
+        <h2 className="font-semibold text-brand-ink">{title}</h2>
+        <p className="text-xs text-brand-ink-soft mt-1">{hint}</p>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Empty({ children }: { children: React.ReactNode }) {
+  return <p className="px-5 py-8 text-center text-sm text-brand-ink-soft">{children}</p>;
 }

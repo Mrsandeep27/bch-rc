@@ -286,7 +286,7 @@ export function PdpReviews({
                 {images.map((url) => (
                   <div key={url} className="relative h-16 w-16 overflow-hidden rounded-lg border border-brand-line">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
+                    <img src={url} alt="" width={64} height={64} className="h-full w-full object-cover" loading="lazy" />
                     <button
                       type="button"
                       onClick={() => setImages((prev) => prev.filter((u) => u !== url))}
@@ -367,7 +367,7 @@ export function PdpReviews({
                       className="block h-16 w-16 overflow-hidden rounded-lg border border-brand-line"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={url} alt="Customer photo" className="h-full w-full object-cover transition-transform hover:scale-105" loading="lazy" />
+                      <img src={url} alt="Customer photo" width={64} height={64} className="h-full w-full object-cover transition-transform hover:scale-105" loading="lazy" />
                     </a>
                   ))}
                 </div>

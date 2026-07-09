@@ -8,23 +8,23 @@ export default async function AdminSettings() {
   const allAdmins = await db.select().from(admins);
 
   return (
-    <div className="space-y-5">
-      <h1 className="font-display text-2xl sm:text-3xl font-bold text-brand-ink">
+    <div className="space-y-3 sm:space-y-5">
+      <h1 className="font-display text-lg sm:text-3xl font-bold text-brand-ink">
         Settings
       </h1>
 
-      <section className="bg-white rounded-2xl border border-brand-line p-5">
+      <section className="bg-white rounded-2xl border border-brand-line p-3 sm:p-5">
         <h2 className="font-semibold text-brand-ink mb-3">Sites</h2>
         <ul className="space-y-3">
           {allSites.map((s) => (
             <li
               key={s.id}
-              className="flex items-center justify-between border border-brand-line rounded-lg px-4 py-3"
+              className="flex items-center justify-between gap-3 border border-brand-line rounded-lg px-3 sm:px-4 py-3"
             >
-              <div>
+              <div className="min-w-0">
                 <div className="font-semibold text-brand-ink">
                   {s.name}{" "}
-                  <span className="text-xs text-brand-ink-soft font-mono">
+                  <span className="text-xs text-brand-ink-soft font-mono break-all">
                     {s.id}
                   </span>
                 </div>
@@ -33,11 +33,11 @@ export default async function AdminSettings() {
                 </div>
               </div>
               {s.active ? (
-                <span className="text-[10px] font-mono uppercase tracking-widest font-semibold px-2 py-0.5 rounded-full bg-success/10 text-success">
+                <span className="shrink-0 text-[10px] font-mono uppercase tracking-widest font-semibold px-2 py-0.5 rounded-full bg-success/10 text-success">
                   Active
                 </span>
               ) : (
-                <span className="text-[10px] font-mono uppercase tracking-widest font-semibold px-2 py-0.5 rounded-full bg-brand-line text-brand-ink-soft">
+                <span className="shrink-0 text-[10px] font-mono uppercase tracking-widest font-semibold px-2 py-0.5 rounded-full bg-brand-line text-brand-ink-soft">
                   Inactive
                 </span>
               )}
@@ -50,22 +50,22 @@ export default async function AdminSettings() {
         </p>
       </section>
 
-      <section className="bg-white rounded-2xl border border-brand-line p-5">
+      <section className="bg-white rounded-2xl border border-brand-line p-3 sm:p-5">
         <h2 className="font-semibold text-brand-ink mb-3">Admins</h2>
         <ul className="space-y-2">
           {allAdmins.map((a) => (
             <li
               key={a.id}
-              className="flex items-center justify-between border border-brand-line rounded-lg px-4 py-3 text-sm"
+              className="flex items-center justify-between gap-3 border border-brand-line rounded-lg px-3 sm:px-4 py-3 text-sm"
             >
-              <div>
-                <div className="font-semibold text-brand-ink">{a.email}</div>
+              <div className="min-w-0">
+                <div className="font-semibold text-brand-ink break-all">{a.email}</div>
                 <div className="text-xs text-brand-ink-soft mt-0.5">
                   {a.role} · {a.siteIds.length} sites
                 </div>
               </div>
               {a.email === ctx.email && (
-                <span className="text-[10px] font-mono uppercase tracking-widest text-brand-ink-soft">
+                <span className="shrink-0 text-[10px] font-mono uppercase tracking-widest text-brand-ink-soft">
                   You
                 </span>
               )}

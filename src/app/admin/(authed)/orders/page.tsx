@@ -1,5 +1,11 @@
 import Link from "next/link";
-import { Package, Plus, Search } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Package,
+  Plus,
+  Search,
+} from "lucide-react";
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { orders } from "@/db/schema";
@@ -28,17 +34,23 @@ const FAILED_STATUSES = [
 
 type View = "live" | "pending" | "failed" | "manual" | "all";
 
+const PAGE_SIZE = 50;
+
 export default async function AdminOrdersList({
   searchParams,
 }: {
   searchParams: Promise<{
     view?: string;
     q?: string;
-    site?: string;
+    page?: string;
   }>;
 }) {
   const ctx = await requireAdmin();
   const params = await searchParams;
+
+  // 1-based page. Anything non-numeric / < 1 falls back to page 1.
+  const page = Math.max(1, Math.floor(Number(params.page)) || 1);
+  const offset = (page - 1) * PAGE_SIZE;
 
   const view: View =
     params.view === "pending"
@@ -53,9 +65,7 @@ export default async function AdminOrdersList({
 
   const q = (params.q ?? "").trim();
 
-  const visibleSiteIds = params.site
-    ? ctx.siteIds.filter((s) => s === params.site)
-    : ctx.siteIds;
+  const visibleSiteIds = ctx.siteIds;
 
   // Bucket counts come from a single grouped query, NOT three separate
   // SELECTs — same wall-clock, all four buttons accurate regardless of
@@ -120,24 +130,35 @@ export default async function AdminOrdersList({
     );
   }
 
-  const rows = await db
+  // Fetch PAGE_SIZE + 1 so we know whether a next page exists without a second
+  // count query. The extra row (if any) is sliced off before rendering.
+  const fetched = await db
     .select()
     .from(orders)
     .where(and(...conditions))
     .orderBy(desc(orders.placedAt))
-    .limit(100);
+    .limit(PAGE_SIZE + 1)
+    .offset(offset);
+
+  const hasNext = fetched.length > PAGE_SIZE;
+  const rows = hasNext ? fetched.slice(0, PAGE_SIZE) : fetched;
+  const hasPrev = page > 1;
+  const rangeStart = rows.length === 0 ? 0 : offset + 1;
+  const rangeEnd = offset + rows.length;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3 sm:space-y-5">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-brand-ink">
+          <h1 className="font-display text-xl sm:text-3xl font-bold text-brand-ink">
             Orders
           </h1>
-          <p className="text-sm text-brand-ink-soft mt-1">
+          <p className="text-xs sm:text-sm text-brand-ink-soft mt-0.5 sm:mt-1">
             {q
-              ? `Search results for "${q}" — ${rows.length} match${rows.length === 1 ? "" : "es"}`
-              : `Showing ${rows.length} of ${counts[view]} ${view === "all" ? "total" : view}`}
+              ? `Search results for "${q}" — showing ${rangeStart}–${rangeEnd}${
+                  hasNext ? "+" : ""
+                }`
+              : `Showing ${rangeStart}–${rangeEnd} of ${counts[view]} ${view === "all" ? "total" : view}`}
           </p>
         </div>
         <Link
@@ -158,16 +179,13 @@ export default async function AdminOrdersList({
         className="bg-white rounded-2xl border border-brand-line p-1.5 flex items-center gap-1.5"
       >
         {view !== "live" && <input type="hidden" name="view" value={view} />}
-        {params.site && (
-          <input type="hidden" name="site" value={params.site} />
-        )}
         <Search size={16} className="text-brand-ink-soft ml-2 shrink-0" />
         <input
           type="search"
           name="q"
           defaultValue={q}
           placeholder="Search by order ID, name, phone, or email…"
-          className="flex-1 px-2 py-2 text-sm text-brand-ink placeholder:text-brand-ink-soft focus:outline-none bg-transparent"
+          className="flex-1 min-w-0 px-2 py-1.5 sm:py-2 text-sm text-brand-ink placeholder:text-brand-ink-soft focus:outline-none bg-transparent"
         />
         {q && (
           <Link
@@ -179,30 +197,32 @@ export default async function AdminOrdersList({
         )}
         <button
           type="submit"
-          className="bg-brand-ink text-white text-xs font-semibold uppercase tracking-widest px-3 py-2 rounded-xl"
+          aria-label="Search"
+          className="bg-brand-ink text-white text-xs font-semibold uppercase tracking-widest px-2.5 py-2 sm:px-3 rounded-xl"
         >
-          Search
+          <Search size={14} className="sm:hidden" />
+          <span className="hidden sm:inline">Search</span>
         </button>
       </form>
 
       {/* View tabs */}
       <div className="flex items-center gap-2 overflow-x-auto overflow-y-hidden no-scrollbar">
         <ViewChip
-          href={buildHref({ view: "live", site: params.site })}
+          href={buildHref({ view: "live" })}
           label="Live"
           sub="Paid + COD + in-fulfilment"
           count={counts.live}
           active={view === "live"}
         />
         <ViewChip
-          href={buildHref({ view: "pending", site: params.site })}
+          href={buildHref({ view: "pending" })}
           label="Pending"
           sub="Started checkout, payment open"
           count={counts.pending}
           active={view === "pending"}
         />
         <ViewChip
-          href={buildHref({ view: "failed", site: params.site })}
+          href={buildHref({ view: "failed" })}
           label="Failed"
           sub="Cancelled, failed, refunded, returned"
           count={counts.failed}
@@ -210,14 +230,14 @@ export default async function AdminOrdersList({
           danger
         />
         <ViewChip
-          href={buildHref({ view: "manual", site: params.site })}
+          href={buildHref({ view: "manual" })}
           label="Manual"
           sub="Created by an admin (any status)"
           count={counts.manual}
           active={view === "manual"}
         />
         <ViewChip
-          href={buildHref({ view: "all", site: params.site })}
+          href={buildHref({ view: "all" })}
           label="All"
           sub="Everything"
           count={counts.all}
@@ -227,19 +247,29 @@ export default async function AdminOrdersList({
 
       <div className="bg-white rounded-2xl border border-brand-line overflow-hidden">
         {rows.length === 0 ? (
-          <div className="px-5 py-16 text-center">
+          <div className="px-4 py-10 sm:px-5 sm:py-16 text-center">
             <Package size={32} className="text-brand-ink-soft mx-auto mb-2" />
             <p className="text-sm text-brand-ink-soft">
-              {q
-                ? `No orders match "${q}".`
-                : view === "live"
-                  ? "No live orders. Paid orders will appear here as customers check out."
-                  : view === "failed"
-                    ? "No failed orders. Nothing to follow up on — clean slate."
-                    : view === "pending"
-                      ? "No pending orders. UPI carts in progress will appear here."
-                      : "No orders yet."}
+              {page > 1
+                ? "You've reached the end — no more orders on this page."
+                : q
+                  ? `No orders match "${q}".`
+                  : view === "live"
+                    ? "No live orders. Paid orders will appear here as customers check out."
+                    : view === "failed"
+                      ? "No failed orders. Nothing to follow up on — clean slate."
+                      : view === "pending"
+                        ? "No pending orders. UPI carts in progress will appear here."
+                        : "No orders yet."}
             </p>
+            {page > 1 && (
+              <Link
+                href={buildPageHref({ view, q, page: page - 1 })}
+                className="inline-block mt-3 text-xs font-semibold text-brand-red hover:underline"
+              >
+                ← Back to previous page
+              </Link>
+            )}
           </div>
         ) : (
           <ul className="divide-y divide-brand-line">
@@ -253,32 +283,34 @@ export default async function AdminOrdersList({
                 <li key={o.id}>
                   <Link
                     href={`/admin/orders/${o.id}`}
-                    className="flex items-start gap-4 px-5 py-4 hover:bg-brand-cream transition-colors"
+                    className="flex items-start gap-3 sm:gap-4 px-3 py-2.5 sm:px-5 sm:py-4 hover:bg-brand-cream transition-colors"
                   >
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono font-semibold text-brand-ink">
+                      <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                        <span className="font-mono font-semibold text-brand-ink text-[13px] sm:text-base">
                           {o.id}
                         </span>
                         <StatusBadge status={o.status} />
-                        <span className="text-[10px] font-mono uppercase tracking-widest text-brand-ink-soft border border-brand-line px-1.5 py-0.5 rounded">
+                        {/* Site chip is desktop-only — single combined store */}
+                        <span className="hidden sm:inline text-[10px] font-mono uppercase tracking-widest text-brand-ink-soft border border-brand-line px-1.5 py-0.5 rounded">
                           {o.siteId}
                         </span>
                       </div>
-                      <div className="text-sm text-brand-ink mt-1.5 truncate">
+                      <div className="text-[13px] sm:text-sm text-brand-ink mt-1 sm:mt-1.5 truncate">
                         {addr.fullName ?? "—"}
                         {addr.phone && (
                           <span className="text-brand-ink-soft font-mono ml-2">
                             {addr.phone}
                           </span>
                         )}
+                        {/* Pincode is desktop-only — detail page has the full address */}
                         {addr.pincode && (
-                          <span className="text-brand-ink-soft font-mono ml-2">
+                          <span className="hidden sm:inline text-brand-ink-soft font-mono ml-2">
                             {addr.pincode}
                           </span>
                         )}
                       </div>
-                      <div className="text-xs text-brand-ink-soft mt-1">
+                      <div className="text-[11px] sm:text-xs text-brand-ink-soft mt-0.5 sm:mt-1">
                         {formatIST(o.placedAt)}
                         {" · "}
                         {o.paymentMethod}
@@ -287,11 +319,12 @@ export default async function AdminOrdersList({
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="font-semibold text-brand-ink tabular-nums">
+                      <div className="font-semibold text-brand-ink tabular-nums text-sm sm:text-base">
                         {formatINR(o.totalInr)}
                       </div>
+                      {/* AWB is desktop-only — it crowded the price column */}
                       {o.awbCode && (
-                        <div className="text-[10px] font-mono text-brand-ink-soft mt-0.5">
+                        <div className="hidden sm:block text-[10px] font-mono text-brand-ink-soft mt-0.5">
                           AWB {o.awbCode}
                         </div>
                       )}
@@ -303,14 +336,51 @@ export default async function AdminOrdersList({
           </ul>
         )}
       </div>
+
+      {/* Pagination — Prev/Next preserve the current view + search query. */}
+      {(hasPrev || hasNext) && (
+        <div className="flex items-center justify-between gap-3">
+          {hasPrev ? (
+            <Link
+              href={buildPageHref({ view, q, page: page - 1 })}
+              className="inline-flex items-center gap-1 bg-white border border-brand-line hover:border-brand-ink text-brand-ink text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
+            >
+              <ChevronLeft size={16} /> Previous
+            </Link>
+          ) : (
+            <span />
+          )}
+          <span className="text-xs font-mono text-brand-ink-soft">
+            Page {page}
+          </span>
+          {hasNext ? (
+            <Link
+              href={buildPageHref({ view, q, page: page + 1 })}
+              className="inline-flex items-center gap-1 bg-white border border-brand-line hover:border-brand-ink text-brand-ink text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
+            >
+              Next <ChevronRight size={16} />
+            </Link>
+          ) : (
+            <span />
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-function buildHref(input: { view: View; site?: string }): string {
+/** Build a list URL preserving view + search query for a given page. */
+function buildPageHref(input: { view: View; q: string; page: number }): string {
   const parts: string[] = [];
   if (input.view !== "live") parts.push(`view=${input.view}`);
-  if (input.site) parts.push(`site=${input.site}`);
+  if (input.q) parts.push(`q=${encodeURIComponent(input.q)}`);
+  if (input.page > 1) parts.push(`page=${input.page}`);
+  return `/admin/orders${parts.length ? "?" + parts.join("&") : ""}`;
+}
+
+function buildHref(input: { view: View }): string {
+  const parts: string[] = [];
+  if (input.view !== "live") parts.push(`view=${input.view}`);
   return `/admin/orders${parts.length ? "?" + parts.join("&") : ""}`;
 }
 
@@ -332,7 +402,7 @@ function ViewChip({
   return (
     <Link
       href={href}
-      className={`shrink-0 inline-flex flex-col items-start gap-0.5 px-4 py-2 rounded-2xl transition-colors min-w-[140px] ${
+      className={`shrink-0 inline-flex flex-col items-start gap-0.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full sm:rounded-2xl transition-colors sm:min-w-[140px] ${
         active
           ? danger
             ? "bg-brand-red text-white"
@@ -341,15 +411,16 @@ function ViewChip({
       }`}
     >
       <div className="flex items-center gap-1.5 w-full">
-        <span className="text-sm font-semibold">{label}</span>
+        <span className="text-[13px] sm:text-sm font-semibold">{label}</span>
         <span
           className={`tabular-nums text-xs ${active ? "text-white/70" : "text-brand-ink-soft"}`}
         >
           {count}
         </span>
       </div>
+      {/* Explainer sub-line is desktop-only — mobile chips are slim pills */}
       <span
-        className={`text-[10px] font-mono uppercase tracking-widest truncate ${
+        className={`hidden sm:block text-[10px] font-mono uppercase tracking-widest truncate ${
           active ? "text-white/60" : "text-brand-ink-soft"
         }`}
       >

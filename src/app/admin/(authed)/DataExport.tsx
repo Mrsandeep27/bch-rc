@@ -46,7 +46,7 @@ export function DataExport() {
   }
 
   return (
-    <div className="rounded-2xl border border-brand-line bg-white p-4 sm:p-5">
+    <div className="rounded-2xl border border-brand-line bg-white p-3 sm:p-5">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h2 className="font-semibold text-brand-ink flex items-center gap-2">
@@ -59,7 +59,7 @@ export function DataExport() {
             off. The code has no audience data; this is how you get it out.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => download("orders", "orders CSV")}

@@ -99,9 +99,9 @@ export default async function AdminActivity({
   ]);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3 sm:space-y-5">
       <div>
-        <h1 className="font-display text-2xl sm:text-3xl font-bold text-brand-ink inline-flex items-center gap-2">
+        <h1 className="font-display text-xl sm:text-3xl font-bold text-brand-ink inline-flex items-center gap-2">
           <Activity size={24} className="text-brand-red" />
           Activity
         </h1>
@@ -131,7 +131,7 @@ export default async function AdminActivity({
 
       <div className="bg-white rounded-2xl border border-brand-line overflow-hidden">
         {rows.length === 0 ? (
-          <p className="px-5 py-12 text-center text-sm text-brand-ink-soft">
+          <p className="px-4 py-8 sm:px-5 sm:py-12 text-center text-sm text-brand-ink-soft">
             {filterType
               ? `No ${filterType} events yet.`
               : "No events recorded yet. They'll appear here as customers buy and the system reacts."}
@@ -141,7 +141,7 @@ export default async function AdminActivity({
             {rows.map((e) => {
               const tone = TYPE_TONE[e.type] ?? "info";
               const inner = (
-                <div className="flex items-start gap-3 px-5 py-3">
+                <div className="flex items-start gap-2 sm:gap-3 px-3.5 sm:px-5 py-3">
                   <span
                     className={`shrink-0 mt-0.5 text-[10px] font-mono uppercase tracking-widest font-semibold px-2 py-0.5 rounded-full ${toneClasses(tone)}`}
                   >

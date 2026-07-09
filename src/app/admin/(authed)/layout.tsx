@@ -1,14 +1,16 @@
-import Link from "next/link";
-import Image from "next/image";
-import { Activity, BarChart3, Boxes, Filter, LayoutDashboard, LifeBuoy, Package, Settings, Users } from "lucide-react";
+import { sql } from "drizzle-orm";
+import { db } from "@/db";
 import { requireAdmin } from "@/lib/admin-auth";
 import { THEME } from "@/lib/theme";
-import { AdminSignOut } from "./AdminSignOut";
+import { AdminShell, type AdminCounts } from "./AdminShell";
 
 /**
- * Auth-gated layout. Applies to everything inside src/app/admin/(authed)/.
- * The /admin/login route lives outside this group, so it doesn't inherit
- * the gate — no redirect loop.
+ * Auth-gated admin layout. Applies to everything inside
+ * src/app/admin/(authed)/. The /admin/login route lives outside this group,
+ * so it doesn't inherit the gate — no redirect loop.
+ *
+ * Server component: does the auth + the sidebar's live count badges in one
+ * round-trip, then hands off to the client <AdminShell> (sidebar + drawer).
  */
 export default async function AdminLayout({
   children,
@@ -16,126 +18,49 @@ export default async function AdminLayout({
   children: React.ReactNode;
 }) {
   const ctx = await requireAdmin();
+  const counts = await loadNavCounts(ctx.siteIds);
 
   return (
-    <div className="min-h-screen bg-brand-cream">
-      <header className="bg-brand-ink text-white border-b border-brand-ink-soft sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <Link
-              href="/admin"
-              className="flex items-center gap-2 shrink-0"
-              aria-label={`${THEME.brandName} Admin`}
-            >
-              <Image
-                src={THEME.logoMain}
-                alt={THEME.brandName}
-                width={826}
-                height={304}
-                className="h-7 w-auto"
-                priority
-              />
-              <span className="text-brand-red font-bold text-xs uppercase tracking-widest">
-                Admin
-              </span>
-            </Link>
-            <nav className="hidden md:flex items-center gap-1 text-sm">
-              <NavLink href="/admin" icon={LayoutDashboard}>
-                Overview
-              </NavLink>
-              <NavLink href="/admin/orders" icon={Package}>
-                Orders
-              </NavLink>
-              <NavLink href="/admin/inventory" icon={Boxes}>
-                Inventory
-              </NavLink>
-              <NavLink href="/admin/customers" icon={Users}>
-                Customers
-              </NavLink>
-              <NavLink href="/admin/analytics" icon={BarChart3}>
-                Analytics
-              </NavLink>
-              <NavLink href="/admin/funnel" icon={Filter}>
-                Funnel
-              </NavLink>
-              <NavLink href="/admin/recovery" icon={LifeBuoy}>
-                Recovery
-              </NavLink>
-              <NavLink href="/admin/activity" icon={Activity}>
-                Activity
-              </NavLink>
-              <NavLink href="/admin/settings" icon={Settings}>
-                Settings
-              </NavLink>
-            </nav>
-          </div>
-          <div className="flex items-center gap-3 text-xs">
-            <div className="hidden sm:flex flex-col items-end">
-              <span className="text-white/90">{ctx.email}</span>
-              <span className="text-white/50 font-mono uppercase tracking-widest">
-                {ctx.role}
-              </span>
-            </div>
-            <AdminSignOut />
-          </div>
-        </div>
-        {/* Mobile nav */}
-        <div className="md:hidden border-t border-brand-ink-soft">
-          <div className="max-w-7xl mx-auto px-2 flex items-center gap-1 text-sm overflow-x-auto overflow-y-hidden no-scrollbar">
-            <NavLink href="/admin" icon={LayoutDashboard}>
-              Overview
-            </NavLink>
-            <NavLink href="/admin/orders" icon={Package}>
-              Orders
-            </NavLink>
-            <NavLink href="/admin/inventory" icon={Boxes}>
-              Inventory
-            </NavLink>
-            <NavLink href="/admin/customers" icon={Users}>
-              Customers
-            </NavLink>
-            <NavLink href="/admin/analytics" icon={BarChart3}>
-              Analytics
-            </NavLink>
-            <NavLink href="/admin/funnel" icon={Filter}>
-              Funnel
-            </NavLink>
-            <NavLink href="/admin/recovery" icon={LifeBuoy}>
-              Recovery
-            </NavLink>
-            <NavLink href="/admin/activity" icon={Activity}>
-              Activity
-            </NavLink>
-            <NavLink href="/admin/settings" icon={Settings}>
-              Settings
-            </NavLink>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        {children}
-      </main>
-    </div>
+    <AdminShell
+      email={ctx.email}
+      role={ctx.role}
+      brandName={THEME.brandName}
+      logo={THEME.logoDark}
+      counts={counts}
+    >
+      {children}
+    </AdminShell>
   );
 }
 
-function NavLink({
-  href,
-  icon: Icon,
-  children,
-}: {
-  href: string;
-  icon: React.ComponentType<{ size?: number }>;
-  children: React.ReactNode;
-}) {
-  return (
-    <Link
-      href={href}
-      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-colors"
-    >
-      <Icon size={14} />
-      {children}
-    </Link>
-  );
+/**
+ * Sidebar badge counts — real, cheap, indexed. One round-trip; best-effort
+ * (a DB blip must never take down every admin page, so failures fall back to
+ * no badges rather than throwing).
+ *   • orders  = orders needing action (COD to verify + paid-but-unshipped)
+ *   • reviews = reviews awaiting moderation
+ */
+async function loadNavCounts(siteIds: string[]): Promise<AdminCounts> {
+  if (siteIds.length === 0) return {};
+  try {
+    const siteLiteral = sql`array[${sql.join(
+      siteIds.map((s) => sql`${s}`),
+      sql`, `,
+    )}]::text[]`;
+    const rows = (await db.execute(sql`
+      SELECT
+        (SELECT count(*)::int FROM orders
+           WHERE site_id = ANY(${siteLiteral})
+             AND (status = 'PENDING_COD_VERIFICATION'
+                  OR (status = 'PAID' AND awb_code IS NULL))) AS open_orders,
+        (SELECT count(*)::int FROM reviews WHERE status = 'pending') AS pending_reviews
+    `)) as unknown as Array<{ open_orders: number; pending_reviews: number }>;
+    const r = rows[0];
+    return {
+      orders: r?.open_orders ?? 0,
+      reviews: r?.pending_reviews ?? 0,
+    };
+  } catch {
+    return {};
+  }
 }

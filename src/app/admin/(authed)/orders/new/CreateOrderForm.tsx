@@ -147,7 +147,7 @@ export function CreateOrderForm({ products }: { products: SkuOption[] }) {
     );
     const waLink = `https://wa.me/91${result.customer.phone}?text=${waMessage}`;
     return (
-      <div className="bg-white rounded-2xl border border-brand-line p-6 max-w-2xl">
+      <div className="bg-white rounded-2xl border border-brand-line p-4 sm:p-6 max-w-2xl">
         <div className="flex items-center gap-2 mb-4">
           <div className="w-9 h-9 rounded-full bg-green-100 text-green-700 flex items-center justify-center">
             <Check size={18} />
@@ -159,7 +159,7 @@ export function CreateOrderForm({ products }: { products: SkuOption[] }) {
             </div>
           </div>
         </div>
-        <div className="bg-brand-cream rounded-xl p-4 mb-4">
+        <div className="bg-brand-cream rounded-xl p-3 sm:p-4 mb-4">
           <div className="text-xs font-mono uppercase tracking-widest text-brand-ink-soft mb-1.5">
             Razorpay payment link
           </div>
@@ -226,7 +226,7 @@ export function CreateOrderForm({ products }: { products: SkuOption[] }) {
 
   // ── Form ────────────────────────────────────────────────────
   return (
-    <form onSubmit={onSubmit} className="space-y-5">
+    <form onSubmit={onSubmit} className="space-y-3 sm:space-y-5">
       <Section title="Customer">
         <div className="grid sm:grid-cols-2 gap-3">
           <Field label="Full name" required>
@@ -453,7 +453,7 @@ export function CreateOrderForm({ products }: { products: SkuOption[] }) {
         <button
           type="submit"
           disabled={pending}
-          className="bg-brand-red hover:bg-brand-red-hover text-white px-6 py-3.5 rounded-xl font-bold inline-flex items-center gap-2 disabled:opacity-50"
+          className="w-full sm:w-auto bg-brand-red hover:bg-brand-red-hover text-white px-6 py-3.5 rounded-xl font-bold inline-flex items-center justify-center gap-2 disabled:opacity-50"
         >
           {pending ? <Loader2 size={16} className="animate-spin" /> : null}
           {pending ? "Creating order…" : `Generate payment link · ${formatINR(total)}`}
@@ -475,7 +475,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="bg-white rounded-2xl border border-brand-line p-4 sm:p-5">
+    <section className="bg-white rounded-2xl border border-brand-line p-3 sm:p-5">
       <h2 className="font-display font-bold text-base mb-3">{title}</h2>
       {children}
     </section>

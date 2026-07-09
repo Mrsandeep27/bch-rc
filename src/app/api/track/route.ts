@@ -10,8 +10,14 @@
  * Per-navigation liveness (last_seen_at) and the pageview tally are bumped
  * separately by the batched /api/track/event handler (recordFunnelEvents), so
  * an engaged visit costs one server round-trip at the start rather than one per
- * navigation. The ON CONFLICT branch below still bumps last_seen_at /
- * pageview_count defensively for the rare case the same sid is re-inserted.
+ * navigation.
+ *
+ * Pageview count ownership (single writer): this route INSERTs the session with
+ * pageview_count = 0 and NEVER increments it — the batched event handler is the
+ * sole owner and counts every page_view event (including the landing one). The
+ * old default of 1 here PLUS the landing page_view event double-counted the
+ * first page of every session. The ON CONFLICT branch only refreshes
+ * last_seen_at (a rare same-sid re-insert must not re-add a pageview).
  *
  * This endpoint is best-effort: it must never throw back to the middleware
  * (which is in the critical path of every page load). All failures are logged
@@ -19,7 +25,6 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { sites, analyticsSessions } from "@/db/schema";
 import {
@@ -128,12 +133,17 @@ export async function POST(req: NextRequest) {
         country: body.country ?? null,
         userAgent: ua ?? null,
         isBot: bot,
+        // Start at 0: the batched /api/track/event handler owns the pageview
+        // tally and increments once per page_view event (landing included).
+        // Overrides the schema default of 1 so the first page isn't counted twice.
+        pageviewCount: 0,
       })
       .onConflictDoUpdate({
         target: analyticsSessions.id,
+        // Only refresh liveness on a re-insert — do NOT bump pageview_count here
+        // (events own it), or a rare duplicate session start would over-count.
         set: {
           lastSeenAt: new Date(),
-          pageviewCount: sql`${analyticsSessions.pageviewCount} + 1`,
         },
       });
   } catch (err) {

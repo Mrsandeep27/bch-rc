@@ -20,10 +20,7 @@ export function FunnelWindowTabs() {
   const current = Number(sp.get("window")) || 7;
 
   function go(days: number) {
-    // Preserve ?site= so the window + store selectors compose.
-    const params = new URLSearchParams(sp.toString());
-    params.set("window", String(days));
-    router.push(`/admin/funnel?${params.toString()}`);
+    router.push(`/admin/funnel?window=${days}`);
   }
 
   return (
@@ -34,7 +31,7 @@ export function FunnelWindowTabs() {
           type="button"
           onClick={() => go(w.d)}
           aria-pressed={current === w.d}
-          className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+          className={`px-3 py-2 sm:py-1.5 rounded-full text-sm font-medium transition-colors ${
             current === w.d
               ? "bg-brand-ink text-white"
               : "text-brand-ink-soft hover:text-brand-ink"

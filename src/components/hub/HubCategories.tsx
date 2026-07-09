@@ -109,7 +109,7 @@ const inr = (n: number) => "₹" + n.toLocaleString("en-IN");
 function TileImage({ c }: { c: Cat }) {
   if (c.img) {
     return (
-      <Image src={c.img} alt={c.label} width={1254} height={1254} unoptimized sizes="150px" className="h-full w-full object-cover" />
+      <Image src={c.img} alt={c.label} width={1254} height={1254} sizes="150px" className="h-full w-full object-cover" />
     );
   }
   return (
@@ -134,7 +134,6 @@ function PdpCard({ p, pdpBase }: { p: Product; pdpBase: string }) {
           src={p.img}
           alt={p.name}
           fill
-          unoptimized
           sizes="(max-width: 640px) 45vw, 240px"
           className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
         />

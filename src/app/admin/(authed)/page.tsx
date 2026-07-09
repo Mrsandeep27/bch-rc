@@ -1,38 +1,35 @@
 import Link from "next/link";
+import Image from "next/image";
 import {
   AlertTriangle,
   ArrowUpRight,
   Bell,
   CheckCircle2,
-  Eye,
-  IndianRupee,
   ListChecks,
-  Package,
-  Percent,
   PhoneCall,
   Radio,
-  Repeat,
-  ShoppingBag,
   Truck,
-  TrendingUp,
-  Users,
+  type LucideIcon,
 } from "lucide-react";
 import { and, desc, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { orders } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
-import { DataExport } from "./DataExport";
+import { getAudience, getConversion, warnIfInsane } from "@/lib/analytics-service";
 import { RangeTabs } from "./RangeTabs";
-import { StoreTabs } from "./StoreTabs";
-import { formatINR, formatIST } from "@/lib/utils";
-import { LIVE_WINDOW_MINUTES, SOURCE_LABEL, type TrafficSource } from "@/lib/analytics";
+import { QuickRestock } from "./QuickRestock";
+import { formatINR } from "@/lib/utils";
+import { addUtcDays, istDayStart, istShortDate, istYmd as ymd } from "@/lib/tz";
+import { PRODUCTS } from "@/lib/products";
+import { LIVE_WINDOW_MINUTES } from "@/lib/analytics";
 
 export const dynamic = "force-dynamic";
 
 // Windows the operator can flip between via the RangeTabs control. Drives every
 // period-scoped metric on this page + the sales graph. "Today" and "Live now"
 // are real-time and intentionally ignore this.
-const ALLOWED_RANGES = [7, 14, 30] as const;
+/** 1 = Today. Keep in sync with RANGES/DEFAULT_RANGE in RangeTabs.tsx. */
+const ALLOWED_RANGES = [1, 7, 14, 30] as const;
 
 // SKUs sold below this stock-count threshold appear in the Low-Stock card.
 // Tuned to the operator's lead time from Syed (≈48 hrs to top up).
@@ -41,16 +38,6 @@ const LOW_STOCK_THRESHOLD = 10;
 // Orders we consider "paid" for AOV + top-SKU aggregates. Excludes PENDING
 // (UPI carts that never captured) and anything terminal-unhappy.
 const PAID_STATUSES = ["PAID", "PACKED", "SHIPPED", "DELIVERED"] as const;
-
-// Terminal-unhappy statuses. Recent orders in any of these are surfaced in the
-// "Failed" bucket on the dashboard, regardless of payment method.
-const FAILED_STATUSES = [
-  "CANCELLED",
-  "FAILED",
-  "ABANDONED",
-  "RETURNED",
-  "REFUNDED",
-] as const;
 
 // Notifications stuck this many retries without sending → operator should look.
 const STUCK_NOTIF_ATTEMPTS = 3;
@@ -62,10 +49,17 @@ type OrderItemForAgg = {
   lineTotalInr: number;
 };
 
+/** One point on the sales chart — an IST hour ("Today") or an IST day. */
+type ChartPoint = { label: string; revenue: number; orderCount: number };
+
+// Catalogue lookups for the product widgets (image + display name by SKU id).
+const HERO = new Map(PRODUCTS.map((p) => [p.id, p.heroImage]));
+const SKU_NAME = new Map(PRODUCTS.map((p) => [p.id, p.name]));
+
 export default async function AdminOverview({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string; site?: string }>;
+  searchParams: Promise<{ range?: string }>;
 }) {
   const ctx = await requireAdmin();
   const sp = await searchParams;
@@ -74,35 +68,34 @@ export default async function AdminOverview({
     ALLOWED_RANGES as readonly number[]
   ).includes(rangeRaw)
     ? (rangeRaw as (typeof ALLOWED_RANGES)[number])
-    : 7;
+    : 1;
 
-  // Store scope. Default ("All") = every site this admin manages — the existing
-  // combined view. If ?site= names one of the admin's sites, scope every metric
-  // on this page to just that store. An unknown/foreign site value falls back to
-  // "all" so the param can never widen access beyond ctx.siteIds.
-  const selectedSite =
-    sp.site && ctx.siteIds.includes(sp.site) ? sp.site : null;
-  const selectedSiteIds = selectedSite ? [selectedSite] : ctx.siteIds;
+  // Range-aware copy: "last 1 days" reads wrong, so a 1-day window says "today".
+  const rangeText = range === 1 ? "today" : `last ${range} days`;
+
+  // Single combined store — every metric aggregates across all sites this admin
+  // manages (the per-store toggle was removed).
+  const selectedSiteIds = ctx.siteIds;
 
   const now = new Date();
   // Day boundaries are IST, NOT the server's timezone (UTC on Vercel). Without
   // this, "Today" and the range windows begin at midnight UTC = 5:30 AM IST, so
   // orders placed 00:00–05:30 IST land in the previous day and the numbers
-  // disagree with the IST dates shown in the orders list ("2 today" vs 4 on the
-  // list). India has no DST, so a fixed +5:30 offset is exact. `today` is the
-  // UTC instant that corresponds to IST midnight of the current IST day.
-  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
-  const istMidnight = new Date(now.getTime() + IST_OFFSET_MS);
-  istMidnight.setUTCHours(0, 0, 0, 0);
-  const today = new Date(istMidnight.getTime() - IST_OFFSET_MS);
+  // disagree with the IST dates shown in the orders list. India has no DST, so a
+  // fixed +5:30 offset is exact. Shared IST helpers (src/lib/tz.ts) keep this
+  // byte-for-byte identical to the analytics page so the two can't drift.
+  const today = istDayStart(now);
   // Period window for the headline scalars (revenue, AOV, units, visitors,
-  // conversion, sources, top SKUs) — follows the selected range. setUTCDate
-  // keeps the day math tied to the IST-midnight instant regardless of server TZ.
-  const periodStart = new Date(today);
-  periodStart.setUTCDate(periodStart.getUTCDate() - range);
-  // Graph window — `range` daily buckets inclusive of today.
-  const graphStart = new Date(today);
-  graphStart.setUTCDate(graphStart.getUTCDate() - (range - 1));
+  // conversion, sources, top SKUs) — `range` days INCLUSIVE of today, so the KPI
+  // total matches the "Sales over time" graph total exactly (both start at
+  // today-(range-1)). Previously started at today-range, which summed one extra
+  // day vs the graph and made the deltas compare unequal-length windows.
+  const periodStart = addUtcDays(today, -(range - 1));
+  // Previous equal-length window immediately before the current one — drives the
+  // ▲/▼ deltas on the KPI cards. [prevStart, periodStart), exactly `range` days.
+  const prevStart = addUtcDays(today, -(2 * range - 1));
+  // Graph window — `range` daily buckets inclusive of today (== periodStart).
+  const graphStart = addUtcDays(today, -(range - 1));
 
   // IMPORTANT: interpolate ISO strings, NOT Date objects, into the sql``
   // templates below. Drizzle's postgres-js driver cannot bind a raw Date inside
@@ -110,10 +103,8 @@ export default async function AdminOverview({
   // Postgres casts these ISO strings to timestamptz correctly.
   const todayIso = today.toISOString();
   const periodStartIso = periodStart.toISOString();
+  const prevStartIso = prevStart.toISOString();
   const graphStartIso = graphStart.toISOString();
-  const liveSinceIso = new Date(
-    now.getTime() - LIVE_WINDOW_MINUTES * 60 * 1000,
-  ).toISOString();
 
   // ── Query 1 of 5: orders scalars ────────────────────────────────
   // One scan of `orders` collects EVERY scalar metric the dashboard needs —
@@ -160,43 +151,17 @@ export default async function AdminOverview({
   // (kind='source'). Single index range scan over analytics_sessions; the
   // grouping cost is the same as the previous two-query version.
   // Was: trafficAggP + trafficSourcesP.
-  const trafficP = db.execute<{
-    kind: "aggs" | "source";
-    source: string | null;
-    visitors_today: number | null;
-    visitors_7d: number | null;
-    sessions_7d: number | null;
-    live_visitors: number | null;
-    sessions: number | null;
-    visitors_for_source: number | null;
-  }>(sql`
-    SELECT
-      'aggs'::text AS kind,
-      NULL::text AS source,
-      count(DISTINCT visitor_id) FILTER (WHERE started_at >= ${todayIso} AND is_bot = false)::int AS visitors_today,
-      count(DISTINCT visitor_id) FILTER (WHERE started_at >= ${periodStartIso} AND is_bot = false)::int AS visitors_7d,
-      count(*) FILTER (WHERE started_at >= ${periodStartIso} AND is_bot = false)::int AS sessions_7d,
-      count(DISTINCT visitor_id) FILTER (WHERE last_seen_at >= ${liveSinceIso} AND is_bot = false)::int AS live_visitors,
-      NULL::int AS sessions,
-      NULL::int AS visitors_for_source
-    FROM analytics_sessions
-    WHERE site_id = ANY(${siteIdsLiteral})
+  // Audience scalars come from the ANALYTICS SERVICE (the single source of
+  // truth) so Dashboard / Analytics / Funnel can never disagree again. Only the
+  // per-source breakdown — which nothing else needs — stays inline here.
+  const audienceP = getAudience(selectedSiteIds, {
+    from: periodStart,
+    todayStart: today,
+    liveSince: new Date(now.getTime() - LIVE_WINDOW_MINUTES * 60 * 1000),
+  });
 
-    UNION ALL
-
-    SELECT
-      'source'::text AS kind,
-      source AS source,
-      NULL::int, NULL::int, NULL::int, NULL::int,
-      count(*)::int AS sessions,
-      count(DISTINCT visitor_id)::int AS visitors_for_source
-    FROM analytics_sessions
-    WHERE site_id = ANY(${siteIdsLiteral})
-      AND started_at >= ${periodStartIso}
-      AND is_bot = false
-    GROUP BY source
-    ORDER BY kind, sessions DESC NULLS LAST
-  `);
+  // (The per-source traffic breakdown moved to the Analytics page — a merchant
+  // command centre shows what needs doing, not a traffic report.)
 
   // Sales graph — daily paid revenue, last 14 days. Postgres returns only days
   // that had orders; we pad the gaps below.
@@ -241,27 +206,15 @@ export default async function AdminOverview({
       paymentMethod: orders.paymentMethod,
       totalInr: orders.totalInr,
       placedAt: orders.placedAt,
+      shippingAddress: orders.shippingAddress,
     })
     .from(orders)
     .where(inArray(orders.siteId, selectedSiteIds))
     .orderBy(desc(orders.placedAt))
     .limit(40);
 
-  // Units sold (line-item quantities, NOT order count). `items` is a JSONB
-  // array per order, so we unnest it with jsonb_array_elements and sum each
-  // line's qty across paid orders — today and trailing 7 days.
-  const unitsSoldP = db.execute<{
-    today_units: number | null;
-    week_units: number | null;
-  }>(sql`
-    SELECT
-      coalesce(sum((item->>'qty')::int) FILTER (WHERE o.placed_at >= ${todayIso}), 0)::int AS today_units,
-      coalesce(sum((item->>'qty')::int) FILTER (WHERE o.placed_at >= ${periodStartIso}), 0)::int AS week_units
-    FROM orders o
-    CROSS JOIN LATERAL jsonb_array_elements(o.items) AS item
-    WHERE o.site_id = ANY(${siteIdsLiteral})
-      AND o.status IN ('PAID','PACKED','SHIPPED','DELIVERED')
-  `);
+  // (The units-sold LATERAL/jsonb_array_elements query was removed with the
+  // "Products sold" stat card — top-selling products now carry that story.)
 
   // Per-promise .catch with safe default so one timed-out query doesn't throw
   // the whole layout into the error boundary. Five queries instead of eleven;
@@ -273,8 +226,7 @@ export default async function AdminOverview({
     dailyRevenueRows,
     topSkuOrders,
     recent,
-    trafficRows,
-    unitsSoldRow,
+    audience,
   ] = await Promise.all([
     ordersScalarsP.then((r) => r[0] ?? null).catch(() => null),
     otherScalarsP
@@ -303,54 +255,25 @@ export default async function AdminOverview({
           paymentMethod: string;
           totalInr: number;
           placedAt: Date;
+          shippingAddress: unknown;
         }>,
     ),
-    trafficP
-      .then(
-        (rows) =>
-          (Array.isArray(rows) ? rows : []) as Array<{
-            kind: "aggs" | "source";
-            source: string | null;
-            visitors_today: number | null;
-            visitors_7d: number | null;
-            sessions_7d: number | null;
-            live_visitors: number | null;
-            sessions: number | null;
-            visitors_for_source: number | null;
-          }>,
-      )
-      .catch(() => []),
-    unitsSoldP
-      .then(
-        (r) =>
-          (Array.isArray(r) ? r[0] : null) as {
-            today_units: number | null;
-            week_units: number | null;
-          } | null,
-      )
-      .catch(() => null),
+    audienceP.catch(() => ({
+      visitors: 0,
+      sessions: 0,
+      pageviews: 0,
+      visitorsToday: 0,
+      liveVisitors: 0,
+    })),
   ]);
-  const todayUnits = unitsSoldRow?.today_units ?? 0;
-  const weekUnits = unitsSoldRow?.week_units ?? 0;
-  // De-multiplex the traffic union-all result into the two shapes the page
-  // already expects below. snake_case columns from the raw SQL are remapped
-  // to the camelCase names the rest of this page uses.
-  const trafficAggRaw = trafficRows.find((r) => r.kind === "aggs") ?? null;
-  const trafficAggRow = trafficAggRaw
-    ? {
-        visitorsToday: trafficAggRaw.visitors_today ?? 0,
-        visitors7d: trafficAggRaw.visitors_7d ?? 0,
-        sessions7d: trafficAggRaw.sessions_7d ?? 0,
-        live: trafficAggRaw.live_visitors ?? 0,
-      }
-    : null;
-  const trafficSources = trafficRows
-    .filter((r) => r.kind === "source" && r.source !== null)
-    .map((r) => ({
-      source: r.source as string,
-      sessions: r.sessions ?? 0,
-      visitors: r.visitors_for_source ?? 0,
-    }));
+  // Audience scalars now come straight from the analytics service — the same
+  // formula the Analytics page and the Funnel use.
+  const trafficAggRow = {
+    visitorsToday: audience.visitorsToday,
+    visitors7d: audience.visitors,
+    sessions7d: audience.sessions,
+    live: audience.liveVisitors,
+  };
   // Back-compat shims so the rest of the page (already using these names)
   // doesn't need a wholesale rewrite. orderAggRow + orderTasksRow read from
   // ordersScalarsRow; customer/low-stock/stuck/failed read from otherScalarsRow.
@@ -377,10 +300,6 @@ export default async function AdminOverview({
     ? { count: otherScalarsRow.failed_jobs ?? 0 }
     : null;
 
-  const todayStats = {
-    orderCount: orderAggRow?.todayCount ?? 0,
-    revenue: orderAggRow?.todayRevenue ?? 0,
-  };
   const weekStats = {
     orderCount: orderAggRow?.weekCount ?? 0,
     revenue: orderAggRow?.weekRevenue ?? 0,
@@ -401,22 +320,113 @@ export default async function AdminOverview({
       ? Math.round(aovStats.revenue / aovStats.orderCount)
       : 0;
 
-  const returningPct =
-    returningStats.total > 0
-      ? Math.round((returningStats.returning / returningStats.total) * 100)
-      : 0;
-
-  // Visitor metrics + conversion. Conversion = paid orders (7d) ÷ sessions
-  // (7d). Orders are written by our own checkout and can't be ad-blocked, so
-  // the numerator is exact; sessions supply an accurate, bot-filtered
-  // denominator.
+  // Visitor metrics + conversion. Orders are written by our own checkout and
+  // can't be ad-blocked, so the numerator is exact; VISITORS (not sessions)
+  // supply the denominator — see src/lib/analytics-service.ts.
   const visitorsToday = trafficAggRow?.visitorsToday ?? 0;
   const visitors7d = trafficAggRow?.visitors7d ?? 0;
   const sessions7d = trafficAggRow?.sessions7d ?? 0;
   const liveVisitors = trafficAggRow?.live ?? 0;
+  // CONVERSION = paid orders ÷ unique VISITORS (people), never ÷ sessions.
+  // This page used to divide by sessions while the Analytics page divided by
+  // visitors, so the same "Conversion" label showed two different numbers.
   const conversionPct =
-    sessions7d > 0
-      ? Math.round((aovStats.orderCount / sessions7d) * 1000) / 10
+    visitors7d > 0 ? Math.round(getConversion(aovStats.orderCount, visitors7d) * 10) / 10 : null;
+
+  warnIfInsane("dashboard", {
+    visitors: visitors7d,
+    sessions: sessions7d,
+    pageviews: audience.pageviews,
+  });
+
+  // Previous equal-length window [prevStart, periodStart) — powers the KPI
+  // ▲/▼ deltas. Paid orders (same filter as the headline) + bot-filtered
+  // sessions, so every delta is real. Best-effort: a failure just hides deltas.
+  const prevRow = await db
+    .execute(sql`
+      SELECT
+        (SELECT coalesce(sum(total_inr),0)::int FROM orders
+           WHERE site_id = ANY(${siteIdsLiteral})
+             AND placed_at >= ${prevStartIso} AND placed_at < ${periodStartIso}
+             AND status IN ('PAID','PACKED','SHIPPED','DELIVERED')) AS prev_revenue,
+        (SELECT count(*)::int FROM orders
+           WHERE site_id = ANY(${siteIdsLiteral})
+             AND placed_at >= ${prevStartIso} AND placed_at < ${periodStartIso}
+             AND status IN ('PAID','PACKED','SHIPPED','DELIVERED')) AS prev_orders,
+        (SELECT count(DISTINCT visitor_id)::int FROM analytics_sessions
+           WHERE site_id = ANY(${siteIdsLiteral})
+             AND started_at >= ${prevStartIso} AND started_at < ${periodStartIso}
+             AND is_bot = false) AS prev_sessions
+    `)
+    .then(
+      (r) =>
+        (Array.isArray(r) ? r[0] : null) as {
+          prev_revenue: number | null;
+          prev_orders: number | null;
+          prev_sessions: number | null;
+        } | null,
+    )
+    .catch(() => null);
+
+  // ── Additive dashboard queries ────────────────────────────────────────────
+  // NOTHING above was modified: no formula, no window, no analytics logic. These
+  // four are NEW because the sections they power (hourly trend, ops cards,
+  // low-stock widget, CRM cards) had no data source at all. Each is best-effort
+  // so one slow query can't take the page down.
+  const [hourlyRows, opsRow, invRows, custRow] = await Promise.all([
+    // Hourly revenue — only fetched for the 1-day ("Today") window.
+    range === 1
+      ? db
+          .execute<{ hr: string; revenue: number; orders: number }>(sql`
+            SELECT to_char(date_trunc('hour', placed_at AT TIME ZONE 'Asia/Kolkata'), 'HH24') AS hr,
+                   coalesce(sum(total_inr), 0)::int AS revenue,
+                   count(*)::int AS orders
+            FROM orders
+            WHERE site_id = ANY(${siteIdsLiteral})
+              AND placed_at >= ${todayIso}
+              AND status IN ('PAID','PACKED','SHIPPED','DELIVERED')
+            GROUP BY 1
+          `)
+          .then((r) => (Array.isArray(r) ? r : []))
+          .catch(() => [])
+      : Promise.resolve([] as Array<{ hr: string; revenue: number; orders: number }>),
+    db
+      .execute<{ failed: number; abandoned: number }>(sql`
+        SELECT
+          count(*) FILTER (WHERE status = 'FAILED' AND placed_at >= ${periodStartIso})::int AS failed,
+          count(*) FILTER (WHERE status = 'ABANDONED' AND placed_at >= ${periodStartIso})::int AS abandoned
+        FROM orders WHERE site_id = ANY(${siteIdsLiteral})
+      `)
+      .then((r) => (Array.isArray(r) ? r[0] : null))
+      .catch(() => null),
+    // The inventory table is tiny (one row per orderable variant), so a single
+    // fetch powers BOTH the low-stock widget and the top-product stock badges.
+    db
+      .execute<{ sku_id: string; variant_slug: string; stock: number }>(sql`
+        SELECT sku_id, variant_slug, stock FROM inventory
+        WHERE site_id = ANY(${siteIdsLiteral})
+      `)
+      .then((r) => (Array.isArray(r) ? r : []))
+      .catch(() => []),
+    db
+      .execute<{ new_customers: number; avg_ltv: number }>(sql`
+        SELECT
+          (SELECT count(*)::int FROM customers
+             WHERE first_site_id = ANY(${siteIdsLiteral}) AND created_at >= ${periodStartIso}) AS new_customers,
+          (SELECT coalesce(round(avg(total_spent_inr)), 0)::int FROM customers
+             WHERE first_site_id = ANY(${siteIdsLiteral}) AND total_orders >= 1) AS avg_ltv
+      `)
+      .then((r) => (Array.isArray(r) ? r[0] : null))
+      .catch(() => null),
+  ]);
+
+  const prevRevenue = prevRow?.prev_revenue ?? 0;
+  const prevOrders = prevRow?.prev_orders ?? 0;
+  const prevSessions = prevRow?.prev_sessions ?? 0;
+  const prevAov = prevOrders > 0 ? Math.round(prevRevenue / prevOrders) : 0;
+  const prevConv =
+    prevSessions > 0
+      ? Math.round((prevOrders / prevSessions) * 1000) / 10
       : null;
 
   // Pad daily revenue so the graph is continuous.
@@ -436,11 +446,49 @@ export default async function AdminOverview({
       orderCount: row?.orderCount ?? 0,
     });
   }
-  const maxRevenue = Math.max(1, ...dailyBuckets.map((b) => b.revenue));
   const totalPeriodRevenue = dailyBuckets.reduce((s, b) => s + b.revenue, 0);
 
-  // Traffic sources → percentages.
-  const sourcesTotal = trafficSources.reduce((s, r) => s + r.sessions, 0);
+  // Chart series — 24 IST hourly buckets for "Today", daily buckets otherwise.
+  // A 1-day window used to plot a single point (a giant empty triangle).
+  const hourMap = new Map(hourlyRows.map((r) => [r.hr, r]));
+  const chartPoints: ChartPoint[] =
+    range === 1
+      ? Array.from({ length: 24 }, (_, h) => {
+          const key = String(h).padStart(2, "0");
+          const row = hourMap.get(key);
+          return {
+            label: `${key}:00`,
+            revenue: row?.revenue ?? 0,
+            orderCount: row?.orders ?? 0,
+          };
+        })
+      : dailyBuckets.map((b) => ({
+          label: istShortDate(b.date),
+          revenue: b.revenue,
+          orderCount: b.orderCount,
+        }));
+  const chartMax = Math.max(1, ...chartPoints.map((p) => p.revenue));
+
+  // Orders requiring action.
+  const failedPayments = opsRow?.failed ?? 0;
+  const abandonedCheckouts = opsRow?.abandoned ?? 0;
+
+  // Inventory — one fetch, two consumers.
+  const stockBySku = new Map<string, number>();
+  for (const r of invRows)
+    stockBySku.set(r.sku_id, (stockBySku.get(r.sku_id) ?? 0) + r.stock);
+  const lowStockRows = invRows
+    .filter((r) => r.stock < LOW_STOCK_THRESHOLD)
+    .sort((a, b) => a.stock - b.stock)
+    .slice(0, 5);
+
+  // Customer insights.
+  const newCustomers = custRow?.new_customers ?? 0;
+  const avgLtv = custRow?.avg_ltv ?? 0;
+  const repeatPct =
+    customerStats.total > 0
+      ? Math.round((returningStats.returning / customerStats.total) * 100)
+      : 0;
 
   // Tasks list.
   const tasks: Array<{
@@ -475,7 +523,7 @@ export default async function AdminOverview({
       icon: AlertTriangle,
       label: `Variants under ${LOW_STOCK_THRESHOLD} units`,
       count: lowStockCount,
-      href: "/admin/inventory",
+      href: "/admin/products",
       tone: "bad",
     });
   if (failedJobs > 0)
@@ -518,257 +566,121 @@ export default async function AdminOverview({
     .sort((a, b) => b.qty - a.qty || b.revenue - a.revenue)
     .slice(0, 5);
 
-  // Split recent orders into three operator-facing buckets:
-  //   - Failed: any terminal-unhappy status (takes precedence over method)
-  //   - COD:    cash-on-delivery that's still live
-  //   - Online: prepaid (UPI/card/netbanking/wallet) that's still live
-  // Each capped at 6 so the card stays scannable on a phone.
-  const RECENT_PER_GROUP = 6;
-  const recentFailed = recent
-    .filter((o) => (FAILED_STATUSES as readonly string[]).includes(o.status))
-    .slice(0, RECENT_PER_GROUP);
-  const recentCod = recent
-    .filter(
-      (o) =>
-        o.paymentMethod === "COD" &&
-        !(FAILED_STATUSES as readonly string[]).includes(o.status),
-    )
-    .slice(0, RECENT_PER_GROUP);
-  const recentOnline = recent
-    .filter(
-      (o) =>
-        o.paymentMethod !== "COD" &&
-        !(FAILED_STATUSES as readonly string[]).includes(o.status),
-    )
-    .slice(0, RECENT_PER_GROUP);
+  // Recent orders — flat table (Artifact design), most-recent first.
+  const recentRows = recent.slice(0, 5);
+
+  // KPI deltas vs the previous equal window + sparkline series (from the real
+  // daily buckets). Conversion has no daily series (no daily-sessions query), so
+  // it shows a delta only; AOV is derived per-day from revenue ÷ orders.
+  const revenueDelta = deltaPct(weekStats.revenue, prevRevenue);
+  const ordersDelta = deltaAbs(weekStats.orderCount, prevOrders);
+  const convDelta = deltaPp(conversionPct, prevConv);
+  const aovDelta = deltaRupee(aov, prevAov);
+  const revenueSpark = dailyBuckets.map((b) => b.revenue);
+  const ordersSpark = dailyBuckets.map((b) => b.orderCount);
+  const aovSpark = dailyBuckets.map((b) =>
+    b.orderCount > 0 ? Math.round(b.revenue / b.orderCount) : 0,
+  );
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-brand-ink">
-            Welcome back{ctx.name ? `, ${ctx.name}` : ""}.
-          </h1>
-          <p className="text-sm text-brand-ink-soft mt-1">
-            {ctx.siteIds.length === 1
-              ? `Managing ${ctx.siteIds[0]}.`
-              : selectedSite
-                ? `Showing ${selectedSite} · ${ctx.siteIds.length} sites total`
-                : `Managing all ${ctx.siteIds.length} sites.`}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {ctx.siteIds.length > 1 && <StoreTabs sites={ctx.siteIds} />}
-          <RangeTabs />
-        </div>
+    <div className="space-y-3 sm:space-y-4">
+      {/* Controls — the "Dashboard" title lives in the topbar (Artifact header) */}
+      <div className="flex items-center justify-end gap-2 flex-wrap">
+        <RangeTabs />
       </div>
 
-      <DataExport />
-
-      {/* Row 1 — order velocity */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
-        <StatCard
-          label="Today"
-          value={todayStats.orderCount}
-          sub={`${formatINR(todayStats.revenue)} revenue`}
-          icon={Package}
-          href="/admin/orders?view=live"
+      {/* ROW 1 — 5 KPI cards (Artifact) */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3">
+        <KpiCard
+          label="Revenue"
+          value={formatINR(weekStats.revenue)}
+          delta={revenueDelta}
+          spark={revenueSpark}
+          sparkColor="#16A34A"
         />
-        <StatCard
-          label={`Last ${range} days`}
+        <KpiCard
+          label="Orders"
           value={weekStats.orderCount}
-          sub={`${formatINR(weekStats.revenue)} revenue`}
-          icon={IndianRupee}
-          href="/admin/orders?view=live"
+          delta={ordersDelta}
+          spark={ordersSpark}
+          sparkColor="#E11D2A"
         />
-        <StatCard
-          label={`AOV (${range}d, paid)`}
-          value={formatINR(aov)}
-          sub={
-            aovStats.orderCount
-              ? `Across ${aovStats.orderCount} paid order${aovStats.orderCount === 1 ? "" : "s"}`
-              : "No paid orders yet"
-          }
-          icon={TrendingUp}
-          href="/admin/analytics"
-        />
-        <StatCard
-          label={`Products sold (${range}d)`}
-          value={weekUnits}
-          sub={`${todayUnits} today · units, paid only`}
-          icon={ShoppingBag}
-          href="/admin/inventory"
-        />
-      </div>
-
-      {/* Row 2 — traffic + conversion */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
-        <StatCard
-          label={`Visitors (${range}d)`}
-          value={visitors7d}
-          sub={`${visitorsToday} today`}
-          icon={Eye}
-          href="/admin/analytics"
-        />
-        <StatCard
-          label={`Conversion (${range}d)`}
+        <KpiCard
+          label="Conversion"
           value={conversionPct === null ? "—" : `${conversionPct}%`}
-          sub={
-            sessions7d
-              ? `${aovStats.orderCount} paid / ${sessions7d} sessions`
-              : "No sessions tracked yet"
-          }
-          icon={Percent}
-          href="/admin/funnel"
+          delta={convDelta}
         />
-        <div className="bg-white rounded-2xl border border-brand-line p-4 sm:p-5">
+        <KpiCard
+          label="AOV"
+          value={formatINR(aov)}
+          delta={aovDelta}
+          spark={aovSpark}
+          sparkColor="#38b672"
+        />
+        <div className="bg-white rounded-2xl border border-brand-line p-3 sm:p-4">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-[10px] sm:text-xs font-mono font-bold uppercase tracking-widest text-brand-ink-soft truncate">
-              Live now
+            <p className="text-[11px] font-mono font-bold uppercase tracking-widest text-brand-ink-soft truncate">
+              Live visitors
             </p>
             <Radio
-              size={16}
+              size={14}
               className={liveVisitors > 0 ? "text-success" : "text-brand-ink-soft"}
             />
           </div>
-          <p className="font-display text-2xl sm:text-3xl font-bold text-brand-ink mt-2 inline-flex items-center gap-2">
-            {liveVisitors > 0 && (
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-success" />
-              </span>
-            )}
+          <p className="font-display text-[20px] font-bold text-brand-ink mt-1.5 tabular-nums">
             {liveVisitors}
           </p>
-          <p className="text-xs text-brand-ink-soft mt-1">
-            Visitors active in the last {LIVE_WINDOW_MINUTES} min
+          <p className="text-[11px] font-semibold mt-1 inline-flex items-center gap-1.5">
+            {liveVisitors > 0 ? (
+              <span className="inline-flex items-center gap-1.5 text-success">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-success" />
+                </span>
+                updating live
+              </span>
+            ) : (
+              <span className="text-brand-ink-soft">no one right now</span>
+            )}
+          </p>
+          <p className="text-[11px] text-brand-ink-soft tabular-nums mt-0.5">
+            {visitorsToday.toLocaleString("en-IN")} visitors today
           </p>
         </div>
       </div>
 
-      {/* Row 3 — customer + ops health */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
-        <StatCard
-          label="Customers (all-time)"
-          value={customerStats.total}
-          sub="Unique phone numbers"
-          icon={Users}
-          href="/admin/customers"
-        />
-        <StatCard
-          label="Returning customers"
-          value={`${returningPct}%`}
-          sub={
-            returningStats.total
-              ? `${returningStats.returning} of ${returningStats.total} bought again`
-              : "Need first orders to compute"
-          }
-          icon={Repeat}
-          href="/admin/customers"
-        />
-        <Link
-          href="/admin/inventory"
-          className="bg-white rounded-2xl border border-brand-line p-4 sm:p-5 hover:border-brand-red transition-colors"
-        >
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[10px] sm:text-xs font-mono font-bold uppercase tracking-widest text-brand-ink-soft truncate">
-              Low stock (&lt;{LOW_STOCK_THRESHOLD})
-            </p>
-            <AlertTriangle
-              size={16}
-              className={
-                lowStockCount > 0 ? "text-brand-red" : "text-brand-ink-soft"
-              }
-            />
-          </div>
-          <p
-            className={`font-display text-2xl sm:text-3xl font-bold mt-2 ${
-              lowStockCount > 0 ? "text-brand-red" : "text-brand-ink"
-            }`}
-          >
-            {lowStockCount}
-          </p>
-          <p className="text-xs text-brand-ink-soft mt-1">
-            {lowStockCount > 0
-              ? "Variant SKUs need restock — tap to fix"
-              : "All variants stocked"}
-          </p>
-        </Link>
-      </div>
-
-      {/* Sales graph + Tasks side by side on desktop */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Sales graph — 14 days */}
-        <section className="lg:col-span-2 bg-white rounded-2xl border border-brand-line">
-          <header className="px-5 py-4 border-b border-brand-line flex items-center justify-between">
-            <h2 className="font-semibold text-brand-ink">
-              Sales{" "}
+      {/* ROW 2 — Sales over time (70%) + Needs attention (30%) */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1.7fr_1fr] gap-3 sm:gap-4">
+        <section className="bg-white rounded-2xl border border-brand-line">
+          <header className="px-3 sm:px-5 py-3.5 border-b border-brand-line flex items-center justify-between">
+            <h2 className="font-semibold text-brand-ink text-sm">
+              Sales over time{" "}
               <span className="text-brand-ink-soft font-normal">
-                — last {range} days, paid
+                — {range === 1 ? "today, hourly" : `${rangeText}, paid`}
               </span>
             </h2>
             <span className="text-sm font-semibold text-brand-ink tabular-nums">
               {formatINR(totalPeriodRevenue)}
             </span>
           </header>
-          <div className="p-5">
-            <div className="flex items-end gap-1.5 h-40">
-              {dailyBuckets.map((b) => {
-                const isToday = ymd(b.date) === ymd(today);
-                const height = `${Math.max(2, (b.revenue / maxRevenue) * 100)}%`;
-                return (
-                  <div
-                    key={ymd(b.date)}
-                    className="flex-1 flex flex-col items-center gap-1.5 h-full"
-                  >
-                    <div
-                      className="w-full flex-1 flex items-end"
-                      title={`${shortDate(b.date)}: ${formatINR(b.revenue)} (${b.orderCount} order${b.orderCount === 1 ? "" : "s"})`}
-                    >
-                      <div
-                        className={`w-full rounded-t transition-all ${
-                          b.revenue === 0
-                            ? "bg-brand-line"
-                            : isToday
-                              ? "bg-brand-red"
-                              : "bg-brand-ink"
-                        }`}
-                        style={{ height }}
-                      />
-                    </div>
-                    <span
-                      className={`text-[9px] font-mono ${
-                        isToday
-                          ? "text-brand-red font-semibold"
-                          : "text-brand-ink-soft"
-                      }`}
-                    >
-                      {new Date(b.date.getTime() + IST_OFFSET_MS).getUTCDate()}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+          <div className="p-3 sm:p-5">
+            <SalesChart points={chartPoints} max={chartMax} />
           </div>
         </section>
 
-        {/* Tasks & notifications */}
         <section className="bg-white rounded-2xl border border-brand-line">
-          <header className="px-5 py-4 border-b border-brand-line flex items-center gap-2">
-            <ListChecks size={16} className="text-brand-ink-soft" />
-            <h2 className="font-semibold text-brand-ink">Tasks</h2>
+          <header className="px-3 sm:px-5 py-3.5 border-b border-brand-line flex items-center gap-2">
+            <ListChecks size={15} className="text-brand-ink-soft" />
+            <h2 className="font-semibold text-brand-ink text-sm">Needs attention</h2>
             {tasks.length > 0 && (
               <span className="ml-auto text-xs font-mono font-bold text-brand-red tabular-nums">
-                {tasks.length} need attention
+                {tasks.length}
               </span>
             )}
           </header>
           {tasks.length === 0 ? (
             <div className="px-5 py-10 text-center">
-              <CheckCircle2
-                size={28}
-                className="text-success mx-auto mb-2"
-              />
+              <CheckCircle2 size={28} className="text-success mx-auto mb-2" />
               <p className="text-sm text-brand-ink-soft">
                 All clear. Nothing needs you right now.
               </p>
@@ -779,32 +691,19 @@ export default async function AdminOverview({
                 <li key={i}>
                   <Link
                     href={t.href}
-                    className="flex items-center gap-3 px-5 py-3 hover:bg-brand-cream transition-colors"
+                    className="flex items-center gap-3 px-3 sm:px-5 py-2.5 hover:bg-brand-cream transition-colors"
                   >
                     <span
-                      className={`shrink-0 ${
+                      className={`w-2 h-2 rounded-full shrink-0 ${
                         t.tone === "bad"
-                          ? "text-brand-red"
+                          ? "bg-brand-red"
                           : t.tone === "warn"
-                            ? "text-gold"
-                            : "text-brand-ink-soft"
+                            ? "bg-gold"
+                            : "bg-blue-500"
                       }`}
-                    >
-                      <t.icon size={16} />
-                    </span>
-                    <span className="flex-1 text-sm text-brand-ink">
-                      {t.label}
-                    </span>
-                    <span
-                      className={`shrink-0 font-display font-bold tabular-nums ${
-                        t.tone === "bad"
-                          ? "text-brand-red"
-                          : t.tone === "warn"
-                            ? "text-gold"
-                            : "text-brand-ink"
-                      }`}
-                    >
-                      {t.count}
+                    />
+                    <span className="flex-1 text-[13px] text-brand-ink">
+                      {t.count} {t.label}
                     </span>
                   </Link>
                 </li>
@@ -814,262 +713,469 @@ export default async function AdminOverview({
         </section>
       </div>
 
-      {/* Traffic sources */}
-      <section className="bg-white rounded-2xl border border-brand-line">
-        <header className="px-5 py-4 border-b border-brand-line flex items-center justify-between">
-          <h2 className="font-semibold text-brand-ink">
-            Traffic sources{" "}
-            <span className="text-brand-ink-soft font-normal">
-              — last {range} days
+      {/* ── SECTION 2 — Orders requiring action ── */}
+      <section className="space-y-2">
+        <h2 className="text-[11px] font-mono font-bold uppercase tracking-widest text-brand-ink-soft">
+          Orders requiring action
+        </h2>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+          <OpsCard
+            icon={PhoneCall}
+            label="COD verification"
+            count={codPending}
+            sub="waiting on a call"
+            href="/cod"
+            cta="Review"
+            tone="warn"
+          />
+          <OpsCard
+            icon={Truck}
+            label="Ready to ship"
+            count={paidUnshipped}
+            sub="paid, no AWB yet"
+            href="/admin/orders?view=live"
+            cta="Fulfil"
+            tone="warn"
+          />
+          <OpsCard
+            icon={AlertTriangle}
+            label="Failed payments"
+            count={failedPayments}
+            sub={rangeText}
+            href="/admin/orders?view=failed"
+            cta="Inspect"
+            tone="bad"
+          />
+          <OpsCard
+            icon={Bell}
+            label="Abandoned checkouts"
+            count={abandonedCheckouts}
+            sub="recoverable carts"
+            href="/admin/recovery"
+            cta="Recover"
+            tone="info"
+          />
+        </div>
+      </section>
+
+      {/* ── SECTION 3 — Product performance ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+        <section className="bg-white rounded-2xl border border-brand-line overflow-hidden">
+          <header className="px-3 sm:px-5 py-3.5 border-b border-brand-line flex items-center justify-between">
+            <h2 className="font-semibold text-brand-ink text-sm">Top selling products</h2>
+            <Link
+              href="/admin/products"
+              className="text-xs text-brand-red hover:underline inline-flex items-center gap-1"
+            >
+              All products <ArrowUpRight size={12} />
+            </Link>
+          </header>
+          {topSkus.length === 0 ? (
+            <p className="px-5 py-10 text-center text-sm text-brand-ink-soft">
+              No paid orders {range === 1 ? "today" : `in the ${rangeText}`} yet.
+            </p>
+          ) : (
+            <ul className="divide-y divide-brand-line">
+              {topSkus.map((s) => {
+                const stock = stockBySku.has(s.skuId) ? stockBySku.get(s.skuId)! : null;
+                const img = HERO.get(s.skuId);
+                return (
+                  <li key={s.skuId} className="flex items-center gap-3 px-3 sm:px-5 py-2.5">
+                    <span className="h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-brand-line bg-brand-cream grid place-items-center">
+                      {img && (
+                        <Image src={img} alt="" width={36} height={36} className="h-full w-full object-contain" />
+                      )}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[13px] font-semibold text-brand-ink">{s.name}</div>
+                      <StockPill stock={stock} />
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-[13px] font-semibold text-brand-ink tabular-nums">
+                        {formatINR(s.revenue)}
+                      </div>
+                      <div className="text-[11px] text-brand-ink-soft tabular-nums">{s.qty} sold</div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+
+        <section className="bg-white rounded-2xl border border-brand-line overflow-hidden">
+          <header className="px-3 sm:px-5 py-3.5 border-b border-brand-line flex items-center gap-2">
+            <AlertTriangle
+              size={15}
+              className={lowStockRows.length ? "text-brand-red" : "text-brand-ink-soft"}
+            />
+            <h2 className="font-semibold text-brand-ink text-sm">Low stock</h2>
+            <span className="ml-auto text-[11px] text-brand-ink-soft">
+              under {LOW_STOCK_THRESHOLD} units
             </span>
-          </h2>
+          </header>
+          {lowStockRows.length === 0 ? (
+            <div className="px-5 py-10 text-center">
+              <CheckCircle2 size={26} className="text-success mx-auto mb-2" />
+              <p className="text-sm text-brand-ink-soft">Every variant is stocked.</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-brand-line">
+              {lowStockRows.map((r) => (
+                <li
+                  key={`${r.sku_id}:${r.variant_slug}`}
+                  className="flex items-center gap-3 px-3 sm:px-5 py-2.5"
+                >
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      href={`/admin/products/${r.sku_id}`}
+                      className="block truncate text-[13px] font-semibold text-brand-ink hover:text-brand-red"
+                    >
+                      {SKU_NAME.get(r.sku_id) ?? r.sku_id}
+                    </Link>
+                    <div className="text-[11px] text-brand-ink-soft truncate">
+                      {r.variant_slug || "default"}
+                    </div>
+                  </div>
+                  <span
+                    className={`text-sm font-bold tabular-nums ${
+                      r.stock === 0 ? "text-brand-red" : "text-gold"
+                    }`}
+                  >
+                    {r.stock}
+                  </span>
+                  <QuickRestock skuId={r.sku_id} variantSlug={r.variant_slug} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+
+      {/* ── SECTION 4 — Customer insights (headline only; depth lives in Analytics) ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+        <MiniStat label="New customers" value={newCustomers.toLocaleString("en-IN")} sub={rangeText} />
+        <MiniStat
+          label="Returning"
+          value={returningStats.returning.toLocaleString("en-IN")}
+          sub={`of ${customerStats.total.toLocaleString("en-IN")} all-time`}
+        />
+        <MiniStat label="Repeat purchase" value={`${repeatPct}%`} sub="bought more than once" />
+        <MiniStat
+          label="Avg lifetime value"
+          value={avgLtv > 0 ? formatINR(avgLtv) : "—"}
+          sub="per paying customer"
+        />
+      </div>
+
+      {/* ── SECTION 5 — Recent orders (compact, last 5) ── */}
+      <div className="bg-white rounded-2xl border border-brand-line overflow-hidden">
+        <div className="px-3 sm:px-5 py-3.5 border-b border-brand-line flex items-center justify-between">
+          <h2 className="font-semibold text-brand-ink text-sm">Recent orders</h2>
           <Link
-            href="/admin/analytics"
-            className="text-sm text-brand-red hover:underline inline-flex items-center gap-1"
+            href="/admin/orders"
+            className="inline-flex items-center gap-1 rounded-lg border border-brand-line px-2.5 py-1 text-xs font-semibold text-brand-ink-soft hover:text-brand-ink hover:border-brand-ink transition-colors"
           >
-            Analytics <ArrowUpRight size={14} />
+            View all orders <ArrowUpRight size={12} />
           </Link>
-        </header>
-        {sourcesTotal === 0 ? (
+        </div>
+        {recentRows.length === 0 ? (
           <p className="px-5 py-10 text-center text-sm text-brand-ink-soft">
-            No visitor sessions tracked yet. Data appears here once traffic
-            starts flowing.
+            No orders yet. They&apos;ll show up here as customers check out.
           </p>
         ) : (
           <ul className="divide-y divide-brand-line">
-            {trafficSources.map((s) => {
-              const pct = Math.round((s.sessions / sourcesTotal) * 100);
+            {recentRows.map((o) => {
+              const addr = o.shippingAddress as { fullName?: string };
               return (
-                <li key={s.source} className="px-5 py-3">
-                  <div className="flex items-center justify-between text-sm mb-1.5">
-                    <span className="font-semibold text-brand-ink">
-                      {SOURCE_LABEL[s.source as TrafficSource] ?? s.source}
+                <li key={o.id}>
+                  <Link
+                    href={`/admin/orders/${o.id}`}
+                    className="flex items-center gap-3 px-3 sm:px-5 py-2.5 hover:bg-brand-cream transition-colors"
+                  >
+                    <span className="font-mono text-[12px] font-semibold text-brand-ink shrink-0">
+                      {o.id}
                     </span>
-                    <span className="text-brand-ink-soft tabular-nums">
-                      {s.sessions} session{s.sessions === 1 ? "" : "s"} · {s.visitors}{" "}
-                      visitor{s.visitors === 1 ? "" : "s"}{" "}
-                      <span className="font-semibold text-brand-ink">
-                        ({pct}%)
-                      </span>
+                    <span className="min-w-0 flex-1 truncate text-[13px] text-brand-ink-soft">
+                      {addr?.fullName ?? "—"}
                     </span>
-                  </div>
-                  <div className="bg-brand-cream rounded-full h-2 overflow-hidden">
-                    <div
-                      className="bg-brand-ink h-full rounded-full"
-                      style={{ width: `${Math.max(2, pct)}%` }}
-                    />
-                  </div>
+                    <span className="tabular-nums text-[13px] font-semibold text-brand-ink shrink-0">
+                      {formatINR(o.totalInr)}
+                    </span>
+                    <StatusBadge status={o.status} />
+                  </Link>
                 </li>
               );
             })}
           </ul>
         )}
-      </section>
-
-      {/* Top SKUs */}
-      <div className="bg-white rounded-2xl border border-brand-line">
-        <div className="px-5 py-4 border-b border-brand-line flex items-center justify-between">
-          <h2 className="font-semibold text-brand-ink">
-            Top SKUs{" "}
-            <span className="text-brand-ink-soft font-normal">
-              — last {range} days, paid only
-            </span>
-          </h2>
-          <Link
-            href="/admin/inventory"
-            className="text-sm text-brand-red hover:underline inline-flex items-center gap-1"
-          >
-            Inventory <ArrowUpRight size={14} />
-          </Link>
-        </div>
-        {topSkus.length === 0 ? (
-          <p className="px-5 py-10 text-center text-sm text-brand-ink-soft">
-            No paid orders in the last {range} days yet.
-          </p>
-        ) : (
-          <ul className="divide-y divide-brand-line">
-            {topSkus.map((s, i) => (
-              <li key={s.skuId} className="flex items-center gap-4 px-5 py-3">
-                <span className="font-mono text-xs text-brand-ink-soft w-6 tabular-nums">
-                  #{i + 1}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-brand-ink truncate">
-                    {s.name}
-                  </div>
-                  <div className="text-xs text-brand-ink-soft font-mono mt-0.5">
-                    {s.skuId}
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="font-semibold text-brand-ink tabular-nums">
-                    {s.qty} sold
-                  </div>
-                  <div className="text-xs text-brand-ink-soft tabular-nums mt-0.5">
-                    {formatINR(s.revenue)}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {/* Recent orders */}
-      <div className="bg-white rounded-2xl border border-brand-line">
-        <div className="px-5 py-4 border-b border-brand-line flex items-center justify-between">
-          <h2 className="font-semibold text-brand-ink">Recent orders</h2>
-          <Link
-            href="/admin/orders"
-            className="text-sm text-brand-red hover:underline inline-flex items-center gap-1"
-          >
-            View all <ArrowUpRight size={14} />
-          </Link>
-        </div>
-        {recent.length === 0 ? (
-          <p className="px-5 py-10 text-center text-sm text-brand-ink-soft">
-            No orders yet. They&apos;ll show up here as customers check out.
-          </p>
-        ) : (
-          <div className="grid grid-cols-3 divide-x divide-brand-line">
-            <RecentOrderGroup title="Online" tone="ink" orders={recentOnline} />
-            <RecentOrderGroup title="COD" tone="gold" orders={recentCod} />
-            <RecentOrderGroup title="Failed" tone="red" orders={recentFailed} />
-          </div>
-        )}
       </div>
     </div>
   );
 }
 
-// IST calendar date of an instant, as YYYY-MM-DD. Matches the graph's SQL
-// buckets, which are date_trunc'd in Asia/Kolkata — so keys line up.
-function ymd(d: Date): string {
-  const ist = new Date(d.getTime() + 5.5 * 60 * 60 * 1000);
-  return `${ist.getUTCFullYear()}-${String(ist.getUTCMonth() + 1).padStart(2, "0")}-${String(ist.getUTCDate()).padStart(2, "0")}`;
+// KPI delta descriptors — real vs-previous-period change, direction-tinted.
+type Delta = { text: string; dir: "up" | "down" | "flat" };
+
+function deltaPct(cur: number, prev: number): Delta {
+  if (prev <= 0)
+    return { text: cur > 0 ? "▲ new" : "— vs prev", dir: cur > 0 ? "up" : "flat" };
+  const r = Math.round(((cur - prev) / prev) * 1000) / 10;
+  return {
+    text: `${r >= 0 ? "▲" : "▼"} ${Math.abs(r)}% vs prev`,
+    dir: r > 0 ? "up" : r < 0 ? "down" : "flat",
+  };
 }
 
-function shortDate(d: Date): string {
-  return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", timeZone: "Asia/Kolkata" });
+function deltaAbs(cur: number, prev: number): Delta {
+  const d = cur - prev;
+  return {
+    text: `${d >= 0 ? "▲" : "▼"} ${Math.abs(d)} vs prev`,
+    dir: d > 0 ? "up" : d < 0 ? "down" : "flat",
+  };
 }
 
-// One labelled bucket of recent orders (Online / COD / Failed). Renders a
-// header with a tone dot + count, then the order rows — or a muted empty line
-// so every bucket is always visible and the operator knows it was checked.
-function RecentOrderGroup({
-  title,
-  tone,
-  orders,
+function deltaPp(cur: number | null, prev: number | null): Delta {
+  if (cur === null || prev === null) return { text: "vs prev", dir: "flat" };
+  const d = Math.round((cur - prev) * 10) / 10;
+  return {
+    text: `${d >= 0 ? "▲" : "▼"} ${Math.abs(d)}pp vs prev`,
+    dir: d > 0 ? "up" : d < 0 ? "down" : "flat",
+  };
+}
+
+function deltaRupee(cur: number, prev: number): Delta {
+  const d = cur - prev;
+  return {
+    text: `${d >= 0 ? "▲" : "▼"} ${formatINR(Math.abs(d))} vs prev`,
+    dir: d > 0 ? "up" : d < 0 ? "down" : "flat",
+  };
+}
+
+function KpiCard({
+  label,
+  value,
+  delta,
+  spark,
+  sparkColor,
 }: {
-  title: string;
-  tone: "ink" | "gold" | "red";
-  orders: Array<{
-    id: string;
-    status: string;
-    paymentMethod: string;
-    totalInr: number;
-    placedAt: Date;
-  }>;
+  label: string;
+  value: React.ReactNode;
+  delta: Delta;
+  spark?: number[];
+  sparkColor?: string;
 }) {
-  const dot =
-    tone === "red" ? "bg-brand-red" : tone === "gold" ? "bg-gold" : "bg-brand-ink";
   return (
-    <div>
-      <div className="flex items-center gap-1.5 px-2.5 sm:px-5 py-2.5 bg-brand-cream/60">
-        <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />
-        <span className="text-[10px] sm:text-xs font-mono font-bold uppercase tracking-wide sm:tracking-widest text-brand-ink-soft">
-          {title}
-        </span>
-        <span className="text-[10px] sm:text-xs text-brand-ink-soft tabular-nums">
-          {orders.length}
-        </span>
-      </div>
-      {orders.length === 0 ? (
-        <p className="px-2.5 sm:px-5 py-4 text-[10px] sm:text-xs text-brand-ink-soft">
-          No recent {title.toLowerCase()} orders.
-        </p>
-      ) : (
-        <ul className="divide-y divide-brand-line">
-          {orders.map((o) => (
-            <li key={o.id}>
-              <Link
-                href={`/admin/orders/${o.id}`}
-                className="flex flex-col gap-1 lg:flex-row lg:items-center lg:gap-4 px-2.5 sm:px-5 py-2.5 sm:py-3 hover:bg-brand-cream transition-colors"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="font-mono font-semibold text-brand-ink text-xs sm:text-base break-all">
-                    {o.id}
-                  </div>
-                  <div className="text-[10px] sm:text-xs text-brand-ink-soft mt-0.5">
-                    {formatIST(o.placedAt)}{" "}
-                    · {o.paymentMethod}
-                  </div>
-                </div>
-                <StatusBadge status={o.status} />
-                <div className="font-semibold text-brand-ink tabular-nums text-xs sm:text-base">
-                  {formatINR(o.totalInr)}
-                </div>
-              </Link>
-            </li>
-          ))}
-        </ul>
+    <div className="bg-white rounded-2xl border border-brand-line p-3 sm:p-4">
+      <p className="text-[11px] font-mono font-bold uppercase tracking-widest text-brand-ink-soft truncate">
+        {label}
+      </p>
+      <p className="font-display text-[20px] font-bold text-brand-ink mt-1.5 tabular-nums">
+        {value}
+      </p>
+      <p
+        className={`text-[11px] font-semibold mt-1 ${
+          delta.dir === "up"
+            ? "text-success"
+            : delta.dir === "down"
+              ? "text-brand-red"
+              : "text-brand-ink-soft"
+        }`}
+      >
+        {delta.text}
+      </p>
+      {spark && spark.length > 1 && (
+        <Sparkline data={spark} color={sparkColor ?? "#16A34A"} />
       )}
     </div>
   );
 }
 
-function StatCard({
-  label,
-  value,
-  sub,
-  icon: Icon,
-  href,
-}: {
-  label: string;
-  value: number | string;
-  sub: string;
-  icon: React.ComponentType<{ size?: number }>;
-  href?: string;
-}) {
-  const inner = (
-    <>
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[10px] sm:text-xs font-mono font-bold uppercase tracking-widest text-brand-ink-soft truncate">
-          {label}
-        </p>
-        {href ? (
-          <ArrowUpRight
-            size={16}
-            className="text-brand-ink-soft group-hover:text-brand-red transition-colors"
-          />
-        ) : (
-          <Icon size={16} />
-        )}
-      </div>
-      <p className="font-display text-2xl sm:text-3xl font-bold text-brand-ink mt-2 break-words">
-        {value}
-      </p>
-      <p className="text-xs text-brand-ink-soft mt-1">{sub}</p>
-    </>
+// Tiny inline SVG sparkline from a real daily series (server-rendered, no JS).
+function Sparkline({ data, color }: { data: number[]; color: string }) {
+  const W = 120;
+  const H = 28;
+  const max = Math.max(1, ...data);
+  const pts = data
+    .map((v, i) => {
+      const x = data.length === 1 ? 0 : (i / (data.length - 1)) * W;
+      const y = H - (v / max) * (H - 4) - 2;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      width="100%"
+      height={H}
+      preserveAspectRatio="none"
+      className="mt-2 block"
+    >
+      <polyline
+        points={pts}
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
   );
+}
 
-  if (href) {
+// "Sales over time" — real revenue buckets (IST hours when the window is Today,
+// IST days otherwise) as a filled area chart with a green (money) gradient.
+// Server-rendered SVG, no client JS. Handles the degenerate cases the old chart
+// did not: an all-zero period now shows an empty state instead of drawing a
+// giant flat triangle, and a single bucket no longer divides by zero.
+function SalesChart({ points, max }: { points: ChartPoint[]; max: number }) {
+  const W = 800;
+  const H = 240;
+  const PAD = 10;
+  const n = points.length;
+  const total = points.reduce((s, p) => s + p.revenue, 0);
+
+  if (n === 0 || total === 0) {
     return (
-      <Link
-        href={href}
-        className="group block bg-white rounded-2xl border border-brand-line p-4 sm:p-5 hover:border-brand-red hover:shadow-sm transition-all"
-      >
-        {inner}
-      </Link>
+      <div className="py-12 sm:py-14 text-center">
+        <p className="font-display text-2xl font-bold text-brand-ink tabular-nums">
+          {formatINR(0)}
+        </p>
+        <p className="mt-1 text-sm text-brand-ink-soft">
+          No paid orders in this period yet — the chart fills in as orders land.
+        </p>
+      </div>
     );
   }
 
+  const x = (i: number) => (n === 1 ? W / 2 : (i / (n - 1)) * W);
+  const y = (v: number) => H - PAD - (v / max) * (H - PAD * 2);
+  const line = points
+    .map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.revenue).toFixed(1)}`)
+    .join(" ");
+  const area = `${line} L${W},${H} L0,${H} Z`;
+
+  const labelIdx = new Set<number>([0, n - 1]);
+  for (let k = 1; k <= 3; k++) labelIdx.add(Math.round((k * (n - 1)) / 4));
+
   return (
-    <div className="bg-white rounded-2xl border border-brand-line p-4 sm:p-5">
-      {inner}
+    <div>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        width="100%"
+        preserveAspectRatio="none"
+        className="block h-[160px] sm:h-[240px]"
+        role="img"
+        aria-label="Sales over time"
+      >
+        <defs>
+          <linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#0f8a4d" stopOpacity="0.22" />
+            <stop offset="1" stopColor="#0f8a4d" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={area} fill="url(#salesFill)" />
+        <path
+          d={line}
+          fill="none"
+          stroke="#0f8a4d"
+          strokeWidth="2"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+      <div className="mt-1.5 flex justify-between text-[10px] tabular-nums text-brand-ink-soft">
+        {points.map((p, i) => (labelIdx.has(i) ? <span key={i}>{p.label}</span> : null))}
+      </div>
     </div>
   );
 }
+
+const OPS_TONE: Record<"warn" | "bad" | "info", string> = {
+  warn: "text-gold",
+  bad: "text-brand-red",
+  info: "text-blue-600",
+};
+
+/** An operational queue: count + what it means + a real destination. */
+function OpsCard({
+  icon: Icon,
+  label,
+  count,
+  sub,
+  href,
+  cta,
+  tone,
+}: {
+  icon: LucideIcon;
+  label: string;
+  count: number;
+  sub: string;
+  href: string;
+  cta: string;
+  tone: "warn" | "bad" | "info";
+}) {
+  const idle = count === 0;
+  return (
+    <Link
+      href={href}
+      className="group rounded-2xl border border-brand-line bg-white p-3 sm:p-4 transition-colors hover:border-brand-ink/30"
+    >
+      <div className="flex items-center gap-1.5">
+        <Icon size={13} className={idle ? "text-brand-ink-soft" : OPS_TONE[tone]} />
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-brand-ink-soft truncate">
+          {label}
+        </span>
+      </div>
+      <p
+        className={`mt-1.5 font-display text-[22px] font-bold tabular-nums ${
+          idle ? "text-brand-ink-soft" : "text-brand-ink"
+        }`}
+      >
+        {count}
+      </p>
+      <p className="text-[11px] text-brand-ink-soft truncate">
+        {idle ? "nothing waiting" : sub}
+      </p>
+      <span
+        className={`mt-2 inline-flex items-center gap-1 text-[11px] font-semibold ${
+          idle ? "text-brand-ink-soft" : "text-brand-red group-hover:underline"
+        }`}
+      >
+        {cta} <ArrowUpRight size={11} />
+      </span>
+    </Link>
+  );
+}
+
+function MiniStat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="rounded-2xl border border-brand-line bg-white p-3 sm:p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-ink-soft truncate">
+        {label}
+      </p>
+      <p className="mt-1.5 font-display text-[20px] font-bold text-brand-ink tabular-nums truncate">
+        {value}
+      </p>
+      {sub && <p className="text-[11px] text-brand-ink-soft truncate">{sub}</p>}
+    </div>
+  );
+}
+
+/** Honest about "no inventory row" vs a real zero. */
+function StockPill({ stock }: { stock: number | null }) {
+  if (stock === null)
+    return <span className="text-[11px] text-brand-ink-soft">no stock data</span>;
+  if (stock === 0)
+    return <span className="text-[11px] font-semibold text-brand-red">sold out</span>;
+  if (stock < LOW_STOCK_THRESHOLD)
+    return <span className="text-[11px] font-semibold text-gold">{stock} left · low</span>;
+  return (
+    <span className="text-[11px] text-success">{stock.toLocaleString("en-IN")} in stock</span>
+  );
+}
+
 
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
@@ -1087,7 +1193,7 @@ function StatusBadge({ status }: { status: string }) {
   };
   return (
     <span
-      className={`hidden sm:inline-block ${styles[status] ?? "bg-brand-line text-brand-ink"} text-[10px] font-mono uppercase tracking-widest font-semibold px-2 py-1 rounded-full`}
+      className={`inline-block ${styles[status] ?? "bg-brand-line text-brand-ink"} text-[10px] font-mono uppercase tracking-widest font-semibold px-2 py-1 rounded-full whitespace-nowrap`}
     >
       {status}
     </span>

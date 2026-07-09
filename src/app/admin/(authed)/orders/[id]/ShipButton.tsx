@@ -53,7 +53,7 @@ export function ShipButton({ orderId, hasShipment }: Props) {
         type="button"
         onClick={handleClick}
         disabled={loading}
-        className="inline-flex items-center gap-1.5 bg-brand-ink hover:bg-brand-ink-soft text-white text-sm font-semibold px-3 py-2 rounded-lg transition-colors disabled:opacity-50"
+        className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 bg-brand-ink hover:bg-brand-ink-soft text-white text-sm font-semibold px-3 py-2 rounded-lg transition-colors disabled:opacity-50"
       >
         <Truck size={14} />
         {loading

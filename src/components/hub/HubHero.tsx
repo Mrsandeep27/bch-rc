@@ -100,11 +100,13 @@ function Banner({
   w,
   h,
   small = false,
+  priority = false,
 }: {
   s: Slide;
   w: number;
   h: number;
   small?: boolean;
+  priority?: boolean;
 }) {
   return (
     <div className="relative h-[calc(100svh-2rem)] w-full shrink-0 snap-center">
@@ -114,9 +116,8 @@ function Banner({
           alt={s.alt}
           width={w}
           height={h}
-          priority
-          unoptimized
           sizes="100vw"
+          {...(priority ? { priority: true } : { loading: "lazy" as const })}
           className="h-full w-full object-cover"
         />
       </a>
@@ -160,8 +161,8 @@ export default function HubHero() {
         ref={mobileRef}
         className="no-scrollbar flex snap-x snap-mandatory overflow-x-auto sm:hidden"
       >
-        {MOBILE_SLIDES.map((s) => (
-          <Banner key={s.src} s={s} w={1054} h={1492} small />
+        {MOBILE_SLIDES.map((s, i) => (
+          <Banner key={s.src} s={s} w={1054} h={1492} small priority={i === 0} />
         ))}
       </div>
 
@@ -170,8 +171,8 @@ export default function HubHero() {
         ref={desktopRef}
         className="no-scrollbar hidden snap-x snap-mandatory overflow-x-auto sm:flex"
       >
-        {DESKTOP_SLIDES.map((s) => (
-          <Banner key={s.src} s={s} w={1672} h={941} />
+        {DESKTOP_SLIDES.map((s, i) => (
+          <Banner key={s.src} s={s} w={1672} h={941} priority={i === 0} />
         ))}
       </div>
     </section>

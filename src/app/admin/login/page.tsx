@@ -80,8 +80,8 @@ export default function AdminLogin() {
   return (
     <div className="min-h-screen bg-brand-ink flex items-center justify-center px-4">
       <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="font-display text-3xl font-bold text-white">
+        <div className="text-center mb-6 sm:mb-8">
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-white">
             {THEME.brandName}{" "}
             <span className="text-brand-red">Admin</span>
           </h1>
@@ -92,7 +92,7 @@ export default function AdminLogin() {
 
         <form
           onSubmit={handleSubmit}
-          className="bg-white rounded-2xl p-6 sm:p-8 space-y-4"
+          className="bg-white rounded-2xl p-5 sm:p-8 space-y-4"
         >
           <div>
             <label

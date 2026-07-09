@@ -15,7 +15,7 @@ export function AdminSignOut() {
     <button
       onClick={handleSignOut}
       title="Sign out"
-      className="p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+      className="p-2 rounded-lg text-brand-ink-soft hover:text-brand-ink hover:bg-brand-ink/[0.06] transition-colors"
     >
       <LogOut size={16} />
     </button>

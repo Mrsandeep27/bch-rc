@@ -167,7 +167,7 @@ export async function reacquireOrderHolds(
     for (const line of lines) {
       const variantKey = line.variantSlug ?? "";
       // Re-reserve: decrement. Allowed to go negative — a PAID order must be
-      // honoured; ops can correct stock in /admin/inventory if it does.
+      // honoured; ops can correct stock in /admin/products if it does.
       await tx
         .update(inventory)
         .set({

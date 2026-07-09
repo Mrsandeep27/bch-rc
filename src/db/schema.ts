@@ -249,6 +249,36 @@ export const productVariants = pgTable(
 );
 
 // ============================================================
+// 5b. PRODUCT OVERRIDES — admin edits layered over the code catalog
+// ============================================================
+// The live catalogue is defined in code (src/lib/products.ts). Rather than a
+// risky full migration of the catalogue into the DB, the admin edits a thin
+// override row keyed by the code SKU id. Every field is NULLABLE — null means
+// "no override, use the code value". Consumed by src/lib/product-overrides.ts
+// (with a try/catch fallback so the storefront keeps working before this table
+// exists / when the DB is unreachable).
+
+export const productOverrides = pgTable(
+  "product_overrides",
+  {
+    siteId: text("site_id")
+      .notNull()
+      .references(() => sites.id),
+    skuId: text("sku_id").notNull(), // = code catalog Sku.id (e.g. "pocket-bmw")
+    priceInr: integer("price_inr"), // null → code retailINR
+    mrpInr: integer("mrp_inr"), // null → code mrpINR
+    hidden: boolean("hidden"), // null → code value
+    comingSoon: boolean("coming_soon"), // null → code value
+    badge: text("badge"), // null → code badge; "" clears it
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedBy: text("updated_by"),
+  },
+  (t) => [primaryKey({ columns: [t.siteId, t.skuId] })],
+);
+
+// ============================================================
 // 6. REVIEWS
 // ============================================================
 

@@ -18,6 +18,7 @@
 
 import { NextResponse, after, type NextRequest } from "next/server";
 import { recordServerFunnelEvent } from "@/lib/funnel-server";
+import { getOverrideMap, applyOverride } from "@/lib/product-overrides";
 import { cookies } from "next/headers";
 import { z } from "zod";
 import { db } from "@/db";
@@ -203,8 +204,13 @@ export async function POST(req: NextRequest) {
   const lineItems: OrderItemSnapshot[] = [];
   let subtotal = 0;
 
+  // Admin price/visibility overrides are authoritative here — the price the
+  // admin set is the price charged. Empty (no-op) before the migration is run.
+  const overrides = await getOverrideMap();
+
   for (const item of body.items) {
-    const sku = PRODUCTS.find((p) => p.id === item.skuId);
+    const base = PRODUCTS.find((p) => p.id === item.skuId);
+    const sku = base ? applyOverride(base, overrides.get(item.skuId)) : undefined;
     if (!sku || sku.hidden) {
       return NextResponse.json(
         { error: `Product ${item.skuId} not available` },

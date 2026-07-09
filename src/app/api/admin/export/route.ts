@@ -1,9 +1,10 @@
 /**
- * GET /api/admin/export?dataset=orders|funnel[&days=N]
+ * GET /api/admin/export?dataset=orders|funnel|customers[&days=N]
  *
- * Admin-only CSV export of the two datasets you actually study the audience
- * from: paid/placed ORDERS (who bought, from where, how they paid, what) and
- * raw FUNNEL EVENTS (every step a visitor took, where they dropped off).
+ * Admin-only CSV export of the datasets you actually study the audience from:
+ * paid/placed ORDERS (who bought, from where, how they paid, what), raw FUNNEL
+ * EVENTS (every step a visitor took, where they dropped off), and the CUSTOMERS
+ * CRM list (name, phone, email + site-scoped orders/spend/last-order).
  *
  * The point: the source code contains zero audience data. This route is the
  * "data out" half — download a CSV here, hand it to Claude (or open in Excel),
@@ -18,7 +19,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { and, desc, eq, gte, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { orders, customers, funnelEvents } from "@/db/schema";
 import { getAdminContext } from "@/lib/admin-auth";
@@ -29,6 +30,7 @@ export const dynamic = "force-dynamic";
 // memory. Orders are low-volume (keep all); funnel events are high-volume.
 const ORDERS_MAX = 50_000;
 const FUNNEL_MAX = 100_000;
+const CUSTOMERS_MAX = 100_000;
 
 /** RFC-4180 cell: stringify, then quote+escape only when needed. */
 function csvCell(v: unknown): string {
@@ -194,6 +196,53 @@ async function exportFunnel(
   return toCsv(headers, data);
 }
 
+async function exportCustomers(siteIds: string[]): Promise<string> {
+  // Site-scoped CRM export. Orders are joined only for the operator's sites, so
+  // the order count / spend / last-order columns reflect what this admin can
+  // see — never cross-site totals. A customer is included when they have at
+  // least one order in scope OR their first_site_id is one of these sites.
+  const rows = await db
+    .select({
+      name: customers.name,
+      phone: customers.phone,
+      email: customers.email,
+      orderCount: sql<number>`count(${orders.id})::int`,
+      revenue: sql<number>`coalesce(sum(${orders.totalInr}), 0)::int`,
+      lastOrder: sql<Date | null>`max(${orders.placedAt})`,
+    })
+    .from(customers)
+    .leftJoin(
+      orders,
+      sql`${orders.customerId} = ${customers.id} AND ${inArray(orders.siteId, siteIds)}`,
+    )
+    .groupBy(customers.id)
+    .having(
+      sql`count(${orders.id}) > 0 OR ${inArray(customers.firstSiteId, siteIds)}`,
+    )
+    .orderBy(sql`coalesce(sum(${orders.totalInr}), 0) desc`)
+    .limit(CUSTOMERS_MAX);
+
+  const headers = [
+    "name",
+    "phone",
+    "email",
+    "total_orders",
+    "total_spent_inr",
+    "last_order",
+  ];
+
+  const data = rows.map((c) => [
+    c.name,
+    c.phone,
+    c.email,
+    c.orderCount,
+    c.revenue,
+    c.lastOrder,
+  ]);
+
+  return toCsv(headers, data);
+}
+
 export async function GET(req: NextRequest) {
   const ctx = await getAdminContext();
   if (!ctx) {
@@ -219,9 +268,12 @@ export async function GET(req: NextRequest) {
     // Funnel is high-volume — always windowed. Default 30 days.
     csv = await exportFunnel(days ?? 30, siteIds);
     name = "funnel-events";
+  } else if (dataset === "customers") {
+    csv = await exportCustomers(siteIds);
+    name = "customers";
   } else {
     return NextResponse.json(
-      { error: "dataset must be 'orders' or 'funnel'" },
+      { error: "dataset must be 'orders', 'funnel', or 'customers'" },
       { status: 400 },
     );
   }

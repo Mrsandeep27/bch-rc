@@ -40,8 +40,76 @@ import {
   emiMonthlyInr,
 } from "@/lib/config";
 import { formatINR } from "@/lib/utils";
+import {
+  USE_SHOPIFY_CHECKOUT,
+  buildShopifyCartUrl,
+  type ShopifyCartInput,
+} from "@/lib/shopify";
 
 type PaymentMethod = "upi" | "cod" | "emi";
+
+/**
+ * When NEXT_PUBLIC_USE_SHOPIFY_CHECKOUT=1, checkout is handed to Shopify: we
+ * turn the current cart into a Shopify cart-permalink and redirect there so
+ * Shopify owns payment / orders / inventory. Shown instead of the custom
+ * Razorpay checkout below. Fully reversible — flip the flag off to restore it.
+ */
+function ShopifyCheckoutRedirect({
+  items,
+  hasHydrated,
+  count,
+  homeHref,
+}: {
+  items: ShopifyCartInput[];
+  hasHydrated: boolean;
+  count: number;
+  homeHref: string;
+}) {
+  const router = useRouter();
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    if (!hasHydrated) return;
+    if (count === 0) {
+      router.push(homeHref);
+      return;
+    }
+    const url = buildShopifyCartUrl(items);
+    if (url) {
+      window.location.href = url;
+    } else {
+      // No line resolved to a Shopify variant — don't strand the buyer.
+      setFailed(true);
+    }
+  }, [hasHydrated, count, items, router, homeHref]);
+
+  return (
+    <main className="bg-brand-cream min-h-screen grid place-items-center px-6 text-center">
+      <div>
+        {failed ? (
+          <>
+            <p className="text-brand-red font-semibold">
+              Couldn&apos;t start secure checkout.
+            </p>
+            <button
+              type="button"
+              onClick={() => router.push(homeHref)}
+              className="mt-4 underline text-brand-ink"
+            >
+              Back to store
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-brand-line border-t-brand-red" />
+            <p className="mt-4 text-brand-ink-soft">
+              Taking you to secure checkout…
+            </p>
+          </>
+        )}
+      </div>
+    </main>
+  );
+}
 
 // Note: delivery ETA + serviceability now come from /api/serviceability
 // (src/lib/serviceability.ts) — the same source the server gates orders with.
@@ -1030,6 +1098,20 @@ function CheckoutPageInner() {
   // COD is offered unless we've confirmed this pincode can't do COD.
   const codDisabled = !!svcActive?.serviceable && !svcActive.codAvailable;
   const notServiceable = !!svcActive && !svcActive.serviceable;
+
+  // Shopify-checkout mode: skip the entire custom Razorpay/COD flow and hand
+  // the cart to Shopify. All hooks above still run (rules-of-hooks safe); we
+  // only swap what renders. Flip the flag off to restore the custom checkout.
+  if (USE_SHOPIFY_CHECKOUT) {
+    return (
+      <ShopifyCheckoutRedirect
+        items={items}
+        hasHydrated={hasHydrated}
+        count={count}
+        homeHref={homeHref}
+      />
+    );
+  }
 
   return (
     <>

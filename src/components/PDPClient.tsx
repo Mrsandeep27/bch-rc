@@ -71,11 +71,13 @@ function GalleryImage({
   sku,
   alt,
   priority,
+  sizes = "(min-width: 1024px) 600px, 100vw",
 }: {
   src: string;
   sku: Sku;
   alt: string;
   priority?: boolean;
+  sizes?: string;
 }) {
   const [failed, setFailed] = useState(false);
   if (failed) return <ProductPlaceholder sku={sku} showLabel={false} />;
@@ -84,7 +86,7 @@ function GalleryImage({
       src={src}
       alt={alt}
       fill
-      sizes="(min-width: 1024px) 600px, 100vw"
+      sizes={sizes}
       quality={85}
       className="object-contain object-center"
       priority={priority}
@@ -264,7 +266,7 @@ export default function PDPClient({
                 )}
                 aria-label={`View image ${i + 1}`}
               >
-                <GalleryImage src={src} sku={sku} alt={`${sku.name} view ${i + 1}`} />
+                <GalleryImage src={src} sku={sku} alt={`${sku.name} view ${i + 1}`} sizes="(min-width: 1024px) 140px, 25vw" />
               </button>
             ))}
           </div>

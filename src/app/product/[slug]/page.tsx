@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { PRODUCTS, getVisibleProducts, type Sku } from "@/lib/products";
+import { getOverrideForSku, applyOverride } from "@/lib/product-overrides";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -163,12 +164,16 @@ export default async function ProductPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const sku = PRODUCTS.find((p) => p.slug === slug);
+  const base = PRODUCTS.find((p) => p.slug === slug);
+  if (!base) notFound();
+  // Layer admin overrides (price / visibility / badge) over the code SKU so the
+  // PDP shows exactly the price the checkout will charge.
+  const sku = applyOverride(base, await getOverrideForSku(base.id));
   // 404 hidden SKUs AND internal SKUs (e.g. qa-1rs). Internal SKUs need to
   // exist in the data for admin tooling (manual orders, inventory) but must
   // not be reachable as PDPs - otherwise a stranger who guesses the slug
   // can place a ₹1 COD order that burns ₹180-240 in two-way RTO logistics.
-  if (!sku || sku.hidden || sku.internal || sku.comingSoon) notFound();
+  if (sku.hidden || sku.internal || sku.comingSoon) notFound();
 
   // Reviews are keyed under the single hub site. Fetch aggregate +
   // approved list on the server so the PDP ships with real ratings + JSON-LD.

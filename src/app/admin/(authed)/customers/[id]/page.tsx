@@ -3,9 +3,10 @@ import Link from "next/link";
 import { ChevronLeft, Mail, MapPin, Phone } from "lucide-react";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { customers, orders } from "@/db/schema";
+import { addresses, customers, orders } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
 import { formatINR, formatIST } from "@/lib/utils";
+import { CustomerEditForm } from "./CustomerEditForm";
 
 type ShippingAddr = {
   fullName?: string;
@@ -16,6 +17,13 @@ type ShippingAddr = {
   city?: string;
   state?: string;
   pincode?: string;
+};
+
+/** Address enriched with saved-address-book metadata for display. */
+type DisplayAddr = ShippingAddr & {
+  saved?: boolean;
+  isDefault?: boolean;
+  label?: string | null;
 };
 
 function addrKey(a: ShippingAddr): string {
@@ -86,10 +94,37 @@ export default async function AdminCustomerDetail({
       )
     : null;
 
-  // Dedupe shipping addresses across this customer's orders, keep insert
-  // order so the most-recent shows first.
+  // Real saved address book (customers are global, so no site filter here).
+  // Default first, then most-recent.
+  const savedAddrs = await db
+    .select()
+    .from(addresses)
+    .where(eq(addresses.customerId, id))
+    .orderBy(desc(addresses.isDefault), desc(addresses.createdAt));
+
+  // Merge: prefer the real address book, then fold in any distinct addresses
+  // seen only inside order snapshots. Dedupe on the normalised address key and
+  // keep insert order so saved (and the default) show first.
   const addrSeen = new Set<string>();
-  const uniqueAddrs: ShippingAddr[] = [];
+  const uniqueAddrs: DisplayAddr[] = [];
+  for (const a of savedAddrs) {
+    const disp: DisplayAddr = {
+      fullName: a.fullName,
+      phone: a.phone,
+      line1: a.line1,
+      line2: a.line2 ?? undefined,
+      city: a.city,
+      state: a.state,
+      pincode: a.pincode,
+      saved: true,
+      isDefault: a.isDefault,
+      label: a.label,
+    };
+    const key = addrKey(disp);
+    if (!key || addrSeen.has(key)) continue;
+    addrSeen.add(key);
+    uniqueAddrs.push(disp);
+  }
   for (const o of customerOrders) {
     const a = o.shippingAddress as ShippingAddr;
     const key = addrKey(a);
@@ -99,7 +134,7 @@ export default async function AdminCustomerDetail({
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3 sm:space-y-5">
       <Link
         href="/admin/customers"
         className="inline-flex items-center gap-1 text-sm text-brand-ink-soft hover:text-brand-ink"
@@ -109,8 +144,8 @@ export default async function AdminCustomerDetail({
       </Link>
 
       {/* Identity header */}
-      <div className="bg-white rounded-2xl border border-brand-line p-5">
-        <h1 className="font-display text-2xl sm:text-3xl font-bold text-brand-ink">
+      <div className="bg-white rounded-2xl border border-brand-line p-3 sm:p-5">
+        <h1 className="font-display text-lg sm:text-3xl font-bold text-brand-ink">
           {customer.name ?? "Anonymous customer"}
         </h1>
         <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
@@ -151,7 +186,7 @@ export default async function AdminCustomerDetail({
       </div>
 
       {/* LTV stats — derived from orders the admin can see */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
         <Stat label="Orders" value={visibleOrderCount} />
         <Stat label="Lifetime" value={formatINR(visibleRevenue)} />
         <Stat label="AOV (paid)" value={formatINR(aov)} />
@@ -167,9 +202,17 @@ export default async function AdminCustomerDetail({
         />
       </div>
 
-      {/* Addresses used */}
+      {/* Editable CRM details (name, email, notes) */}
+      <CustomerEditForm
+        id={customer.id}
+        initialName={customer.name}
+        initialEmail={customer.email}
+        initialNotes={customer.notes}
+      />
+
+      {/* Addresses — saved address book merged with distinct order snapshots */}
       <section className="bg-white rounded-2xl border border-brand-line">
-        <header className="px-5 py-4 border-b border-brand-line">
+        <header className="px-3 py-3 sm:px-5 sm:py-4 border-b border-brand-line">
           <h2 className="font-semibold text-brand-ink">
             Shipping addresses{" "}
             <span className="text-brand-ink-soft font-normal">
@@ -186,13 +229,32 @@ export default async function AdminCustomerDetail({
             {uniqueAddrs.map((a, i) => (
               <li
                 key={`${addrKey(a)}-${i}`}
-                className="px-5 py-3 flex items-start gap-3"
+                className="px-3 sm:px-5 py-2.5 sm:py-3 flex items-start gap-3"
               >
                 <MapPin
                   size={16}
                   className="text-brand-ink-soft shrink-0 mt-0.5"
                 />
                 <div className="text-sm text-brand-ink space-y-0.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {a.fullName && (
+                      <span className="font-semibold">{a.fullName}</span>
+                    )}
+                    {a.isDefault && (
+                      <span className="text-[10px] font-mono uppercase tracking-widest font-semibold px-2 py-0.5 rounded-full bg-success/10 text-success">
+                        Default
+                      </span>
+                    )}
+                    {a.saved ? (
+                      <span className="text-[10px] font-mono uppercase tracking-widest font-semibold px-2 py-0.5 rounded-full bg-brand-cream text-brand-ink-soft border border-brand-line">
+                        {a.label?.trim() || "Saved"}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-mono uppercase tracking-widest text-brand-ink-soft">
+                        from order
+                      </span>
+                    )}
+                  </div>
                   {addrLines(a).map((line, idx) => (
                     <div key={idx}>{line}</div>
                   ))}
@@ -205,7 +267,7 @@ export default async function AdminCustomerDetail({
 
       {/* Order history */}
       <section className="bg-white rounded-2xl border border-brand-line">
-        <header className="px-5 py-4 border-b border-brand-line">
+        <header className="px-3 py-3 sm:px-5 sm:py-4 border-b border-brand-line">
           <h2 className="font-semibold text-brand-ink">
             Order history{" "}
             <span className="text-brand-ink-soft font-normal">
@@ -223,7 +285,7 @@ export default async function AdminCustomerDetail({
               <li key={o.id}>
                 <Link
                   href={`/admin/orders/${o.id}`}
-                  className="flex items-start gap-4 px-5 py-3 hover:bg-brand-cream transition-colors"
+                  className="flex items-start gap-3 sm:gap-4 px-3 sm:px-5 py-2.5 sm:py-3 hover:bg-brand-cream transition-colors"
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -266,11 +328,11 @@ export default async function AdminCustomerDetail({
 
 function Stat({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="bg-white rounded-2xl border border-brand-line p-4">
+    <div className="bg-white rounded-2xl border border-brand-line p-3 sm:p-4">
       <p className="text-[10px] font-mono font-bold uppercase tracking-widest text-brand-ink-soft">
         {label}
       </p>
-      <p className="font-display text-xl font-bold text-brand-ink mt-1.5 tabular-nums">
+      <p className="font-display text-lg sm:text-xl font-bold text-brand-ink mt-1.5 tabular-nums">
         {value}
       </p>
     </div>

@@ -573,3 +573,18 @@ h4 {
     }
   }
 }
+
+/* ── Admin theme ─────────────────────────────────────────────────────────────
+   ONE cohesive LIGHT theme, ported from the approved Artifact (admin-new-sections):
+   Shopify-style white sidebar rail + white topbar over a warm off-white page
+   (--brand-cream) with white cards. The admin pages style entirely with the
+   brand CSS-variable tokens (text-brand-ink, border-brand-line, bg-brand-cream,
+   text-success/gold/brand-red …), which already resolve to the light :root
+   values — so no per-page markup changes are needed. The only rule here snaps
+   card radius to the Artifact's 12px for visual parity. There is no dark mode. */
+.admin-shell {
+  background-color: var(--brand-cream);
+}
+.admin-shell .rounded-2xl {
+  border-radius: 0.75rem !important; /* Artifact cards = 12px */
+}
