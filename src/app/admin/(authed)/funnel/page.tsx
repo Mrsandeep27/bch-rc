@@ -26,6 +26,10 @@ export default async function FunnelDashboard({
   const paid = report.stages[report.stages.length - 1]?.visitors ?? 0;
   const overallConv = clampPct(safePct(paid, top));
   const maxBar = Math.max(1, top);
+  const productStage = report.stages.find((s) => s.key === "product");
+  // Coverage is low enough that the raw client-tracked stages materially
+  // understate reality — show the adjusted numbers as primary and flag it.
+  const lowCoverage = report.visitors > 0 && report.coveragePct < 90;
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -86,6 +90,14 @@ export default async function FunnelDashboard({
               are missing from them — part of the &ldquo;Viewed a product&rdquo; drop is
               tracking loss, not customer behaviour.
             </p>
+            {productStage && (
+              <p className="mt-1">
+                Adjusted for that gap, your real{" "}
+                <b>&ldquo;Viewed a product&rdquo; rate is ~{pct(productStage.adjustedFromTopPct)}</b>{" "}
+                (the raw bar shows {pct(productStage.fromTopPct)}). The bars and %s below
+                are coverage-adjusted estimates.
+              </p>
+            )}
           </Callout>
         )}
 
@@ -109,16 +121,22 @@ export default async function FunnelDashboard({
         </div>
         <div className="p-3 sm:p-5 space-y-1.5">
           {report.stages.map((s, i) => {
-            const widthPct = (s.visitors / maxBar) * 100;
-            const kept = i === 0 ? 100 : s.stepPct;
+            // Render the coverage-adjusted estimate as primary; on a
+            // full-coverage day it equals the raw count anyway.
+            const shown = s.adjustedVisitors;
+            const widthPct = (shown / maxBar) * 100;
+            const kept = i === 0 ? 100 : s.adjustedStepPct;
             const weak = i > 0 && kept < 50;
+            const prevAdj = i > 0 ? report.stages[i - 1].adjustedVisitors : shown;
+            const adjDropped = Math.max(0, prevAdj - shown);
+            const corrected = s.clientTracked && s.adjustedVisitors !== s.visitors;
             return (
               <div key={s.key}>
                 {/* Drop-off connector (people lost since the previous step) */}
-                {i > 0 && s.dropped > 0 && (
+                {i > 0 && adjDropped > 0 && (
                   <div className="flex items-center gap-1.5 pl-8 sm:pl-14 py-0.5 text-[11px] font-medium text-brand-red/70">
                     <ArrowDown size={11} />
-                    <span className="tabular-nums">{s.dropped.toLocaleString("en-IN")} left</span>
+                    <span className="tabular-nums">{adjDropped.toLocaleString("en-IN")} left</span>
                   </div>
                 )}
                 <div className="flex items-center gap-2 sm:gap-3">
@@ -134,14 +152,18 @@ export default async function FunnelDashboard({
                       style={{ width: `${Math.max(widthPct, 2)}%` }}
                     />
                   </div>
-                  <span className="w-12 sm:w-20 text-right font-bold tabular-nums text-brand-ink text-sm">
-                    {s.visitors.toLocaleString("en-IN")}
+                  <span
+                    className="w-12 sm:w-20 text-right font-bold tabular-nums text-brand-ink text-sm"
+                    title={corrected ? `raw beacon count: ${s.visitors.toLocaleString("en-IN")}` : undefined}
+                  >
+                    {shown.toLocaleString("en-IN")}
+                    {corrected && <span className="text-brand-ink-soft font-normal">*</span>}
                   </span>
                   <span
                     className={`w-11 text-right text-xs font-semibold tabular-nums ${
                       i === 0 ? "text-brand-ink-soft/40" : weak ? "text-brand-red" : "text-success"
                     }`}
-                    title="continued from the previous step"
+                    title="continued from the previous step (coverage-adjusted)"
                   >
                     {i === 0 ? "—" : pct(kept)}
                   </span>
@@ -150,6 +172,12 @@ export default async function FunnelDashboard({
             );
           })}
         </div>
+        {lowCoverage && (
+          <div className="px-4 sm:px-5 pb-3 text-[11px] text-brand-ink-soft">
+            * Steps 2–4 are grossed up from {Math.round(report.coveragePct)}% beacon coverage to
+            estimate real people. Hover a starred count for the raw number.
+          </div>
+        )}
       </div>
 
       {/* Why they leak */}

@@ -51,6 +51,17 @@ export type FunnelStageResult = {
   dropped: number;
   /** True when this stage is measured from the client-side event stream. */
   clientTracked: boolean;
+  /**
+   * Coverage-adjusted visitor ESTIMATE. Client-tracked stages are grossed up by
+   * 1/coverage to the same 100%-population scale as the server-side stages, so a
+   * beacon-suppressed numerator isn't compared against a complete denominator.
+   * Server stages keep their exact count. See the adjustment block below.
+   */
+  adjustedVisitors: number;
+  /** Step conversion computed on the adjusted (coverage-corrected) counts. */
+  adjustedStepPct: number;
+  /** From-top conversion computed on the adjusted (coverage-corrected) counts. */
+  adjustedFromTopPct: number;
 };
 
 export type FunnelReport = {
@@ -143,21 +154,59 @@ export async function getFunnelReport(
       fromTopPct,
       dropped,
       clientTracked: CLIENT_TRACKED_KEYS.has(s.key),
+      // Filled by the coverage-adjustment pass below.
+      adjustedVisitors: stageVisitors,
+      adjustedStepPct: stepPct,
+      adjustedFromTopPct: fromTopPct,
     };
   });
+
+  // ── Coverage-adjusted funnel ──────────────────────────────────────
+  // `visit`, `order`, `paid` are server-side and complete; `product`, `cart`,
+  // `checkout` come from the client beacon that ad-blockers suppress. Dividing a
+  // suppressed numerator by the complete visitor base understates every client
+  // stage — mildly at 86% coverage, brutally on a 35%-coverage day (a 9.5% that
+  // is really 27%). We gross each client stage up by 1/coverage onto the same
+  // 100%-population scale as the server stages, then clamp each to the stage
+  // above so the funnel stays monotonic. This is an ESTIMATE (it assumes blocked
+  // visitors convert like tracked ones); the raw `visitors` stay on every stage.
+  const coverageFrac =
+    trackedVisitors > 0 && visitors > 0
+      ? Math.min(1, trackedVisitors / visitors)
+      : 1;
+  let prevAdj = 0;
+  for (let i = 0; i < stages.length; i++) {
+    const s = stages[i];
+    const grossed =
+      s.clientTracked && coverageFrac > 0
+        ? Math.round(s.visitors / coverageFrac)
+        : s.visitors;
+    const adjustedVisitors = i === 0 ? grossed : Math.min(grossed, prevAdj);
+    s.adjustedVisitors = adjustedVisitors;
+    s.adjustedStepPct = i === 0 ? 100 : clampPct(safePct(adjustedVisitors, prevAdj));
+    s.adjustedFromTopPct = clampPct(safePct(adjustedVisitors, visitors));
+    prevAdj = adjustedVisitors;
+  }
 
   const anomalies = detectFunnelAnomalies(
     stages.map((s) => ({ label: s.label, visitors: s.visitors })),
   );
 
+  // Rank leaks on the COVERAGE-ADJUSTED drop, not the raw one — otherwise a
+  // low-coverage day makes the beacon-suppressed Visit→Product step look like
+  // the biggest leak when it's mostly tracking loss.
   let biggestLeak: FunnelReport["biggestLeak"] = null;
   for (let i = 1; i < stages.length; i++) {
-    if (!biggestLeak || stages[i].dropped > biggestLeak.dropped) {
+    const adjDropped = Math.max(
+      0,
+      stages[i - 1].adjustedVisitors - stages[i].adjustedVisitors,
+    );
+    if (!biggestLeak || adjDropped > biggestLeak.dropped) {
       biggestLeak = {
         fromLabel: stages[i - 1].label,
         toLabel: stages[i].label,
-        dropped: stages[i].dropped,
-        stepPct: stages[i].stepPct,
+        dropped: adjDropped,
+        stepPct: stages[i].adjustedStepPct,
       };
     }
   }
