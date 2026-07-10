@@ -1,6 +1,4 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
 import { PRODUCTS, getVisibleProducts, type Sku } from "@/lib/products";
 import { getOverrideForSku, applyOverride } from "@/lib/product-overrides";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
@@ -202,18 +200,6 @@ export default async function ProductPage({
       />
       <AnnouncementBar />
       <Header />
-      <nav className="border-b border-brand-line bg-white">
-        <div className="max-w-6xl mx-auto px-4 py-2 sm:py-3">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1 text-xs sm:text-sm text-brand-ink-soft hover:text-brand-ink"
-          >
-            <ChevronLeft size={14} />
-            <span className="sm:hidden">All products</span>
-            <span className="hidden sm:inline">Back to all products</span>
-          </Link>
-        </div>
-      </nav>
       <main className="flex-1 bg-white">
         <PDPClient
           sku={sku}

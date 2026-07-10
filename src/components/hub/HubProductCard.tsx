@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Zap, ShoppingBag, Check, Flame } from "lucide-react";
+import { ShoppingBag, Check, Flame } from "lucide-react";
 import { type Sku } from "@/lib/products";
 import { formatINR, calcDiscountPct, cn } from "@/lib/utils";
 import { useCart } from "@/lib/cart-store";
@@ -407,15 +407,19 @@ export function HubProductCard({
                 </p>
               )}
 
-              <button
-                type="button"
-                disabled={soldOut}
-                onClick={() => add(true)}
-                className="inline-flex min-h-[44px] items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-brand-red px-3 text-[13px] font-bold text-white shadow-sm transition-all hover:bg-brand-red-hover hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 sm:px-4 sm:text-sm"
+              {/* Primary CTA drives to the PDP (was a hidden Buy-Now that
+                  jumped straight to checkout with one item — duplicating "Add
+                  to cart" and fighting the mix-and-bundle model). Sending it to
+                  the product page gives undecided buyers the detail/gallery and
+                  makes product_view fire, while "Add to cart" stays the buy
+                  action. Still reachable when sold-out — viewing is always valid. */}
+              <Link
+                href={`/product/${sku.slug}`}
+                aria-label={`See ${title} in action`}
+                className="inline-flex min-h-[44px] items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-brand-red px-3 text-[13px] font-bold text-white shadow-sm transition-all hover:bg-brand-red-hover hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 active:scale-[0.98] sm:px-4 sm:text-sm"
               >
-                <Zap size={15} aria-hidden />
-                {soldOut ? "Sold out" : "Start Racing"}
-              </button>
+                See Car in Action
+              </Link>
               <button
                 type="button"
                 disabled={soldOut}

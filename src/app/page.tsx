@@ -55,11 +55,11 @@ export default function Page() {
         {/* BUNDLE — "Bundle & save" cards; % ladder off the shared cart. */}
         <BundlePicker />
 
-        {/* pocket-performance promo banner (full-bleed) */}
-        <HubPerfBanner />
-
         {/* best-sellers — one pick per range, each CTA opens that PDP */}
         <HubBestSellers />
+
+        {/* pocket-performance promo banner (full-bleed) */}
+        <HubPerfBanner />
 
         {/* drift video — clip + tagline */}
         <HubDriftVideo />
