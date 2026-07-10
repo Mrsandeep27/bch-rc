@@ -39,7 +39,10 @@ const STATUS_NOTIFICATION = {
 } as const;
 
 type ShiprocketEvent = {
-  awb?: string;
+  // Shiprocket sends AWB as a JSON NUMBER in real payloads (e.g. 59629792084),
+  // even though docs show it quoted. awb_code is a text column, so every read
+  // of this must String()-coerce or the match query throws "text = integer".
+  awb?: string | number;
   current_status?: string;
   current_status_id?: number;
   /** Shiprocket's OWN numeric order id (not ours). */
@@ -130,7 +133,7 @@ export async function POST(req: Request) {
       [order] = await db
         .select()
         .from(orders)
-        .where(eq(orders.awbCode, event.awb));
+        .where(eq(orders.awbCode, String(event.awb)));
     }
     if (!order && event.channel_order_id) {
       [order] = await db
@@ -182,7 +185,7 @@ export async function POST(req: Request) {
         updates.cancelledAt = now;
       // Backfill shipment facts the order row is missing (empty string counts
       // as missing — Shiprocket's create response persists "" couriers).
-      if (event.awb && !order.awbCode) updates.awbCode = event.awb;
+      if (event.awb && !order.awbCode) updates.awbCode = String(event.awb);
       if (event.courier_name && !(order.courierName ?? "").trim())
         updates.courierName = event.courier_name;
       await db.update(orders).set(updates).where(eq(orders.id, order.id));
@@ -191,9 +194,13 @@ export async function POST(req: Request) {
       const tpl = STATUS_NOTIFICATION[mapped as keyof typeof STATUS_NOTIFICATION];
       if (tpl) await notifyOrderEvent(order.id, tpl);
 
-      // A cancelled shipment returns its reserved stock + coupon to the pool.
+      // A cancelled OR returned-to-origin shipment returns its reserved stock
+      // + coupon to the pool. RTO is the common COD case: the parcel comes
+      // back, so the stock is ours again. Idempotent via holds_released.
       if (mapped === "CANCELLED") {
         await releaseOrderHoldsBestEffort(order.id, "CANCELLED");
+      } else if (mapped === "RETURNED") {
+        await releaseOrderHoldsBestEffort(order.id, "RTO");
       }
     }
 

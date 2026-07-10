@@ -22,6 +22,7 @@ import { orders, events } from "@/db/schema";
 import { getShipmentStatus, mapShiprocketStatus } from "@/lib/shiprocket";
 import { drainNotificationsOutbox } from "@/lib/notifications/drain";
 import { notifyOrderEvent } from "@/lib/notifications/notify";
+import { releaseOrderHoldsBestEffort } from "@/lib/inventory/release";
 import { logError } from "@/lib/logger";
 
 // DB status → customer notification on transition into that status.
@@ -121,6 +122,11 @@ export async function GET(req: Request) {
           // leave shipped_at NULL on a delivered order.
           if (mapped === "DELIVERED" && !o.shippedAt) updates.shippedAt = now;
           if (mapped === "CANCELLED" && !o.cancelledAt) updates.cancelledAt = now;
+          // A returned parcel was necessarily shipped first — never leave a
+          // RETURNED order without a shipped_at (the /pack + returns views
+          // read it). There is no returned_at column; the RETURNED status +
+          // its POLL_SHIPROCKET_RETURNED event carry the return timestamp.
+          if (mapped === "RETURNED" && !o.shippedAt) updates.shippedAt = now;
         }
         // Persist the AWB the instant Shiprocket reveals it, so the DB row and
         // the customer's tracking link finally carry a real number.
@@ -168,6 +174,14 @@ export async function GET(req: Request) {
             ? STATUS_NOTIFICATION[mapped as keyof typeof STATUS_NOTIFICATION]
             : undefined;
           if (tpl) await notifyOrderEvent(o.id, tpl);
+        }
+
+        // A parcel that returned to origin puts its reserved stock + coupon
+        // back in the pool — the same release CANCELLED gets. Runs on backfill
+        // too (it's a stock fact, not a customer email). Idempotent via
+        // holds_released, so re-polling a RETURNED order is a safe no-op.
+        if (statusChanged && mapped === "RETURNED") {
+          await releaseOrderHoldsBestEffort(o.id, "RTO");
         }
       }
 

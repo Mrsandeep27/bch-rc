@@ -614,24 +614,69 @@ export async function generateInvoice(shiprocketOrderIds: string[]): Promise<{
 /**
  * Maps Shiprocket's status text to our order_status enum.
  * Reference: Shiprocket status codes 1-19+ for various states.
+ *
+ * ORDER IS LOAD-BEARING. Several Shiprocket strings contain "DELIVERED" as a
+ * SUBSTRING while meaning the opposite of a successful delivery:
+ *   - "RTO Delivered"  — the parcel was returned to origin and handed back to US
+ *   - "Undelivered", "Undelivered-AT SOURCE HUB" — a delivery attempt FAILED
+ * A naive `includes("DELIVERED")` first check (the original bug) marked all of
+ * these as DELIVERED. For COD that silently books uncollected cash as revenue
+ * and drives the /admin/returns RTO rate to a fake 0%. So the failure/return
+ * cases MUST be tested before the plain-delivered case.
  */
-export function mapShiprocketStatus(
-  status: string,
-): "PACKED" | "SHIPPED" | "DELIVERED" | "RETURNED" | "CANCELLED" | null {
-  const s = status.toUpperCase();
+export type MappedOrderStatus =
+  | "PACKED"
+  | "SHIPPED"
+  | "DELIVERED"
+  | "RETURNED"
+  | "CANCELLED"
+  | null;
+
+export function mapShiprocketStatus(status: string): MappedOrderStatus {
+  const s = (status ?? "").toUpperCase().trim();
+  if (!s || s === "UNKNOWN") return null;
+
+  // 1. Return-to-origin — ANY stage. "RTO Initiated/In Transit/Delivered/
+  //    Acknowledged" and customer-initiated "Return*" all collapse to RETURNED,
+  //    the only return-shaped terminal state our enum has. Checked first so
+  //    "RTO Delivered" can never fall through to DELIVERED.
+  if (s.includes("RTO") || s.includes("RETURN")) return "RETURNED";
+
+  // 2. Cancelled (incl. the American "Canceled" Shiprocket actually emits).
+  if (s.includes("CANCEL")) return "CANCELLED";
+
+  // 3. Failed delivery attempt — the parcel is STILL with the courier and will
+  //    be re-attempted or eventually RTO'd. It is NOT delivered and NOT yet
+  //    returned, so it stays in flight as SHIPPED. Must precede the DELIVERED
+  //    test because "UNDELIVERED" contains "DELIVERED".
+  if (s.includes("UNDELIVERED") || s.includes("UNDELIVERD")) return "SHIPPED";
+
+  // 4. Genuine successful delivery.
   if (s.includes("DELIVERED")) return "DELIVERED";
-  if (s.includes("RTO") || s.includes("RETURNED")) return "RETURNED";
-  if (s.includes("CANCELLED") || s.includes("CANCELED")) return "CANCELLED";
+
+  // 5. In transit toward the customer.
   if (
     s.includes("OUT FOR DELIVERY") ||
     s.includes("SHIPPED") ||
     s.includes("IN TRANSIT") ||
+    s.includes("INTRANSIT") ||
+    s.includes("EN-ROUTE") ||
     s.includes("PICKED UP")
   ) {
     return "SHIPPED";
   }
-  if (s.includes("PICKUP SCHEDULED") || s.includes("READY TO SHIP")) {
+
+  // 6. Handed to the courier / awaiting pickup — packed but not moving yet.
+  if (
+    s.includes("PICKUP SCHEDULED") ||
+    s.includes("PICKUP GENERATED") ||
+    s.includes("OUT FOR PICKUP") ||
+    s.includes("PICKUP EXCEPTION") ||
+    s.includes("READY TO SHIP") ||
+    s.includes("AWB ASSIGNED")
+  ) {
     return "PACKED";
   }
+
   return null;
 }

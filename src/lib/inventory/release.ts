@@ -37,7 +37,11 @@ export type ReleaseReason =
   | "PAYMENT_FAILED"
   | "ABANDONED"
   | "CANCELLED"
-  | "REFUNDED";
+  | "REFUNDED"
+  // Return-to-origin: the courier could not deliver and the parcel came back.
+  // The reserved stock is physically ours again, so it returns to the pool —
+  // same as a cancellation. Coupon usage is released too (the sale didn't land).
+  | "RTO";
 
 export type ReleaseResult = {
   released: boolean;
