@@ -103,23 +103,29 @@ export async function POST(req: Request) {
     event.channel_order_id ?? event.order_id ?? event.awb ?? "unknown";
   const externalId = `${dedupSubject}::${event.current_status ?? event.shipment_status ?? "unknown"}::${event.current_status_id ?? 0}`;
 
-  try {
-    await db.insert(webhooksInbound).values({
+  // Idempotent insert via ON CONFLICT DO NOTHING on (source, external_id).
+  // Shiprocket's "Test Webhook" button sends the SAME payload every time, so
+  // every test after the first is a duplicate. The previous code relied on
+  // catching a Postgres 23505 by `err.code`, but drizzle/postgres-js wraps the
+  // error so `code` wasn't reachable — the duplicate re-threw and the endpoint
+  // 500'd, which Shiprocket reports as "unable to send request." Letting the DB
+  // handle the conflict is robust and needs no error-shape guessing.
+  const inserted = await db
+    .insert(webhooksInbound)
+    .values({
       source: "shiprocket",
       externalId,
       payload: event,
       processed: false,
-    });
-  } catch (err: unknown) {
-    if (
-      err &&
-      typeof err === "object" &&
-      "code" in err &&
-      err.code === "23505"
-    ) {
-      return NextResponse.json({ ok: true, duplicate: true });
-    }
-    throw err;
+    })
+    .onConflictDoNothing({
+      target: [webhooksInbound.source, webhooksInbound.externalId],
+    })
+    .returning({ id: webhooksInbound.id });
+
+  if (inserted.length === 0) {
+    // Already processed this exact event. Ack 200 and stop.
+    return NextResponse.json({ ok: true, duplicate: true });
   }
 
   try {
