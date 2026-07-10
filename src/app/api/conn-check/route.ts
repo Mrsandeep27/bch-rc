@@ -1,5 +1,9 @@
 /**
- * TEMPORARY debug endpoint — /api/test-shiprocket
+ * TEMPORARY debug endpoint — /api/conn-check
+ *
+ * (Renamed from /api/test-shiprocket, which Shiprocket's URL validator rejected
+ * as "Address not allowed" — it bans the substrings shiprocket/kartrocket/sr/kr
+ * in the webhook URL. This name is clean.)
  *
  * Sole purpose: determine whether Shiprocket's servers can reach THIS site at
  * all, with every possible obstacle removed:
@@ -34,7 +38,7 @@ const CORS = {
 function payload() {
   return {
     status: "alive",
-    source: "shiprocket-test",
+    source: "conn-check",
     time: new Date().toISOString(),
   };
 }
@@ -46,7 +50,7 @@ function logRequest(method: string, req: Request, body?: string): void {
   });
   // Single structured line so it's greppable in `vercel logs`.
   console.log(
-    `[test-shiprocket] ${method} ` +
+    `[conn-check] ${method} ` +
       JSON.stringify({ method, headers, body: body ?? null }),
   );
 }

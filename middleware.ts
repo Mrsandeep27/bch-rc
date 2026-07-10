@@ -303,10 +303,9 @@ export const config = {
      *   the batched funnel beacon, and the Meta CAPI relay — none need
      *   maintenance/store16/auth middleware, and excluding them stops the
      *   internal /api/track POST from re-running the whole middleware)
-     * - api/test-shiprocket (TEMPORARY bare connectivity probe — must be
-     *   reachable with zero middleware; remove this exclusion when the route
-     *   is deleted)
+     * - api/conn-check (TEMPORARY bare connectivity probe — must be reachable
+     *   with zero middleware; remove this exclusion when the route is deleted)
      */
-    "/((?!_next/static|_next/image|favicon.ico|api/webhooks|api/track|api/test-shiprocket|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|woff2|ttf)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/webhooks|api/track|api/conn-check|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|woff2|ttf)$).*)",
   ],
 };
