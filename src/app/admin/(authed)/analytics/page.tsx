@@ -551,16 +551,20 @@ export default async function AdminAnalytics({
             <TrafficDonut slices={donutSlices} totalLabel={usePaid ? "paid orders" : "orders"} />
           </div>
 
-          {/* Store funnel — reuses the audited funnel report, unchanged */}
+          {/* Store funnel — reuses the audited funnel report. Renders the
+              coverage-adjusted counts (client stages grossed up for ad-blocked
+              visitors) so this matches the Funnel page and doesn't understate
+              "Viewed a product" on low-coverage days. See funnel-queries.ts. */}
           {funnel && (
             <Card title="Store funnel" hint={`Distinct people · last ${range === 1 ? "24 h" : `${range} days`}`}>
-              {!funnel.stages.length || funnel.stages[0].visitors === 0 ? (
+              {!funnel.stages.length || funnel.stages[0].adjustedVisitors === 0 ? (
                 <Empty>No visitors tracked in this period.</Empty>
               ) : (
                 <div className="space-y-2 p-3 sm:p-5">
                   {funnel.stages.map((s, i) => {
-                    const top = funnel.stages[0].visitors || 1;
-                    const w = (s.visitors / top) * 100;
+                    const top = funnel.stages[0].adjustedVisitors || 1;
+                    const w = (s.adjustedVisitors / top) * 100;
+                    const corrected = s.clientTracked && s.adjustedVisitors !== s.visitors;
                     return (
                       <div key={s.key} className="flex items-center gap-2 sm:gap-3">
                         <span className="w-24 sm:w-36 shrink-0 truncate text-sm font-medium text-brand-ink">{s.label}</span>
@@ -570,20 +574,30 @@ export default async function AdminAnalytics({
                             style={{ width: `${Math.max(w, 2)}%` }}
                           />
                         </div>
-                        <span className="w-12 sm:w-16 text-right text-sm font-bold tabular-nums text-brand-ink">
-                          {s.visitors.toLocaleString("en-IN")}
+                        <span
+                          className="w-12 sm:w-16 text-right text-sm font-bold tabular-nums text-brand-ink"
+                          title={corrected ? `raw beacon count: ${s.visitors.toLocaleString("en-IN")}` : undefined}
+                        >
+                          {s.adjustedVisitors.toLocaleString("en-IN")}
+                          {corrected && <span className="font-normal text-brand-ink-soft">*</span>}
                         </span>
                         <span
                           className={`w-11 text-right text-xs font-semibold tabular-nums ${
-                            i === 0 ? "text-brand-ink-soft/40" : s.stepPct < 50 ? "text-brand-red" : "text-success"
+                            i === 0 ? "text-brand-ink-soft/40" : s.adjustedStepPct < 50 ? "text-brand-red" : "text-success"
                           }`}
                         >
-                          {i === 0 ? "—" : `${s.stepPct.toFixed(s.stepPct < 10 ? 1 : 0)}%`}
+                          {i === 0 ? "—" : `${s.adjustedStepPct.toFixed(s.adjustedStepPct < 10 ? 1 : 0)}%`}
                         </span>
                       </div>
                     );
                   })}
                 </div>
+              )}
+              {funnel.visitors > 0 && funnel.coveragePct < 90 && (
+                <p className="px-3 sm:px-5 pb-3 text-[11px] text-brand-ink-soft">
+                  * Steps 2–4 grossed up from {Math.round(funnel.coveragePct)}% beacon coverage.
+                  See the Funnel page for detail.
+                </p>
               )}
             </Card>
           )}
