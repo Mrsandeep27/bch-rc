@@ -31,6 +31,16 @@ export const FUNNEL_EVENTS = [
   "wheel_spin", // tapped HIT THE THROTTLE (drifted)
   "wheel_lead", // claimed the code (metadata.code) — NO raw phone stored here
   "wheel_wa_claim", // tapped "send code to WhatsApp"
+  // --- "Name your price" bargain game (exit-intent haggle) ---
+  "bargain_ab", // A/B bucket assigned for this session (metadata.bucket: on|off)
+  "bargain_open", // modal shown (metadata.trigger: back|idle|return|manual, skuId)
+  "bargain_seen_no_play", // modal closed without ever making a guess
+  "bargain_guess", // submitted a guess (metadata.outcome: close|low|won|lost)
+  "bargain_won", // won a price (metadata.skuId, discountInr) — no code/PII here
+  "bargain_lost", // used all 3 guesses without winning
+  "bargain_checkout", // tapped "Buy now" → went to checkout with the won code
+  "bargain_coupon_applied", // a BG- coupon validated at checkout (metadata.discountInr)
+  "bargain_payment_success", // order paid on a BG- coupon (attribution; orders table is authoritative)
 ] as const;
 
 export type FunnelEventType = (typeof FUNNEL_EVENTS)[number];

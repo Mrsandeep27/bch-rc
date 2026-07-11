@@ -452,6 +452,9 @@ export async function POST(req: NextRequest) {
         // 3d. Coupon — atomic redeem + per-customer-limit guard + ledger.
         let couponDiscountInr = 0;
         let appliedCouponCode: string | null = null;
+        // A bargain coupon is the negotiated FINAL price — it must NOT stack with
+        // the prepaid/bundle discounts (see below). Always false for normal coupons.
+        let couponIsBargain = false;
         if (body.couponCode && body.couponCode.trim()) {
           try {
             const result = await redeemCoupon({
@@ -462,9 +465,13 @@ export async function POST(req: NextRequest) {
               orderId,
               subtotalInr: subtotal,
               shippingInr: shipping,
+              // Authoritative SKU gate for a bargain coupon: the exact car must
+              // be in this order or redemption throws + rolls back.
+              cartSkuIds: lineItems.map((i) => i.skuId),
             });
             couponDiscountInr = result.discountInr;
             appliedCouponCode = result.code;
+            couponIsBargain = result.isBargain;
           } catch (err) {
             if (err instanceof CouponError) {
               throw new Error(`COUPON:${err.reason}`);
@@ -473,17 +480,27 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        const total = Math.max(0, totalBeforeCoupon - couponDiscountInr);
+        // Bargain coupons are the negotiated FINAL price: they do NOT stack with
+        // the prepaid or bundle discounts. Zero those for a bargain order so the
+        // buyer pays exactly what they negotiated. This is the server-authoritative
+        // guard; the checkout UI mirrors it. Normal coupons are untouched
+        // (couponIsBargain is always false for them → identical to before).
+        const effPrepaidDiscount = couponIsBargain ? 0 : prepaidDiscount;
+        const effBundleDiscount = couponIsBargain ? 0 : bundleDiscount;
+        const total = Math.max(
+          0,
+          subtotal + shipping + codFee - effPrepaidDiscount - effBundleDiscount - couponDiscountInr,
+        );
         if (total <= 0) {
           throw new Error("BODY:Invalid total");
         }
 
-        // 3e. Apply the coupon discount onto the order row.
+        // 3e. Apply the discounts onto the order row.
         if (couponDiscountInr > 0) {
           await tx
             .update(orders)
             .set({
-              discountInr: prepaidDiscount + bundleDiscount + couponDiscountInr,
+              discountInr: effPrepaidDiscount + effBundleDiscount + couponDiscountInr,
               totalInr: total,
               couponCode: appliedCouponCode,
               updatedAt: new Date(),

@@ -720,6 +720,14 @@ export const coupons = pgTable(
     value: integer("value").notNull(),
     minOrderInr: integer("min_order_inr").notNull().default(0),
     maxDiscountInr: integer("max_discount_inr"),
+    /**
+     * When set, this coupon is BOUND to a single catalog SKU id and only applies
+     * if that SKU is in the cart. Null = applies to any cart (all existing
+     * coupons). Used by the "Name your price" game so a bargain won on one car
+     * can never be spent on another (which would bypass that car's discount
+     * tier). Enforced in validateCoupon (preview) and redeemCoupon (authoritative).
+     */
+    constraintSkuId: text("constraint_sku_id"),
     usageLimit: integer("usage_limit"),
     usedCount: integer("used_count").notNull().default(0),
     perCustomerLimit: integer("per_customer_limit"),
@@ -920,6 +928,61 @@ export const checkoutLeads = pgTable(
 );
 
 // ============================================================
+// 11c. BARGAIN SESSIONS — "Name your price" negotiation game
+// ============================================================
+// Server-authoritative state for the exit-intent haggle game. The buyer gets
+// N guesses against a HIDDEN floor (list × (1 − maxOff), jittered per session so
+// there's no shareable magic number). A guess at/above the floor WINS at the
+// guessed price; on win we mint a real single-use, short-TTL coupon in the
+// `coupons` table and record its code here — so checkout, cart math and pricing
+// stay untouched (a bargain is just "a coupon the buyer earned"). This table
+// holds ONLY game state; it never touches money directly.
+//
+// UNIQUE(device_key, sku_id): one game per device per product. The row is
+// upserted — after the cooldown window a fresh game overwrites the old one, so
+// refreshing/replaying can't farm the floor. `status` is a plain text enum
+// ('ACTIVE' | 'WON' | 'LOST') to keep the manual migration a single CREATE with
+// no CREATE TYPE. floor_inr is written once at game start and never re-rolled.
+
+export const bargainSessions = pgTable(
+  "bargain_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: text("site_id")
+      .notNull()
+      .references(() => sites.id),
+    /** prc_vid (visitor cookie) when present, else a minted prc_bg cookie. The
+     *  server-authoritative identity the 3-guess limit + cooldown are keyed to. */
+    deviceKey: text("device_key").notNull(),
+    skuId: text("sku_id").notNull(),
+    /** List price the game opened against — snapshotted so a later catalog price
+     *  change can't retroactively move the floor of a live game. */
+    listInr: integer("list_inr").notNull(),
+    /** SECRET reserve price. Guess ≥ this wins. Never sent to the client. */
+    floorInr: integer("floor_inr").notNull(),
+    attemptsUsed: integer("attempts_used").notNull().default(0),
+    /** 'ACTIVE' | 'WON' | 'LOST'. Plain text (not pgEnum) on purpose. */
+    status: text("status").notNull().default("ACTIVE"),
+    /** The accepted price on a win (what the buyer pays for that unit). */
+    wonPriceInr: integer("won_price_inr"),
+    /** The single-use coupon minted on win (FK-free — it lives in `coupons`). */
+    couponCode: text("coupon_code"),
+    /** Won-coupon expiry = the 5-minute lock the countdown UI shows. */
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    unique("bargain_device_sku_unique").on(t.deviceKey, t.skuId),
+    index("bargain_sessions_site_created_idx").on(t.siteId, t.createdAt),
+  ],
+);
+
+// ============================================================
 // 12. ADMINS — cross-site dashboard access
 // ============================================================
 
@@ -973,3 +1036,5 @@ export type AnalyticsSession = typeof analyticsSessions.$inferSelect;
 export type NewAnalyticsSession = typeof analyticsSessions.$inferInsert;
 export type CheckoutLead = typeof checkoutLeads.$inferSelect;
 export type NewCheckoutLead = typeof checkoutLeads.$inferInsert;
+export type BargainSession = typeof bargainSessions.$inferSelect;
+export type NewBargainSession = typeof bargainSessions.$inferInsert;

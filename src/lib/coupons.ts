@@ -24,6 +24,15 @@ export type CouponDiscount = {
   code: string;
   type: "FLAT_INR" | "PERCENT" | "FREE_SHIPPING";
   discountInr: number;
+  /**
+   * True for a "Name your price" bargain coupon. Detected from the coupon's
+   * SKU-binding metadata (constraint_sku_id) — NOT the code prefix — so it's a
+   * reliable server-side signal. A bargain coupon is the FINAL price: callers
+   * (checkout total + order create) must NOT stack the prepaid/bundle discounts
+   * on top of it. Always false for normal coupons, so normal checkout is
+   * completely unaffected.
+   */
+  isBargain: boolean;
 };
 
 export class CouponError extends Error {
@@ -60,6 +69,9 @@ export async function validateCoupon(input: {
   /** If present, also reject when this customer has already redeemed the
    *  coupon as many times as perCustomerLimit allows. */
   customerId?: string | null;
+  /** Catalog SKU ids currently in the cart. Required to satisfy a SKU-bound
+   *  (bargain) coupon; absent = the SKU gate is skipped (preview only). */
+  cartSkuIds?: string[] | null;
 }): Promise<CouponDiscount> {
   const code = input.code.trim().toUpperCase();
   if (!code) throw new CouponError("Enter a coupon code");
@@ -85,6 +97,13 @@ export async function validateCoupon(input: {
   }
   if (c.usageLimit != null && c.usedCount >= c.usageLimit) {
     throw new CouponError("Coupon fully redeemed");
+  }
+
+  // SKU-bound (bargain) coupon: the exact car it was won on must be in the cart.
+  if (c.constraintSkuId) {
+    if (!input.cartSkuIds || !input.cartSkuIds.includes(c.constraintSkuId)) {
+      throw new CouponError("This price is locked to the car you bargained on — add it to your cart");
+    }
   }
 
   // Per-customer limit — only enforce when we know the customer.
@@ -115,7 +134,13 @@ export async function validateCoupon(input: {
     throw new CouponError("Coupon yields no discount on this order");
   }
 
-  return { couponId: c.id, code: c.code, type: c.type, discountInr };
+  return {
+    couponId: c.id,
+    code: c.code,
+    type: c.type,
+    discountInr,
+    isBargain: c.constraintSkuId != null,
+  };
 }
 
 /**
@@ -135,6 +160,8 @@ export async function redeemCoupon(input: {
   orderId: string;
   subtotalInr: number;
   shippingInr: number;
+  /** SKU ids in the order — authoritative gate for a SKU-bound (bargain) coupon. */
+  cartSkuIds?: string[] | null;
 }): Promise<CouponDiscount> {
   const tx = input.tx;
   const code = input.code.trim().toUpperCase();
@@ -179,6 +206,15 @@ export async function redeemCoupon(input: {
 
   const c = updated[0];
 
+  // Authoritative SKU binding — the bargained car must be in the order. Throwing
+  // here rolls back the whole order transaction (including the used_count++),
+  // so a moved bargain coupon can never actually redeem.
+  if (c.constraintSkuId) {
+    if (!input.cartSkuIds || !input.cartSkuIds.includes(c.constraintSkuId)) {
+      throw new CouponError("This price is locked to the car you bargained on");
+    }
+  }
+
   // 2. Per-customer limit — lock the customer row so concurrent transactions
   //    can't both pass the count check.
   if (c.perCustomerLimit != null) {
@@ -215,7 +251,13 @@ export async function redeemCoupon(input: {
     discountInr,
   });
 
-  return { couponId: c.id, code: c.code, type: c.type, discountInr };
+  return {
+    couponId: c.id,
+    code: c.code,
+    type: c.type,
+    discountInr,
+    isBargain: c.constraintSkuId != null,
+  };
 }
 
 // `customers` import is used inside the SQL FOR UPDATE — re-export it as a

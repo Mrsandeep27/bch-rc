@@ -4,6 +4,7 @@ import "./globals.css";
 import NavigationLoader from "@/components/NavigationLoader";
 import Analytics from "@/components/Analytics";
 import ConsentBanner from "@/components/ConsentBanner";
+import BargainLauncher from "@/components/BargainLauncher";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://pocketrccars.com"),
@@ -84,6 +85,13 @@ export default function RootLayout({
           <Analytics />
         </Suspense>
         <ConsentBanner />
+        {/* "Name your price" exit-intent haggle. Self-suppresses unless
+            NEXT_PUBLIC_BARGAIN_ENABLED is on AND the 1:64 cart has an item worth
+            rescuing — so it's inert everywhere by default. usePathname needs a
+            Suspense boundary during static prerender. */}
+        <Suspense fallback={null}>
+          <BargainLauncher />
+        </Suspense>
       </body>
     </html>
   );

@@ -246,6 +246,9 @@ function CheckoutPageInner() {
   const [couponMessage, setCouponMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [couponBusy, setCouponBusy] = useState(false);
   const [couponApplied, setCouponApplied] = useState<string | null>(null);
+  // True when the applied coupon is a "Name your price" bargain — the negotiated
+  // FINAL price, which does NOT stack with the prepaid/bundle discounts.
+  const [couponIsBargain, setCouponIsBargain] = useState(false);
   // Signature (`code|subtotal`) of the inputs last validated against the coupon
   // service. Applying a coupon sets `couponApplied`, which would otherwise make
   // the revalidate effect refire an identical /api/coupons/validate for inputs
@@ -322,6 +325,9 @@ function CheckoutPageInner() {
   // don't refire it after the buyer deliberately removes it.
   const autoCouponTried = useRef(false);
 
+  // Whether we've already applied a bargain-won code from ?bg= (see effect below).
+  const bgCouponTried = useRef(false);
+
   // Idempotency key — generated ONCE per checkout session. Same key on retry
   // → server short-circuits and returns the original order. Cleared after a
   // successful order so a fresh "Buy again" cycle starts a new key.
@@ -355,18 +361,20 @@ function CheckoutPageInner() {
     (async () => {
       try {
         const r = await fetch(
-          `/api/coupons/validate?code=${encodeURIComponent(couponApplied)}&siteId=${"prc"}&subtotalInr=${subtotal}&shippingInr=${subtotal >= OFFERS.freeShippingMinINR ? 0 : 85}`,
+          `/api/coupons/validate?code=${encodeURIComponent(couponApplied)}&siteId=${"prc"}&subtotalInr=${subtotal}&shippingInr=${subtotal >= OFFERS.freeShippingMinINR ? 0 : 85}&skuIds=${encodeURIComponent(items.map((i) => i.skuId).join(","))}`,
         );
         const data = (await r.json()) as {
           ok: boolean;
           code?: string;
           discountInr?: number;
           error?: string;
+          isBargain?: boolean;
         };
         if (cancelled) return;
         if (!data.ok) {
           setCouponDiscountInr(0);
           setCouponApplied(null);
+          setCouponIsBargain(false);
           setCouponMessage({
             kind: "error",
             text: `Coupon ${couponApplied} no longer valid: ${data.error ?? "rejected"}`,
@@ -375,6 +383,7 @@ function CheckoutPageInner() {
         }
         lastCouponValidation.current = sig;
         setCouponDiscountInr(data.discountInr ?? 0);
+        setCouponIsBargain(!!data.isBargain);
       } catch {
         // Network failure during revalidate — leave the existing discount in
         // place; server-side validation at order create will be authoritative.
@@ -514,9 +523,17 @@ function CheckoutPageInner() {
   // distinct SKUs.
   const bundleDiscount = bundleDiscountInr(count, subtotal);
   const bundleLabel = bundleTierLabel(count);
+  // Bargain price is FINAL: a bargain coupon does NOT stack with the prepaid or
+  // bundle discounts, so the buyer pays exactly what they negotiated. Normal
+  // coupons keep stacking exactly as before (bargainActive is false for them).
+  // The server enforces the same rule in /api/orders/create — this only keeps the
+  // displayed total honest.
+  const bargainActive = couponIsBargain && couponDiscountInr > 0;
+  const effPrepaidDiscount = bargainActive ? 0 : prepaidDiscount;
+  const effBundleDiscount = bargainActive ? 0 : bundleDiscount;
   const total = Math.max(
     0,
-    subtotal + shipping + codFee - prepaidDiscount - bundleDiscount - couponDiscountInr,
+    subtotal + shipping + codFee - effPrepaidDiscount - effBundleDiscount - couponDiscountInr,
   );
 
   // No-Cost EMI — a prepaid card charge. The amount financed is the same online
@@ -526,7 +543,7 @@ function CheckoutPageInner() {
   // Gated on EMI.minInr so it never shows below the bank EMI floor (~₹3,000).
   const emiTotal = Math.max(
     0,
-    subtotal + shipping - OFFERS.prepaidDiscountINR - bundleDiscount - couponDiscountInr,
+    subtotal + shipping - (bargainActive ? 0 : OFFERS.prepaidDiscountINR) - effBundleDiscount - couponDiscountInr,
   );
   const emiMonthly = emiMonthlyInr(emiTotal);
   const emiEligible = emiMonthly > 0;
@@ -593,13 +610,14 @@ function CheckoutPageInner() {
     if (!opts?.silent) setCouponMessage(null);
     try {
       const r = await fetch(
-        `/api/coupons/validate?code=${encodeURIComponent(code)}&siteId=${"prc"}&subtotalInr=${subtotal}&shippingInr=${shipping}`,
+        `/api/coupons/validate?code=${encodeURIComponent(code)}&siteId=${"prc"}&subtotalInr=${subtotal}&shippingInr=${shipping}&skuIds=${encodeURIComponent(items.map((i) => i.skuId).join(","))}`,
       );
       const data = (await r.json()) as {
         ok: boolean;
         code?: string;
         discountInr?: number;
         error?: string;
+        isBargain?: boolean;
       };
       if (!data.ok) {
         // Auto-apply failures are silent — the buyer never typed this code,
@@ -607,6 +625,7 @@ function CheckoutPageInner() {
         if (!opts?.silent) {
           setCouponDiscountInr(0);
           setCouponApplied(null);
+          setCouponIsBargain(false);
           setCouponMessage({ kind: "error", text: data.error ?? "Coupon rejected" });
         }
         return;
@@ -615,10 +634,17 @@ function CheckoutPageInner() {
       setCouponCode(data.code ?? code);
       setCouponDiscountInr(data.discountInr ?? 0);
       setCouponApplied(data.code ?? code);
+      setCouponIsBargain(!!data.isBargain);
       setCouponMessage({
         kind: "ok",
         text: `Applied ${data.code ?? code} — ${formatINR(data.discountInr ?? 0)} off`,
       });
+      // Bargain-won coupons are BG-prefixed — tag the funnel so we can measure
+      // profit-per-visitor for the game (orders.coupon_code LIKE 'BG-%' is the
+      // authoritative revenue source; this is the checkout-side signal).
+      if ((data.code ?? code).toUpperCase().startsWith("BG-")) {
+        trackFunnel("bargain_coupon_applied", { discountInr: data.discountInr ?? 0 });
+      }
     } catch {
       if (!opts?.silent)
         setCouponMessage({ kind: "error", text: "Couldn't reach coupon service" });
@@ -665,6 +691,20 @@ function CheckoutPageInner() {
       cancelled = true;
     };
   }, [hasHydrated, subtotal, couponApplied, shipping, is16]);
+
+  // "Name your price" bargain: the buyer arrives from the game at
+  // /checkout?bg=<CODE> with a real single-use, 5-minute coupon already minted.
+  // Auto-apply it through the SAME validated path as any coupon (no pricing
+  // logic touched) so their negotiated price is reflected the moment they land.
+  // Runs once; a normal coupon the buyer applied manually always wins.
+  useEffect(() => {
+    if (bgCouponTried.current) return;
+    const bg = searchParams.get("bg");
+    if (!bg) return;
+    if (!hasHydrated || subtotal <= 0 || couponApplied) return;
+    bgCouponTried.current = true;
+    void applyCoupon(bg);
+  }, [hasHydrated, subtotal, couponApplied, searchParams, applyCoupon]);
 
   // Live serviceability check when a full pincode is entered. All state is set
   // after the await; staleness on partial pincodes is handled by `svcActive`.
@@ -733,6 +773,7 @@ function CheckoutPageInner() {
     setCouponCode("");
     setCouponApplied(null);
     setCouponDiscountInr(0);
+    setCouponIsBargain(false);
     setCouponMessage(null);
   }
 
@@ -771,6 +812,16 @@ function CheckoutPageInner() {
             { amountInr: data.amountInr },
             { orderId: data.orderId, immediate: true },
           );
+          // Bargain attribution: a paid order that carries a BG- coupon came from
+          // the game. (orders.coupon_code LIKE 'BG-%' is the authoritative source;
+          // this is the client-side signal for the funnel.)
+          if (couponApplied?.toUpperCase().startsWith("BG-")) {
+            trackFunnel(
+              "bargain_payment_success",
+              { amountInr: data.amountInr },
+              { orderId: data.orderId, immediate: true },
+            );
+          }
           setError(null);
           setPaymentCancelled(null);
           setConfirming(true);
@@ -1801,13 +1852,15 @@ function CheckoutPageInner() {
                 <span>{formatINR(codFee)}</span>
               </div>
             )}
-            {prepaidDiscount > 0 && (
+            {/* Prepaid + bundle bonuses are hidden for a bargain order — the
+                negotiated price is final and doesn't stack with them. */}
+            {!bargainActive && prepaidDiscount > 0 && (
               <div className="flex justify-between text-success">
                 <span>Online-pay bonus</span>
                 <span>-{formatINR(prepaidDiscount)}</span>
               </div>
             )}
-            {bundleDiscount > 0 && (
+            {!bargainActive && bundleDiscount > 0 && (
               <div className="flex justify-between text-success">
                 <span>Bundle bonus{bundleLabel ? ` (${bundleLabel})` : ""}</span>
                 <span>-{formatINR(bundleDiscount)}</span>
@@ -1815,7 +1868,11 @@ function CheckoutPageInner() {
             )}
             {couponDiscountInr > 0 && (
               <div className="flex justify-between text-success">
-                <span>Coupon{couponApplied ? ` (${couponApplied})` : ""}</span>
+                <span>
+                  {bargainActive
+                    ? "Private negotiated price applied"
+                    : `Coupon${couponApplied ? ` (${couponApplied})` : ""}`}
+                </span>
                 <span>-{formatINR(couponDiscountInr)}</span>
               </div>
             )}

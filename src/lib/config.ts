@@ -172,6 +172,74 @@ export const AUTO_COUPON = {
   label: "₹100 OFF your first order",
 } as const;
 
+/**
+ * "Name your price" bargain game — the exit-intent haggle that rescues an
+ * abandoning cart by letting the buyer negotiate against a HIDDEN reserve.
+ *
+ * The mechanic (per product):
+ *   - `maxOffPct` (23%) is the HARD wall — the most discount we will EVER give.
+ *     The buyer never sees it. A guess AT or ABOVE the floor wins at THEIR
+ *     guessed price, so we usually give LESS than 23% (they anchor conservative).
+ *   - The floor jitters per session inside [minOffPct, maxOffPct] so there's no
+ *     shareable "guess ₹X to win" number — and it NEVER exceeds `maxOffPct`.
+ *   - `attempts` guesses. On a win we mint a single-use coupon that expires in
+ *     `lockMinutes` (the 5-minute countdown). One game per device per product,
+ *     replayable only after `cooldownHours`.
+ *
+ * `heroFloorPct` protects specific best-sellers with a SMALLER wall (they sell
+ * fine at full price — don't over-discount them). Keyed by catalog SKU id; any
+ * SKU not listed uses `maxOffPct`. Start empty (flat 23% everywhere); add a SKU
+ * here to cap its discount lower without touching code.
+ *
+ * The whole feature is inert unless NEXT_PUBLIC_BARGAIN_ENABLED is "1"/"true",
+ * so it ships dark and is A/B-flippable from Vercel env with no redeploy of code.
+ */
+export const BARGAIN = {
+  /** Dead-stock / default wall — the hard maximum, never exceeded. */
+  maxOffPct: 23,
+  /** Bottom of the jitter band (only applies where band > 0, i.e. dead stock). */
+  minOffPct: 20,
+  attempts: 3,
+  /** The urgency countdown the buyer SEES. */
+  lockMinutes: 5,
+  /** The REAL coupon lifetime — longer than the UI countdown so a genuine buyer
+   *  who dawdles at the payment gateway isn't burned by a redemption-time expiry.
+   *  Urgency is theatre (5 min); redemption safety is real (this). */
+  couponGraceMinutes: 15,
+  cooldownHours: 20,
+  /** Round the hidden floor UP to a clean number so it reads like a price. */
+  roundFloorToInr: 10,
+  /** A win that saves less than this mints no coupon — we just tell them they've
+   *  already got our best price (no pointless ₹9 "discounts" or coupon clutter). */
+  minWinSavingInr: 50,
+  /** Share of eligible shoppers who see the game when the flag is on (A/B). The
+   *  rest are the control group — we compare profit/order, not just conversion. */
+  abTestPct: 50,
+  /**
+   * DATA-DRIVEN discount ceiling per SKU (id → max % off). Any SKU not listed
+   * falls through to `maxOffPct` (23% = dead stock, discount hard to move it).
+   * Tiers set from REAL paid-order velocity (90-day units), NOT the marketing
+   * badges — the badges disagreed with sales (Thar is badged BESTSELLER but has
+   * sold 2; Monster/BMW are the real movers). Re-tier as sales shift.
+   *   best   → 14%  (proven sellers — don't over-discount them)
+   *   medium → 18%  (trickling)
+   *   dead   → 23%  (unlisted; needs the deepest cut to move)
+   */
+  skuMaxOffPct: {
+    "pocket-monster": 14, // 14 units/90d — top seller
+    "pocket-bmw": 14, //     13 units/90d
+    "pocket-porsche": 14, //  9 units/90d
+    "pocket-f1-classic": 18, // 4 units/90d
+    "pocket-thar": 18, //     2 units/90d
+  } as Record<string, number>,
+} as const;
+
+/** Server + client both read the same flag so the game can never half-exist. */
+export function isBargainEnabled(): boolean {
+  const v = (process.env.NEXT_PUBLIC_BARGAIN_ENABLED ?? "").trim().toLowerCase();
+  return v === "1" || v === "true" || v === "on";
+}
+
 export const TRUST = {
   ordersShipped: THEME.ordersShipped,
   rating: THEME.rating,

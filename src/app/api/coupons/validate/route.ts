@@ -16,6 +16,9 @@ const Query = z.object({
   siteId: z.string().min(1).max(40).default("prc"),
   subtotalInr: z.coerce.number().int().nonnegative(),
   shippingInr: z.coerce.number().int().nonnegative().default(0),
+  /** Comma-separated catalog SKU ids in the cart — lets a SKU-bound (bargain)
+   *  coupon preview correctly. Optional; absent skips the SKU gate. */
+  skuIds: z.string().max(400).optional(),
 });
 
 export async function GET(req: Request) {
@@ -30,6 +33,7 @@ export async function GET(req: Request) {
     siteId: url.searchParams.get("siteId") ?? "prc",
     subtotalInr: url.searchParams.get("subtotalInr"),
     shippingInr: url.searchParams.get("shippingInr") ?? 0,
+    skuIds: url.searchParams.get("skuIds") ?? undefined,
   });
 
   if (!parsed.success) {
@@ -37,7 +41,9 @@ export async function GET(req: Request) {
   }
 
   try {
-    const result = await validateCoupon(parsed.data);
+    const { skuIds, ...rest } = parsed.data;
+    const cartSkuIds = skuIds ? skuIds.split(",").filter(Boolean) : null;
+    const result = await validateCoupon({ ...rest, cartSkuIds });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     if (err instanceof CouponError) {
