@@ -18,7 +18,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { X, Zap, PartyPopper, Sparkles, ArrowUp, Target, Check, Hourglass, type LucideIcon } from "lucide-react";
+import { X, Zap, PartyPopper, Sparkles, ArrowUp, Target, Check, Hourglass, Tag, Lock, type LucideIcon } from "lucide-react";
 import { trackFunnel } from "@/lib/funnel-client";
 import { BARGAIN } from "@/lib/config";
 
@@ -275,65 +275,99 @@ export default function BargainModal({
           {/* ── PLAY ── */}
           {(phase === "loading" || phase === "play") && (
             <>
-              <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-brand-red">
-                Wait — don&apos;t pay full price
+              {/* eyebrow — calm & exclusive, not a scammy shout */}
+              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.32em] text-white/45">
+                Private price · just for you
               </p>
-              <h3 className="mt-2 font-display text-2xl font-extrabold uppercase leading-tight">
+              <h3 className="mt-2.5 font-display text-[26px] font-extrabold uppercase leading-[1.05]">
                 Name your price
               </h3>
-              <p className="mt-1.5 text-sm text-white/70">
-                <span className="text-white">{target.name}</span> · sticker{" "}
-                <span className="font-semibold">{inr(listInr)}</span>
+              <p className="mx-auto mt-2 max-w-[16rem] text-[13px] leading-relaxed text-white/55">
+                Beat the sticker in {BARGAIN.attempts} tries. Match our number and it&apos;s
+                yours — at the price you type.
               </p>
 
-              {/* attempt dots */}
-              <div className="mt-4 flex items-center justify-center gap-1.5">
-                {Array.from({ length: BARGAIN.attempts }).map((_, i) => (
-                  <span
-                    key={i}
-                    className={`h-2 w-2 rounded-full ${i < attemptsLeft ? "bg-brand-red" : "bg-white/20"}`}
+              {/* product row — grounds it in the REAL item, kills the generic-popup feel */}
+              <div className="mt-5 flex items-center gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-2.5 pr-4 text-left">
+                {target.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={target.image}
+                    alt=""
+                    className="h-12 w-12 shrink-0 rounded-xl bg-white/[0.04] object-cover"
                   />
-                ))}
-                <span className="ml-2 text-[11px] text-white/50">
+                ) : (
+                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-white/[0.06]">
+                    <Tag size={18} className="text-white/40" />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-white">{target.name}</p>
+                  <p className="mt-0.5 text-[12px] text-white/45">
+                    Sticker price ·{" "}
+                    <span className="font-semibold tabular-nums text-white/70">{inr(listInr)}</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* attempts */}
+              <div className="mt-4 flex items-center justify-center gap-2">
+                <div className="flex items-center gap-1.5">
+                  {Array.from({ length: BARGAIN.attempts }).map((_, i) => (
+                    <span
+                      key={i}
+                      className={`h-1.5 w-1.5 rounded-full ${i < attemptsLeft ? "bg-brand-red" : "bg-white/15"}`}
+                    />
+                  ))}
+                </div>
+                <span className="text-[11px] uppercase tracking-wide text-white/40">
                   {attemptsLeft} {attemptsLeft === 1 ? "try" : "tries"} left
                 </span>
               </div>
 
               {heat && (
-                <div className="prcbg-pop mt-4 flex items-center justify-center gap-2 rounded-xl bg-white/5 px-4 py-2.5 text-sm">
+                <div className="prcbg-pop mt-3 flex items-center justify-center gap-2 rounded-xl bg-white/[0.05] px-4 py-2.5 text-[13px] text-white/90">
                   {(() => {
                     const Icon = HEAT[heat].Icon;
-                    return <Icon size={16} className="shrink-0 text-brand-red" />;
+                    return <Icon size={15} className="shrink-0 text-brand-red" />;
                   })()}
                   <span>{HEAT[heat].text}</span>
                 </div>
               )}
 
-              <form onSubmit={submitGuess} className="mt-5">
-                <div className="flex items-center overflow-hidden rounded-full border border-white/15 bg-white/10 focus-within:border-brand-red">
-                  <span className="pl-5 pr-1 text-lg font-semibold text-white/60">₹</span>
+              <form onSubmit={submitGuess} className="mt-4">
+                <div className="flex items-center overflow-hidden rounded-2xl border border-white/[0.12] bg-black/40 transition-colors focus-within:border-brand-red/70 focus-within:bg-black/60">
+                  <span className="pl-5 pr-1 text-2xl font-semibold text-white/45">₹</span>
                   <input
                     value={guess}
                     onChange={(e) => setGuess(e.target.value.replace(/[^\d]/g, "").slice(0, 8))}
                     inputMode="numeric"
                     autoFocus
-                    placeholder="your offer"
+                    placeholder="0"
                     disabled={busy || phase === "loading"}
-                    className="w-full bg-transparent py-3.5 pr-5 text-lg text-white placeholder:text-white/35 focus:outline-none"
+                    className="w-full bg-transparent py-4 pr-5 text-2xl font-semibold tabular-nums text-white placeholder:text-white/25 focus:outline-none"
                   />
                 </div>
                 {err && <p className="mt-2 text-xs text-red-300">{err}</p>}
                 <button
                   type="submit"
                   disabled={busy || phase === "loading"}
-                  className="mt-3 min-h-[44px] w-full rounded-full bg-brand-red px-6 py-3.5 text-base font-bold uppercase tracking-wide text-white shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60"
+                  className="mt-3 inline-flex h-[56px] w-full items-center justify-center gap-2 rounded-full bg-brand-red px-6 text-[15px] font-extrabold uppercase tracking-wide text-white shadow-[0_12px_30px_rgba(225,29,42,.35)] transition-transform hover:brightness-110 active:scale-[0.98] disabled:opacity-60"
                 >
-                  {busy ? "Checking…" : phase === "loading" ? "…" : "Make my offer"}
+                  {busy ? (
+                    "Checking…"
+                  ) : phase === "loading" ? (
+                    "…"
+                  ) : (
+                    <>
+                      <Tag size={17} /> Make my offer
+                    </>
+                  )}
                 </button>
               </form>
-              <p className="mt-2 text-[11px] leading-relaxed text-white/45">
-                Make your <span className="text-white/70">strongest first offer</span> — first offers
-                get priority. 3 chances only.
+              <p className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-white/40">
+                <Lock size={11} className="text-white/35" /> One shot per shopper · make your first
+                offer count
               </p>
             </>
           )}

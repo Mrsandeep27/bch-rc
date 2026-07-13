@@ -24,6 +24,12 @@ import {
   getVisitors,
   warnIfInsane,
 } from "@/lib/analytics-service";
+import {
+  getCheckoutAnalytics,
+  getCouponPerformance,
+  getEngagementEvents,
+  getProductFunnel,
+} from "@/lib/analytics-extra";
 import RevenueChart, { type ChartPoint } from "./RevenueChart";
 import TrafficDonut from "./TrafficDonut";
 
@@ -66,6 +72,18 @@ const srcLabel = (s: string | null) =>
   !s ? "Direct" : SOURCE_LABEL[s] ?? s.charAt(0).toUpperCase() + s.slice(1);
 
 const HERO = new Map(PRODUCTS.map((p) => [p.id, p.heroImage]));
+
+/** Friendly labels for the engagement events already in the funnel stream. */
+const ENGAGEMENT_DISPLAY: Array<{ key: string; label: string }> = [
+  { key: "hero_cta_click", label: "Hero CTA clicks" },
+  { key: "whatsapp_click", label: "WhatsApp clicks" },
+  { key: "wheel_open", label: "Spin-wheel opens" },
+  { key: "wheel_spin", label: "Spin-wheel spins" },
+  { key: "wheel_lead", label: "Spin-wheel leads" },
+  { key: "bargain_open", label: "Bargain opened" },
+  { key: "bargain_won", label: "Bargain won" },
+  { key: "bargain_checkout", label: "Bargain → checkout" },
+];
 
 /** % change vs the previous equal-length window. null when there's no baseline. */
 function deltaPct(cur: number, prev: number): number | null {
@@ -438,6 +456,53 @@ export default async function AdminAnalytics({
 
   const funnel = tab === "overview" ? await getFunnelReport(ctx.siteIds, range) : null;
 
+  // ── Additive sections (collected-but-not-shown) ───────────────────────────
+  // Gated to the tab that renders them so no other tab pays for the query.
+  // Every one is keyed off the SAME windowStart + PAID_STATUSES as above, so
+  // revenue/orders/people reconcile with the rest of the page.
+  const [couponPerf, engagement] =
+    tab === "marketing"
+      ? await Promise.all([
+          getCouponPerformance(ctx.siteIds, windowStart),
+          getEngagementEvents(ctx.siteIds, windowStart),
+        ])
+      : [null, null];
+  const checkoutA = tab === "operations" ? await getCheckoutAnalytics(ctx.siteIds, windowStart) : null;
+  const productFunnelRaw = tab === "products" ? await getProductFunnel(ctx.siteIds, windowStart) : null;
+
+  // Merge per-SKU views/cart (beacon) with purchased units from `skuAggregate`
+  // (the SAME orders-ledger map the Best-sellers list uses).
+  const productFunnel = productFunnelRaw
+    ? Array.from(
+        new Set<string>([...productFunnelRaw.map((p) => p.skuId), ...skuAggregate.keys()]),
+      )
+        .map((skuId) => {
+          const fe = productFunnelRaw.find((p) => p.skuId === skuId);
+          const bought = skuAggregate.get(skuId);
+          const views = fe?.views ?? 0;
+          const addToCart = fe?.addToCart ?? 0;
+          const purchased = bought?.qty ?? 0;
+          return {
+            skuId,
+            name: bought?.name ?? fe?.name ?? skuId,
+            views,
+            addToCart,
+            purchased,
+            convPct: views > 0 ? (purchased / views) * 100 : 0,
+            abandonPct: addToCart > 0 ? Math.max(0, 1 - purchased / addToCart) * 100 : 0,
+          };
+        })
+        .sort((a, b) => b.views - a.views)
+    : null;
+
+  // High demand (views), weak conversion — the products worth investigating.
+  const lowPerformers = productFunnel
+    ? productFunnel
+        .filter((p) => p.views >= 20 && p.purchased < p.views)
+        .sort((a, b) => a.convPct - b.convPct || b.views - a.views)
+        .slice(0, 8)
+    : null;
+
   const usePaid = sourceRows.some((r) => r.paid > 0);
   const donutSlices = sourceRows
     .map((r) => ({
@@ -614,6 +679,7 @@ export default async function AdminAnalytics({
 
       {/* ── PRODUCTS ── */}
       {tab === "products" && (
+        <div className="space-y-3 sm:space-y-4">
         <Card title="Best sellers" hint={`By revenue · last ${range} day${range === 1 ? "" : "s"} · paid only`}>
           {bestSellers.length === 0 ? (
             <Empty>No paid orders in this period.</Empty>
@@ -644,6 +710,83 @@ export default async function AdminAnalytics({
             </ul>
           )}
         </Card>
+
+        {/* Product funnel — per-SKU view → cart → buy (collected but never shown). */}
+        <Card title="Product funnel" hint="Views & cart-adds from on-site tracking · purchases from paid orders">
+          {!productFunnel || productFunnel.filter((p) => p.views > 0 || p.purchased > 0).length === 0 ? (
+            <Empty>No product activity tracked in this period.</Empty>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-[11px] uppercase tracking-wide text-brand-ink-soft">
+                    <th className="text-left font-semibold px-4 sm:px-5 py-2.5">Product</th>
+                    <th className="text-right font-semibold px-2 py-2.5">Views</th>
+                    <th className="text-right font-semibold px-2 py-2.5">Cart</th>
+                    <th className="text-right font-semibold px-2 py-2.5">Bought</th>
+                    <th className="text-right font-semibold px-2 py-2.5">Conv</th>
+                    <th className="text-right font-semibold px-4 sm:px-5 py-2.5">Abandon</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-brand-line">
+                  {productFunnel
+                    .filter((p) => p.views > 0 || p.purchased > 0)
+                    .slice(0, 15)
+                    .map((p) => (
+                      <tr key={p.skuId}>
+                        <td className="px-4 sm:px-5 py-2.5">
+                          <div className="flex items-center gap-2.5">
+                            <span className="h-8 w-8 shrink-0 overflow-hidden rounded-lg border border-brand-line bg-brand-cream grid place-items-center">
+                              {HERO.get(p.skuId) ? (
+                                <Image src={HERO.get(p.skuId)!} alt="" width={32} height={32} className="h-full w-full object-contain" />
+                              ) : null}
+                            </span>
+                            <span className="truncate max-w-[9rem] sm:max-w-[14rem] font-medium text-brand-ink">{p.name}</span>
+                          </div>
+                        </td>
+                        <td className="text-right tabular-nums text-brand-ink px-2">{p.views.toLocaleString("en-IN")}</td>
+                        <td className="text-right tabular-nums text-brand-ink-soft px-2">{p.addToCart.toLocaleString("en-IN")}</td>
+                        <td className="text-right tabular-nums text-brand-ink px-2">{p.purchased.toLocaleString("en-IN")}</td>
+                        <td className={`text-right tabular-nums px-2 font-semibold ${p.views > 0 && p.convPct < 2 ? "text-brand-red" : "text-brand-ink"}`}>
+                          {p.views > 0 ? `${p.convPct.toFixed(1)}%` : "—"}
+                        </td>
+                        <td className="text-right tabular-nums text-brand-ink-soft px-4 sm:px-5">
+                          {p.addToCart > 0 ? `${p.abandonPct.toFixed(0)}%` : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+
+        {/* Low performers — real demand, weak conversion. */}
+        <Card title="Low-performing products" hint="High views but low conversion — likely a price, photo or description problem">
+          {!lowPerformers || lowPerformers.length === 0 ? (
+            <Empty>Nothing flagged — no high-traffic products with weak conversion.</Empty>
+          ) : (
+            <ul className="divide-y divide-brand-line">
+              {lowPerformers.map((p) => (
+                <li key={p.skuId} className="flex items-center gap-3 px-4 sm:px-5 py-3">
+                  <span className="h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-brand-line bg-brand-cream grid place-items-center">
+                    {HERO.get(p.skuId) ? (
+                      <Image src={HERO.get(p.skuId)!} alt="" width={36} height={36} className="h-full w-full object-contain" />
+                    ) : null}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-semibold text-brand-ink">{p.name}</div>
+                    <div className="text-xs text-brand-ink-soft tabular-nums">
+                      {p.views.toLocaleString("en-IN")} views · {p.addToCart.toLocaleString("en-IN")} carts · {p.purchased.toLocaleString("en-IN")} bought
+                    </div>
+                  </div>
+                  <span className="text-right text-sm font-bold tabular-nums text-brand-red">{p.convPct.toFixed(1)}%</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+        </div>
       )}
 
       {/* ── CUSTOMERS ── */}
@@ -723,6 +866,74 @@ export default async function AdminAnalytics({
                   </li>
                 ))}
               </ul>
+            )}
+          </Card>
+
+          {/* Coupon performance — from the orders ledger (reconciles with Revenue). */}
+          <Card title="Coupon performance" hint="Applied → redeemed · revenue & discount from paid orders">
+            {!couponPerf || couponPerf.rows.length === 0 ? (
+              <Empty>No coupon-tagged orders in this period.</Empty>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-brand-line border-b border-brand-line">
+                  <Split label="Redemptions" value={couponPerf.totals.redeemed} tone="success" />
+                  <Split label="Applied" value={couponPerf.totals.applied} />
+                  <div className="px-3 py-3 sm:px-5 sm:py-4 text-center">
+                    <div className="text-xl sm:text-2xl font-bold tabular-nums text-brand-ink">{formatINR(couponPerf.totals.revenue)}</div>
+                    <div className="text-xs text-brand-ink-soft mt-0.5">Revenue</div>
+                  </div>
+                  <div className="px-3 py-3 sm:px-5 sm:py-4 text-center">
+                    <div className="text-xl sm:text-2xl font-bold tabular-nums text-brand-red">−{formatINR(couponPerf.totals.discount)}</div>
+                    <div className="text-xs text-brand-ink-soft mt-0.5">Discount given</div>
+                  </div>
+                </div>
+                <ul className="divide-y divide-brand-line">
+                  {couponPerf.rows.slice(0, 12).map((c) => (
+                    <li key={c.code} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 sm:px-5 py-3 text-sm">
+                      <span className="min-w-[6rem] flex-1 font-mono font-semibold text-brand-ink">{c.code}</span>
+                      <span className="text-brand-ink-soft tabular-nums text-xs">{c.applied} applied</span>
+                      <span className="text-brand-ink tabular-nums font-semibold">{c.redeemed} used</span>
+                      <span className={`tabular-nums text-xs font-semibold ${c.convPct < 40 ? "text-brand-red" : "text-success"}`}>{c.convPct}%</span>
+                      <span className="text-brand-red tabular-nums text-xs">−{formatINR(c.discount)}</span>
+                      <span className="w-24 text-right tabular-nums text-brand-ink font-semibold">{formatINR(c.revenue)}</span>
+                    </li>
+                  ))}
+                </ul>
+                {couponPerf.rows.some((c) => c.failed > 0) && (
+                  <div className="px-4 sm:px-5 py-3 border-t border-brand-line">
+                    <p className="text-[11px] uppercase tracking-wide text-brand-ink-soft mb-1.5">Most-abandoned codes (applied, never paid)</p>
+                    <div className="flex flex-wrap gap-2">
+                      {couponPerf.rows
+                        .filter((c) => c.failed > 0)
+                        .sort((a, b) => b.failed - a.failed)
+                        .slice(0, 6)
+                        .map((c) => (
+                          <span key={c.code} className="inline-flex items-center gap-1.5 rounded-full bg-brand-cream px-2.5 py-1 text-xs">
+                            <span className="font-mono font-semibold text-brand-ink">{c.code}</span>
+                            <span className="text-brand-red tabular-nums">{c.failed} unpaid</span>
+                          </span>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </Card>
+
+          {/* Marketing engagement — on-site interactions already in the event stream. */}
+          <Card title="Marketing engagement" hint="On-site interactions captured this period">
+            {!engagement || Object.keys(engagement).length === 0 ? (
+              <Empty>No engagement events tracked in this period.</Empty>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-px bg-brand-line">
+                {ENGAGEMENT_DISPLAY.filter((e) => engagement[e.key]).map((e) => (
+                  <div key={e.key} className="bg-white p-3 sm:p-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-brand-ink-soft truncate">{e.label}</div>
+                    <div className="mt-1 text-xl font-bold tabular-nums text-brand-ink">{engagement[e.key].events.toLocaleString("en-IN")}</div>
+                    <div className="text-[11px] text-brand-ink-soft tabular-nums">{engagement[e.key].visitors.toLocaleString("en-IN")} people</div>
+                  </div>
+                ))}
+              </div>
             )}
           </Card>
         </div>
@@ -814,6 +1025,66 @@ export default async function AdminAnalytics({
                   </li>
                 ))}
               </ul>
+            )}
+          </Card>
+
+          {/* Checkout analytics — payment lifecycle from on-site events. */}
+          <Card title="Checkout analytics" hint="Payment lifecycle from on-site events · distinct people per step">
+            {!checkoutA || checkoutA.stages.checkoutStarted === 0 ? (
+              <Empty>No checkout activity tracked in this period.</Empty>
+            ) : (
+              <div className="p-4 sm:p-5 space-y-4">
+                <div className="space-y-2">
+                  {[
+                    { label: "Started checkout", v: checkoutA.stages.checkoutStarted },
+                    { label: "Selected payment", v: checkoutA.stages.paymentMethodSelected },
+                    { label: "Opened Razorpay", v: checkoutA.stages.razorpayOpened },
+                    { label: "Paid", v: checkoutA.stages.paymentSucceeded },
+                  ].map((s, _i, arr) => {
+                    const top = arr[0].v || 1;
+                    const w = (s.v / top) * 100;
+                    return (
+                      <div key={s.label} className="flex items-center gap-2 sm:gap-3">
+                        <span className="w-28 sm:w-36 shrink-0 text-sm text-brand-ink">{s.label}</span>
+                        <div className="relative h-7 flex-1 overflow-hidden rounded-lg bg-brand-cream">
+                          <div className="absolute inset-y-0 left-0 rounded-lg bg-gradient-to-r from-brand-red to-brand-red/65" style={{ width: `${Math.max(w, 2)}%` }} />
+                        </div>
+                        <span className="w-14 text-right text-sm font-bold tabular-nums text-brand-ink">{s.v.toLocaleString("en-IN")}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs tabular-nums border-t border-brand-line pt-3">
+                  <span className="text-brand-red">{checkoutA.stages.paymentFailed} payment failed</span>
+                  <span className="text-brand-ink-soft">{checkoutA.stages.paymentCancelled} cancelled</span>
+                </div>
+                {checkoutA.methods.length > 0 && (
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-brand-ink-soft mb-1.5">Payment method chosen</p>
+                    <div className="flex flex-wrap gap-2">
+                      {checkoutA.methods.map((m) => (
+                        <span key={m.method} className="inline-flex items-center gap-1.5 rounded-full bg-brand-cream px-2.5 py-1 text-xs">
+                          <span className="font-semibold text-brand-ink uppercase">{m.method}</span>
+                          <span className="text-brand-ink-soft tabular-nums">{m.n}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {checkoutA.failureReasons.length > 0 && (
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-brand-ink-soft mb-1.5">Top failure reasons</p>
+                    <ul className="space-y-1">
+                      {checkoutA.failureReasons.map((f, i) => (
+                        <li key={i} className="flex items-center justify-between text-xs">
+                          <span className="text-brand-ink truncate pr-2">{f.reason}</span>
+                          <span className="text-brand-red tabular-nums font-semibold">{f.n}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             )}
           </Card>
         </div>

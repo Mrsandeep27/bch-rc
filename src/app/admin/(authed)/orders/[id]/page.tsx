@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { orders, customers, events, notificationsOutbox } from "@/db/schema";
+import { orders, customers, events, notificationsOutbox, coupons } from "@/db/schema";
 import { requireAdmin } from "@/lib/admin-auth";
 import { formatINR, formatIST } from "@/lib/utils";
 import { OFFERS, bundleDiscountInr, bundleTierLabel } from "@/lib/config";
@@ -82,6 +82,18 @@ export default async function AdminOrderDetail({
     .from(notificationsOutbox)
     .where(eq(notificationsOutbox.orderId, id))
     .orderBy(desc(notificationsOutbox.createdAt));
+
+  // A won-bargain coupon is SKU-bound, and its price is FINAL — order creation
+  // zeroes the prepaid + bundle discounts for it. The summary below must know
+  // that, or it back-solves a fictional split out of a discount that was never
+  // stacked (showed a real ₹799 bargain as "bundle ₹610 + prepaid ₹100 + ₹89").
+  const [couponRow] = order.couponCode
+    ? await db
+        .select({ constraintSkuId: coupons.constraintSkuId })
+        .from(coupons)
+        .where(eq(coupons.code, order.couponCode))
+    : [];
+  const isBargainOrder = couponRow?.constraintSkuId != null;
 
   const items = order.items as OrderItem[];
   const addr = order.shippingAddress as Record<string, string>;
@@ -185,15 +197,32 @@ export default async function AdminOrderDetail({
               {order.codFeeInr > 0 && <Row label="COD fee" value={formatINR(order.codFeeInr)} />}
               {order.discountInr > 0 && (() => {
                 const cartQty = items.reduce((n, i) => n + i.qty, 0);
-                const prepaidBonus = order.paymentMethod !== "COD" ? OFFERS.prepaidDiscountINR : 0;
-                const bundleBonus = bundleDiscountInr(cartQty, order.subtotalInr);
+                // Bargain price is final: nothing stacks, so the whole discount IS the coupon.
+                const prepaidBonus = isBargainOrder
+                  ? 0
+                  : order.paymentMethod !== "COD"
+                    ? OFFERS.prepaidDiscountINR
+                    : 0;
+                const bundleBonus = isBargainOrder
+                  ? 0
+                  : bundleDiscountInr(cartQty, order.subtotalInr);
                 const bundleName = bundleTierLabel(cartQty);
                 const couponBonus = Math.max(0, order.discountInr - prepaidBonus - bundleBonus);
                 return (
                   <>
                     {bundleBonus > 0 && <Row label={`Bundle offer${bundleName ? ` (${bundleName})` : ""}`} value={`-${formatINR(bundleBonus)}`} green />}
                     {prepaidBonus > 0 && <Row label="Prepaid (pay-online) discount" value={`-${formatINR(prepaidBonus)}`} green />}
-                    {couponBonus > 0 && <Row label={order.couponCode ? `Coupon (${order.couponCode})` : "Coupon"} value={`-${formatINR(couponBonus)}`} green />}
+                    {couponBonus > 0 && (
+                      <Row
+                        label={
+                          order.couponCode
+                            ? `Coupon (${order.couponCode})${isBargainOrder ? " · negotiated price" : ""}`
+                            : "Coupon"
+                        }
+                        value={`-${formatINR(couponBonus)}`}
+                        green
+                      />
+                    )}
                   </>
                 );
               })()}
