@@ -30,17 +30,24 @@ type Slide = { src: string; alt: string; href: string; cta: string };
 const MOBILE_SLIDES: Slide[] = [
   {
     src: "/landing/mobile-1.webp",
-    alt: "PRC pocket-size drift car — small size, big drift",
-    href: "/hub/shop/mini64",
-    cta: "Shop Mini RC",
+    alt: "PRC 1:16 scale RC car lineup — precision, passion, performance",
+    href: "/hub/shop/big16",
+    cta: "Shop 1:16 Cars",
   },
   {
     src: "/landing/mobile-2.webp",
-    alt: "PRC Mini RC drift car — the gift he won't stop using",
+    alt: "PRC RC cars built for speed, made for adventure — racing, drifting and off-road",
     href: "/hub/shop/mini64",
     cta: "Shop Mini RC",
   },
-  // 3rd slide — Construction 3-Pack (BUY ALL 3 · ₹4,999) → construction category
+  // 1:20 "Built for Legends" collection (Itachi · Sasuke · Naruto) → 1:20 category
+  {
+    src: "/landing/mobile-s20.webp",
+    alt: "PRC 1:20 scale drift cars — Itachi Speed Racing, Sasuke AE86 Trueno and Naruto Future GT",
+    href: "/hub/shop/s20",
+    cta: "Shop 1:20 Cars",
+  },
+  // Construction 3-Pack (BUY ALL 3 · ₹4,999) → construction category
   {
     src: "/landing/mobile-construction.webp",
     alt: "PRC construction 3-pack — mining truck, excavator and forklift, buy all 3 for ₹4,999",
@@ -74,6 +81,15 @@ const DESKTOP_SLIDES: Slide[] = [
 
 const AUTOROLL_MS = 3500;
 
+/**
+ * Seamless INFINITE forward loop. The rail renders `count` real slides plus one
+ * clone of the first appended at the end (index `count`). The timer always
+ * advances forward (never `% count` back to 0), so after the last real slide it
+ * glides onto the clone — visually identical to slide 1 — and once the scroll
+ * settles there we snap scrollLeft back to 0 with NO animation. The result is an
+ * endless leftward roll with no jarring rewind. Pauses on touch/hover, disabled
+ * for reduced-motion.
+ */
 function useAutoRoll(ref: { current: HTMLDivElement | null }, count: number) {
   useEffect(() => {
     const rail = ref.current;
@@ -88,16 +104,36 @@ function useAutoRoll(ref: { current: HTMLDivElement | null }, count: number) {
     evPause.forEach((e) => rail.addEventListener(e, pause, { passive: true }));
     evResume.forEach((e) => rail.addEventListener(e, resume, { passive: true }));
 
+    // Once motion settles on the clone (index === count), jump back to the real
+    // first slide instantly (behavior auto) so the forward loop is invisible.
+    let settle: ReturnType<typeof setTimeout>;
+    const onScroll = () => {
+      clearTimeout(settle);
+      settle = setTimeout(() => {
+        const w = rail.clientWidth;
+        if (w && Math.round(rail.scrollLeft / w) >= count) {
+          const prev = rail.style.scrollBehavior;
+          rail.style.scrollBehavior = "auto";
+          rail.scrollLeft = 0;
+          rail.style.scrollBehavior = prev;
+        }
+      }, 140);
+    };
+    rail.addEventListener("scroll", onScroll, { passive: true });
+
     const id = setInterval(() => {
       if (paused) return;
       const w = rail.clientWidth;
       if (!w) return; // hidden carousel
       const cur = Math.round(rail.scrollLeft / w);
-      rail.scrollTo({ left: ((cur + 1) % count) * w, behavior: "smooth" });
+      // Always forward; cur+1 may be the clone (index count) — onScroll resets it.
+      rail.scrollTo({ left: (cur + 1) * w, behavior: "smooth" });
     }, AUTOROLL_MS);
 
     return () => {
       clearInterval(id);
+      clearTimeout(settle);
+      rail.removeEventListener("scroll", onScroll);
       evPause.forEach((e) => rail.removeEventListener(e, pause));
       evResume.forEach((e) => rail.removeEventListener(e, resume));
     };
@@ -169,23 +205,24 @@ export default function HubHero() {
           lighter banners without darkening the whole image. */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-30 h-24 bg-gradient-to-b from-black/40 to-transparent" />
 
-      {/* MOBILE: 2 portrait posters */}
+      {/* MOBILE: portrait posters + a clone of the 1st appended for the
+          seamless infinite loop (see useAutoRoll). */}
       <div
         ref={mobileRef}
         className="no-scrollbar flex snap-x snap-mandatory overflow-x-auto sm:hidden"
       >
-        {MOBILE_SLIDES.map((s, i) => (
-          <Banner key={s.src} s={s} w={1054} h={1492} small priority={i === 0} />
+        {[...MOBILE_SLIDES, MOBILE_SLIDES[0]].map((s, i) => (
+          <Banner key={i} s={s} w={1054} h={1492} small priority={i === 0} />
         ))}
       </div>
 
-      {/* DESKTOP: 3 landscape 16:9 banners */}
+      {/* DESKTOP: landscape 16:9 banners + a clone of the 1st for the seamless loop */}
       <div
         ref={desktopRef}
         className="no-scrollbar hidden snap-x snap-mandatory overflow-x-auto sm:flex"
       >
-        {DESKTOP_SLIDES.map((s, i) => (
-          <Banner key={s.src} s={s} w={1672} h={941} priority={i === 0} />
+        {[...DESKTOP_SLIDES, DESKTOP_SLIDES[0]].map((s, i) => (
+          <Banner key={i} s={s} w={1672} h={941} priority={i === 0} />
         ))}
       </div>
     </section>
